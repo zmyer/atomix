@@ -9,21 +9,37 @@
 
   <groupId>io.atomix</groupId>
   <artifactId>atomix-parent</artifactId>
-  <version>1.0.0-SNAPSHOT</version>
+  <version>2.0.0-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>Atomix Parent Pom</name>
-  <description>Distributed coordination framework based on the Raft consensus algorithm.</description>
+  <description>Distributed systems framework.</description>
   <url>http://github.com/atomix/atomix</url>
   <inceptionYear>2013</inceptionYear>
 
   <properties>
     <jv>${project.version}</jv>
-  
+
+    <!-- Java -->
     <java.version>1.8</java.version>
+
+    <!-- Logging -->
     <slf4j.version>1.7.7</slf4j.version>
+
+    <!-- Testing -->
+    <junit.version>4.12</junit.version>
+    <hamcrest.version>1.3</hamcrest.version>
+    <mockito.version>1.10.19</mockito.version>
+    <concurrentunit.version>0.4.2</concurrentunit.version>
     <logback.version>1.1.2</logback.version>
-    <catalyst.version>1.1.1</catalyst.version>
-    <copycat.version>1.1.5-SNAPSHOT</copycat.version>
+
+    <!-- Core dependencies -->
+    <guava.version>22.0</guava.version>
+    <kryo.version>4.0.0</kryo.version>
+    <commons.lang3.version>3.5</commons.lang3.version>
+    <commons.math3.version>3.6.1</commons.math3.version>
+    <netty.version>4.1.8.Final</netty.version>
+
+    <!-- Maven plugins -->
     <maven.source.plugin.version>2.2.1</maven.source.plugin.version>
     <maven.compiler.plugin.version>3.0</maven.compiler.plugin.version>
     <maven.failsafe.plugin.version>2.14</maven.failsafe.plugin.version>
@@ -33,6 +49,7 @@
     <maven.assembly.plugin.version>2.4</maven.assembly.plugin.version>
     <maven.javadoc.plugin.version>2.10.1</maven.javadoc.plugin.version>
     <maven.bundle.plugin.version>2.5.3</maven.bundle.plugin.version>
+    <maven.checkstyle.plugin.version>2.17</maven.checkstyle.plugin.version>
   </properties>
 
   <licenses>
@@ -62,17 +79,15 @@
   </issueManagement>
 
   <modules>
-    <module>resource</module>
-    <module>manager</module>
-    <module>groups</module>
-    <module>collections</module>
-    <module>concurrent</module>
-    <module>variables</module>
     <module>core</module>
-    <module>standalone</module>
-    <module>examples</module>
-    <module>testing</module>
-    <module>all</module>
+    <module>event</module>
+    <module>messaging</module>
+    <module>protocols</module>
+    <module>serializer</module>
+    <module>storage</module>
+    <module>tests</module>
+    <module>time</module>
+    <module>utils</module>
   </modules>
 
   <dependencies>
@@ -82,21 +97,32 @@
       <version>${slf4j.version}</version>
     </dependency>
     <dependency>
-      <groupId>org.testng</groupId>
-      <artifactId>testng</artifactId>
-      <version>6.8.8</version>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>${junit.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.hamcrest</groupId>
+      <artifactId>hamcrest-all</artifactId>
+      <version>${hamcrest.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.google.guava</groupId>
+      <artifactId>guava-testlib</artifactId>
+      <version>${guava.version}</version>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>net.jodah</groupId>
       <artifactId>concurrentunit</artifactId>
-      <version>0.4.2</version>
+      <version>${concurrentunit.version}</version>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.mockito</groupId>
       <artifactId>mockito-core</artifactId>
-      <version>1.10.19</version>
+      <version>${mockito.version}</version>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -123,6 +149,7 @@
           </execution>
         </executions>
       </plugin>
+
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
@@ -132,12 +159,14 @@
           <target>${java.version}</target>
         </configuration>
       </plugin>
+
       <plugin>
         <groupId>org.apache.felix</groupId>
         <artifactId>maven-bundle-plugin</artifactId>
         <version>${maven.bundle.plugin.version}</version>
         <extensions>true</extensions>
       </plugin>
+
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-javadoc-plugin</artifactId>
@@ -155,22 +184,23 @@
           <doctitle>Atomix API Reference (${jv})</doctitle>
           <windowtitle>Atomix API Reference (${jv})</windowtitle>
           <aggregate>true</aggregate>
-          <excludePackageNames>io.atomix.examples*:*.internal*:*.config</excludePackageNames>
+          <excludePackageNames>io.atomix.examples*:*.impl*</excludePackageNames>
           <additionalparam>
             -Xdoclint:none
             -notimestamp
             -link http://docs.oracle.com/javase/8/docs/api/
-            -link http://atomix.io/catalyst/api/latest/
-            -link http://atomix.io/copycat/api/latest/
             -group "Atomix core" io.atomix
-            -group "Distributed resources" io.atomix.variables:io.atomix.collections:io.atomix.group:io.atomix.concurrent
-            -group "Resource management" io.atomix.manager
-            -group "Resource API" io.atomix.resource
-            -group "Test API" io.atomix.testing
+            -group "Cluster" io.atomix.cluster*
+            -group "Storage" io.atomix.storage*
+            -group "Time" io.atomix.time*
+            -group "Distributed primitives" io.atomix.primitives*
+            -group "Raft protocol" io.atomix.protocols.raft*
+            -group "Gossip protocol" io.atomix.protocols.gossip*
+            -group "Utilities" io.atomix.logging:io.atomix.serializer*:io.atomix.time:io.atomix.storage:io.atomix.buffer
           </additionalparam>
         </configuration>
       </plugin>
-      
+
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-release-plugin</artifactId>
@@ -179,7 +209,17 @@
           <allowTimestampedSnapshots>true</allowTimestampedSnapshots>
         </configuration>
       </plugin>
-      
+
+      <!-- Coding standards -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-checkstyle-plugin</artifactId>
+        <version>2.17</version>
+        <configuration>
+          <configLocation>google_checks.xml</configLocation>
+        </configuration>
+      </plugin>
+
       <!-- Coverage -->
       <plugin>
         <groupId>org.eluder.coveralls</groupId>
