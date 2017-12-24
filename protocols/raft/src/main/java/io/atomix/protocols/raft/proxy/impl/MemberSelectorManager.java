@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-present Open Networking Laboratory
+ * Copyright 2017-present Open Networking Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,12 +15,12 @@
  */
 package io.atomix.protocols.raft.proxy.impl;
 
-import io.atomix.protocols.raft.cluster.MemberId;
+import com.google.common.collect.Lists;
+import io.atomix.cluster.NodeId;
 import io.atomix.protocols.raft.proxy.CommunicationStrategy;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.LinkedList;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
 
@@ -29,25 +29,25 @@ import java.util.concurrent.CopyOnWriteArraySet;
  */
 public final class MemberSelectorManager {
   private final Set<MemberSelector> selectors = new CopyOnWriteArraySet<>();
-  private volatile MemberId leader;
-  private volatile Collection<MemberId> servers = Collections.emptyList();
+  private volatile NodeId leader;
+  private volatile Collection<NodeId> members = Collections.emptyList();
 
   /**
    * Returns the current cluster leader.
    *
    * @return The current cluster leader.
    */
-  public MemberId leader() {
+  public NodeId leader() {
     return leader;
   }
 
   /**
-   * Returns the set of servers in the cluster.
+   * Returns the set of members in the cluster.
    *
-   * @return The set of servers in the cluster.
+   * @return The set of members in the cluster.
    */
-  public Collection<MemberId> servers() {
-    return servers;
+  public Collection<NodeId> members() {
+    return members;
   }
 
   /**
@@ -57,7 +57,7 @@ public final class MemberSelectorManager {
    * @return A new address selector.
    */
   public MemberSelector createSelector(CommunicationStrategy selectionStrategy) {
-    MemberSelector selector = new MemberSelector(leader, servers, selectionStrategy, this);
+    MemberSelector selector = new MemberSelector(leader, members, selectionStrategy, this);
     selectors.add(selector);
     return selector;
   }
@@ -73,18 +73,18 @@ public final class MemberSelectorManager {
    * Resets all child selectors.
    *
    * @param leader  The current cluster leader.
-   * @param servers The collection of all active servers.
+   * @param members The collection of all active members.
    */
-  public void resetAll(MemberId leader, Collection<MemberId> servers) {
+  public void resetAll(NodeId leader, Collection<NodeId> members) {
     this.leader = leader;
-    this.servers = new LinkedList<>(servers);
-    selectors.forEach(s -> s.reset(leader, servers));
+    this.members = Lists.newLinkedList(members);
+    selectors.forEach(s -> s.reset(leader, this.members));
   }
 
   /**
    * Removes the given selector.
    *
-   * @param selector The address selector to remove.
+   * @param selector The member selector to remove.
    */
   void remove(MemberSelector selector) {
     selectors.remove(selector);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-present Open Networking Laboratory
+ * Copyright 2017-present Open Networking Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,38 +18,31 @@ package io.atomix.utils;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Interface for types that can be asynchronously opened and closed.
+ * Interface for types that can be asynchronously started and stopped.
  *
  * @param <T> managed type
  */
 public interface Managed<T> {
 
   /**
-   * Opens the managed object.
+   * Starts the managed object.
    *
-   * @return A completable future to be completed once the object has been opened.
+   * @return A completable future to be completed once the object has been started.
    */
-  CompletableFuture<T> open();
+  CompletableFuture<T> start();
 
   /**
-   * Returns a boolean value indicating whether the managed object is open.
+   * Returns a boolean value indicating whether the managed object is running.
    *
-   * @return Indicates whether the managed object is open.
+   * @return Indicates whether the managed object is running.
    */
-  boolean isOpen();
+  boolean isRunning();
 
   /**
-   * Closes the managed object.
+   * Stops the managed object.
    *
-   * @return A completable future to be completed once the object has been closed.
+   * @return A completable future to be completed once the object has been stopped.
    */
-  CompletableFuture<Void> close();
-
-  /**
-   * Returns a boolean value indicating whether the managed object is closed.
-   *
-   * @return Indicates whether the managed object is closed.
-   */
-  boolean isClosed();
+  CompletableFuture<Void> stop();
 
 }

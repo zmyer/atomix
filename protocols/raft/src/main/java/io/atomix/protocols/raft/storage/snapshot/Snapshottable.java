@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-present Open Networking Laboratory
+ * Copyright 2015-present Open Networking Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,11 +15,11 @@
  */
 package io.atomix.protocols.raft.storage.snapshot;
 
-import io.atomix.protocols.raft.service.RaftService;
+import io.atomix.primitive.service.PrimitiveService;
 import io.atomix.protocols.raft.storage.log.RaftLog;
 
 /**
- * Support for periodically persisting {@link RaftService} snapshots to disk.
+ * Support for periodically persisting {@link PrimitiveService} snapshots to disk.
  * <p>
  * To store a state machine's state, simply implement the {@link #snapshot(SnapshotWriter)} method and write the
  * complete state machine state to the snapshot via the {@link SnapshotWriter}. Raft will periodically invoke

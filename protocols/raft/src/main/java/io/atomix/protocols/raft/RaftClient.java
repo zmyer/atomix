@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-present Open Networking Laboratory
+ * Copyright 2015-present Open Networking Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,11 +15,12 @@
  */
 package io.atomix.protocols.raft;
 
-import io.atomix.protocols.raft.cluster.MemberId;
+import io.atomix.cluster.NodeId;
+import io.atomix.primitive.PrimitiveClient;
 import io.atomix.protocols.raft.impl.DefaultRaftClient;
 import io.atomix.protocols.raft.protocol.RaftClientProtocol;
 import io.atomix.protocols.raft.proxy.CommunicationStrategy;
-import io.atomix.protocols.raft.proxy.RaftProxy;
+import io.atomix.utils.concurrent.ThreadModel;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -33,7 +34,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 /**
  * Provides an interface for submitting operations to the Raft cluster.
  */
-public interface RaftClient {
+public interface RaftClient extends PrimitiveClient<RaftProtocol> {
 
   /**
    * Returns a new Raft client builder.
@@ -45,8 +46,8 @@ public interface RaftClient {
    * @return The client builder.
    */
   @SuppressWarnings("unchecked")
-  static Builder newBuilder() {
-    return newBuilder(Collections.EMPTY_LIST);
+  static Builder builder() {
+    return builder(Collections.EMPTY_LIST);
   }
 
   /**
@@ -59,8 +60,8 @@ public interface RaftClient {
    * @param cluster The cluster to which to connect.
    * @return The client builder.
    */
-  static Builder newBuilder(MemberId... cluster) {
-    return newBuilder(Arrays.asList(cluster));
+  static Builder builder(NodeId... cluster) {
+    return builder(Arrays.asList(cluster));
   }
 
   /**
@@ -73,8 +74,32 @@ public interface RaftClient {
    * @param cluster The cluster to which to connect.
    * @return The client builder.
    */
-  static Builder newBuilder(Collection<MemberId> cluster) {
+  static Builder builder(Collection<NodeId> cluster) {
     return new DefaultRaftClient.Builder(cluster);
+  }
+
+  /**
+   * @deprecated since 2.1
+   */
+  @Deprecated
+  static Builder newBuilder() {
+    return builder();
+  }
+
+  /**
+   * @deprecated since 2.1
+   */
+  @Deprecated
+  static Builder newBuilder(NodeId... cluster) {
+    return builder(cluster);
+  }
+
+  /**
+   * @deprecated since 2.1
+   */
+  @Deprecated
+  static Builder newBuilder(Collection<NodeId> cluster) {
+    return builder(cluster);
   }
 
   /**
@@ -85,18 +110,25 @@ public interface RaftClient {
   String clientId();
 
   /**
+   * Returns the current term.
+   *
+   * @return the current term
+   */
+  long term();
+
+  /**
+   * Returns the current leader.
+   *
+   * @return the current leader
+   */
+  NodeId leader();
+
+  /**
    * Returns the Raft metadata.
    *
    * @return The Raft metadata.
    */
   RaftMetadataClient metadata();
-
-  /**
-   * Returns a new proxy builder.
-   *
-   * @return A new proxy builder.
-   */
-  RaftProxy.Builder newProxyBuilder();
 
   /**
    * Connects the client to Raft cluster via the default server address.
@@ -110,7 +142,7 @@ public interface RaftClient {
    * @return A completable future to be completed once the client is registered.
    */
   default CompletableFuture<RaftClient> connect() {
-    return connect((Collection<MemberId>) null);
+    return connect((Collection<NodeId>) null);
   }
 
   /**
@@ -122,7 +154,7 @@ public interface RaftClient {
    * @param members A set of server addresses to which to connect.
    * @return A completable future to be completed once the client is registered.
    */
-  default CompletableFuture<RaftClient> connect(MemberId... members) {
+  default CompletableFuture<RaftClient> connect(NodeId... members) {
     if (members == null || members.length == 0) {
       return connect();
     } else {
@@ -139,7 +171,7 @@ public interface RaftClient {
    * @param members A set of server addresses to which to connect.
    * @return A completable future to be completed once the client is registered.
    */
-  CompletableFuture<RaftClient> connect(Collection<MemberId> members);
+  CompletableFuture<RaftClient> connect(Collection<NodeId> members);
 
   /**
    * Closes the client.
@@ -151,7 +183,7 @@ public interface RaftClient {
   /**
    * Builds a new Raft client.
    * <p>
-   * New client builders should be constructed using the static {@link #newBuilder()} factory method.
+   * New client builders should be constructed using the static {@link #builder()} factory method.
    * <pre>
    *   {@code
    *     RaftClient client = RaftClient.builder(new Address("123.456.789.0", 5000), new Address("123.456.789.1", 5000)
@@ -161,13 +193,14 @@ public interface RaftClient {
    * </pre>
    */
   abstract class Builder implements io.atomix.utils.Builder<RaftClient> {
-    protected final Collection<MemberId> cluster;
+    protected final Collection<NodeId> cluster;
     protected String clientId = UUID.randomUUID().toString();
-    protected MemberId nodeId;
+    protected NodeId nodeId;
     protected RaftClientProtocol protocol;
+    protected ThreadModel threadModel = ThreadModel.SHARED_THREAD_POOL;
     protected int threadPoolSize = Runtime.getRuntime().availableProcessors();
 
-    protected Builder(Collection<MemberId> cluster) {
+    protected Builder(Collection<NodeId> cluster) {
       this.cluster = checkNotNull(cluster, "cluster cannot be null");
     }
 
@@ -193,7 +226,7 @@ public interface RaftClient {
      * @return The client builder.
      * @throws NullPointerException if {@code nodeId} is null
      */
-    public Builder withMemberId(MemberId nodeId) {
+    public Builder withNodeId(NodeId nodeId) {
       this.nodeId = checkNotNull(nodeId, "nodeId cannot be null");
       return this;
     }
@@ -207,6 +240,18 @@ public interface RaftClient {
      */
     public Builder withProtocol(RaftClientProtocol protocol) {
       this.protocol = checkNotNull(protocol, "protocol cannot be null");
+      return this;
+    }
+
+    /**
+     * Sets the client thread model.
+     *
+     * @param threadModel the client thread model
+     * @return the client builder
+     * @throws NullPointerException if the thread model is null
+     */
+    public Builder withThreadModel(ThreadModel threadModel) {
+      this.threadModel = checkNotNull(threadModel, "threadModel cannot be null");
       return this;
     }
 

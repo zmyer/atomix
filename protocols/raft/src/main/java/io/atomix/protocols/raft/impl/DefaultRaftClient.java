@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-present Open Networking Laboratory
+ * Copyright 2017-present Open Networking Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,57 +15,62 @@
  */
 package io.atomix.protocols.raft.impl;
 
+import io.atomix.cluster.NodeId;
+import io.atomix.primitive.PrimitiveType;
+import io.atomix.primitive.Recovery;
+import io.atomix.primitive.proxy.PrimitiveProxy;
+import io.atomix.primitive.proxy.impl.BlockingAwarePrimitiveProxy;
+import io.atomix.primitive.proxy.impl.RecoveringPrimitiveProxy;
+import io.atomix.primitive.proxy.impl.RetryingPrimitiveProxy;
 import io.atomix.protocols.raft.RaftClient;
 import io.atomix.protocols.raft.RaftMetadataClient;
-import io.atomix.protocols.raft.cluster.MemberId;
+import io.atomix.protocols.raft.RaftProtocol;
 import io.atomix.protocols.raft.protocol.RaftClientProtocol;
-import io.atomix.protocols.raft.proxy.RaftProxy;
-import io.atomix.protocols.raft.proxy.RaftProxyClient;
-import io.atomix.protocols.raft.proxy.RecoveryStrategy;
-import io.atomix.protocols.raft.proxy.impl.BlockingAwareRaftProxyClient;
-import io.atomix.protocols.raft.proxy.impl.DelegatingRaftProxy;
+import io.atomix.protocols.raft.proxy.impl.DefaultRaftProxy;
 import io.atomix.protocols.raft.proxy.impl.MemberSelectorManager;
 import io.atomix.protocols.raft.proxy.impl.RaftProxyManager;
-import io.atomix.protocols.raft.proxy.impl.RecoveringRaftProxyClient;
-import io.atomix.protocols.raft.proxy.impl.RetryingRaftProxyClient;
-import io.atomix.utils.concurrent.ThreadPoolContext;
+import io.atomix.utils.concurrent.ThreadContext;
+import io.atomix.utils.concurrent.ThreadContextFactory;
 import io.atomix.utils.logging.ContextualLoggerFactory;
 import io.atomix.utils.logging.LoggerContext;
 import org.slf4j.Logger;
 
 import java.util.Collection;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ThreadFactory;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import static com.google.common.base.MoreObjects.toStringHelper;
 import static com.google.common.base.Preconditions.checkNotNull;
-import static io.atomix.utils.concurrent.Threads.namedThreads;
 
 /**
  * Default Raft client implementation.
  */
 public class DefaultRaftClient implements RaftClient {
   private final String clientId;
-  private final Collection<MemberId> cluster;
-  private final ScheduledExecutorService threadPoolExecutor;
+  private final Collection<NodeId> cluster;
+  private final RaftClientProtocol protocol;
+  private final ThreadContextFactory threadContextFactory;
+  private final ThreadContext threadContext;
   private final RaftMetadataClient metadata;
   private final MemberSelectorManager selectorManager = new MemberSelectorManager();
   private final RaftProxyManager sessionManager;
 
   public DefaultRaftClient(
       String clientId,
-      MemberId nodeId,
-      Collection<MemberId> cluster,
+      NodeId nodeId,
+      Collection<NodeId> cluster,
       RaftClientProtocol protocol,
-      ScheduledExecutorService threadPoolExecutor) {
+      ThreadContextFactory threadContextFactory) {
     this.clientId = checkNotNull(clientId, "clientId cannot be null");
     this.cluster = checkNotNull(cluster, "cluster cannot be null");
-    this.threadPoolExecutor = checkNotNull(threadPoolExecutor, "threadPoolExecutor cannot be null");
-    this.metadata = new DefaultRaftMetadataClient(clientId, protocol, selectorManager, new ThreadPoolContext(threadPoolExecutor));
-    this.sessionManager = new RaftProxyManager(clientId, nodeId, protocol, selectorManager, threadPoolExecutor);
+    this.protocol = checkNotNull(protocol, "protocol cannot be null");
+    this.threadContextFactory = checkNotNull(threadContextFactory, "threadContextFactory cannot be null");
+    this.threadContext = threadContextFactory.createContext();
+    this.metadata = new DefaultRaftMetadataClient(clientId, protocol, selectorManager, threadContextFactory.createContext());
+    this.sessionManager = new RaftProxyManager(clientId, nodeId, protocol, selectorManager, threadContextFactory);
   }
 
   @Override
@@ -74,12 +79,22 @@ public class DefaultRaftClient implements RaftClient {
   }
 
   @Override
+  public long term() {
+    return sessionManager.term();
+  }
+
+  @Override
+  public NodeId leader() {
+    return sessionManager.leader();
+  }
+
+  @Override
   public RaftMetadataClient metadata() {
     return metadata;
   }
 
   @Override
-  public synchronized CompletableFuture<RaftClient> connect(Collection<MemberId> cluster) {
+  public synchronized CompletableFuture<RaftClient> connect(Collection<NodeId> cluster) {
     CompletableFuture<RaftClient> future = new CompletableFuture<>();
 
     // If the provided cluster list is null or empty, use the default list.
@@ -102,18 +117,65 @@ public class DefaultRaftClient implements RaftClient {
       } else {
         future.completeExceptionally(error);
       }
-    }, threadPoolExecutor);
+    }, threadContext);
     return future;
   }
 
   @Override
-  public RaftProxy.Builder newProxyBuilder() {
-    return new SessionBuilder();
+  public PrimitiveProxy newProxy(String primitiveName, PrimitiveType primitiveType, RaftProtocol primitiveProtocol) {
+    // Create a proxy builder that uses the session manager to open a session.
+    Supplier<PrimitiveProxy> proxyFactory = () -> new DefaultRaftProxy(
+        primitiveName,
+        primitiveType,
+        DefaultRaftClient.this.protocol,
+        selectorManager,
+        sessionManager,
+        primitiveProtocol.readConsistency(),
+        primitiveProtocol.communicationStrategy(),
+        threadContextFactory.createContext(),
+        primitiveProtocol.minTimeout(),
+        primitiveProtocol.maxTimeout());
+
+    PrimitiveProxy proxy;
+
+    // If the recovery strategy is set to RECOVER, wrap the builder in a recovering proxy client.
+    if (primitiveProtocol.recoveryStrategy() == Recovery.RECOVER) {
+      proxy = new RecoveringPrimitiveProxy(
+          clientId,
+          primitiveName,
+          primitiveType,
+          proxyFactory,
+          threadContextFactory.createContext());
+    } else {
+      proxy = proxyFactory.get();
+    }
+
+    // If max retries is set, wrap the client in a retrying proxy client.
+    if (primitiveProtocol.maxRetries() > 0) {
+      proxy = new RetryingPrimitiveProxy(
+          proxy,
+          threadContextFactory.createContext(),
+          primitiveProtocol.maxRetries(),
+          primitiveProtocol.retryDelay());
+    }
+
+    // Default the executor to use the configured thread pool executor and create a blocking aware proxy client.
+    Executor executor = primitiveProtocol.executor() != null
+        ? primitiveProtocol.executor()
+        : threadContextFactory.createContext();
+    return new BlockingAwarePrimitiveProxy(proxy, executor);
+  }
+
+  @Override
+  public CompletableFuture<Set<String>> getPrimitives(PrimitiveType primitiveType) {
+    return metadata.getSessions(primitiveType).thenApply(result -> result.stream()
+        .map(m -> m.primitiveName())
+        .collect(Collectors.toSet()));
   }
 
   @Override
   public synchronized CompletableFuture<Void> close() {
-    return sessionManager.close().thenRunAsync(threadPoolExecutor::shutdownNow);
+    return sessionManager.close().thenRunAsync(threadContextFactory::close);
   }
 
   @Override
@@ -124,57 +186,10 @@ public class DefaultRaftClient implements RaftClient {
   }
 
   /**
-   * Default Raft session builder.
-   */
-  private class SessionBuilder extends RaftProxy.Builder {
-    @Override
-    public RaftProxy build() {
-      // Create a client builder that uses the session manager to open a session.
-      RaftProxyClient.Builder clientBuilder = new RaftProxyClient.Builder() {
-        @Override
-        public CompletableFuture<RaftProxyClient> buildAsync() {
-          return sessionManager.openSession(name, serviceType, readConsistency, communicationStrategy, timeout);
-        }
-      };
-
-      // Populate the proxy client builder.
-      clientBuilder.withName(name)
-          .withServiceType(serviceType)
-          .withReadConsistency(readConsistency)
-          .withMaxRetries(maxRetries)
-          .withRetryDelay(retryDelay)
-          .withCommunicationStrategy(communicationStrategy)
-          .withRecoveryStrategy(recoveryStrategy)
-          .withTimeout(timeout);
-
-      RaftProxyClient client;
-
-      // If the recovery strategy is set to RECOVER, wrap the builder in a recovering proxy client.
-      if (recoveryStrategy == RecoveryStrategy.RECOVER) {
-        client = new RecoveringRaftProxyClient(clientId, name, serviceType, clientBuilder, new ThreadPoolContext(threadPoolExecutor));
-      } else {
-        client = clientBuilder.build();
-      }
-
-      // If max retries is set, wrap the client in a retrying proxy client.
-      if (maxRetries > 0) {
-        client = new RetryingRaftProxyClient(client, new ThreadPoolContext(threadPoolExecutor), maxRetries, retryDelay);
-      }
-
-      // Default the executor to use the configured thread pool executor and create a blocking aware proxy client.
-      Executor executor = this.executor != null ? this.executor : new ThreadPoolContext(threadPoolExecutor);
-      client = new BlockingAwareRaftProxyClient(client, executor);
-
-      // Create the proxy.
-      return new DelegatingRaftProxy(client);
-    }
-  }
-
-  /**
    * Default Raft client builder.
    */
   public static class Builder extends RaftClient.Builder {
-    public Builder(Collection<MemberId> cluster) {
+    public Builder(Collection<NodeId> cluster) {
       super(cluster);
     }
 
@@ -184,9 +199,8 @@ public class DefaultRaftClient implements RaftClient {
       Logger log = ContextualLoggerFactory.getLogger(DefaultRaftClient.class, LoggerContext.builder(RaftClient.class)
           .addValue(clientId)
           .build());
-      ThreadFactory threadFactory = namedThreads("raft-client-" + clientId + "-%d", log);
-      ScheduledExecutorService executor = Executors.newScheduledThreadPool(threadPoolSize, threadFactory);
-      return new DefaultRaftClient(clientId, nodeId, cluster, protocol, executor);
+      ThreadContextFactory threadContextFactory = threadModel.factory("raft-client-" + clientId + "-%d", threadPoolSize, log);
+      return new DefaultRaftClient(clientId, nodeId, cluster, protocol, threadContextFactory);
     }
   }
 }

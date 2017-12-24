@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-present Open Networking Laboratory
+ * Copyright 2015-present Open Networking Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
  */
 package io.atomix.protocols.raft.protocol;
 
-import io.atomix.protocols.raft.cluster.MemberId;
+import io.atomix.cluster.NodeId;
 
 import java.util.Objects;
 
@@ -32,13 +32,13 @@ public class TransferRequest extends AbstractRaftRequest {
    *
    * @return A new transfer request builder.
    */
-  public static Builder newBuilder() {
+  public static Builder builder() {
     return new Builder();
   }
 
-  protected final MemberId member;
+  protected final NodeId member;
 
-  protected TransferRequest(MemberId member) {
+  protected TransferRequest(NodeId member) {
     this.member = member;
   }
 
@@ -47,7 +47,7 @@ public class TransferRequest extends AbstractRaftRequest {
    *
    * @return The member to which to transfer.
    */
-  public MemberId member() {
+  public NodeId member() {
     return member;
   }
 
@@ -75,7 +75,7 @@ public class TransferRequest extends AbstractRaftRequest {
    * Transfer request builder.
    */
   public static class Builder extends AbstractRaftRequest.Builder<Builder, TransferRequest> {
-    protected MemberId member;
+    protected NodeId member;
 
     /**
      * Sets the request member.
@@ -85,7 +85,7 @@ public class TransferRequest extends AbstractRaftRequest {
      * @throws NullPointerException if {@code member} is null
      */
     @SuppressWarnings("unchecked")
-    public Builder withMember(MemberId member) {
+    public Builder withMember(NodeId member) {
       this.member = checkNotNull(member, "member cannot be null");
       return this;
     }

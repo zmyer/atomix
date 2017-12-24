@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-present Open Networking Laboratory
+ * Copyright 2015-present Open Networking Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,8 +55,8 @@ public final class CandidateRole extends ActiveRole {
   }
 
   @Override
-  public synchronized CompletableFuture<RaftRole> open() {
-    return super.open().thenRun(this::startElection).thenApply(v -> this);
+  public synchronized CompletableFuture<RaftRole> start() {
+    return super.start().thenRun(this::startElection).thenApply(v -> this);
   }
 
   /**
@@ -75,7 +75,7 @@ public final class CandidateRole extends ActiveRole {
 
     // Because of asynchronous execution, the candidate state could have already been closed. In that case,
     // simply skip the election.
-    if (isClosed()) {
+    if (!isRunning()) {
       return;
     }
 
@@ -87,7 +87,7 @@ public final class CandidateRole extends ActiveRole {
     // When the election timer is reset, increment the current term and
     // restart the election.
     raft.setTerm(raft.getTerm() + 1);
-    raft.setLastVotedFor(raft.getCluster().getMember().memberId());
+    raft.setLastVotedFor(raft.getCluster().getMember().nodeId());
 
     Duration delay = raft.getElectionTimeout().plus(Duration.ofMillis(random.nextInt((int) raft.getElectionTimeout().toMillis())));
     currentTimer = raft.getThreadContext().schedule(delay, () -> {
@@ -107,7 +107,7 @@ public final class CandidateRole extends ActiveRole {
 
     // If there are no other members in the cluster, immediately transition to leader.
     if (votingMembers.isEmpty()) {
-      log.debug("Single member cluster. Transitioning directly to leader.", raft.getCluster().getMember().memberId());
+      log.debug("Single member cluster. Transitioning directly to leader.", raft.getCluster().getMember().nodeId());
       raft.transition(RaftServer.Role.LEADER);
       return;
     }
@@ -142,16 +142,16 @@ public final class CandidateRole extends ActiveRole {
     // of the cluster and vote each member for a vote.
     for (DefaultRaftMember member : votingMembers) {
       log.debug("Requesting vote from {} for term {}", member, raft.getTerm());
-      VoteRequest request = VoteRequest.newBuilder()
+      VoteRequest request = VoteRequest.builder()
           .withTerm(raft.getTerm())
-          .withCandidate(raft.getCluster().getMember().memberId())
+          .withCandidate(raft.getCluster().getMember().nodeId())
           .withLastLogIndex(lastEntry != null ? lastEntry.index() : 0)
           .withLastLogTerm(lastTerm)
           .build();
 
-      raft.getProtocol().vote(member.memberId(), request).whenCompleteAsync((response, error) -> {
+      raft.getProtocol().vote(member.nodeId(), request).whenCompleteAsync((response, error) -> {
         raft.checkThread();
-        if (isOpen() && !complete.get()) {
+        if (isRunning() && !complete.get()) {
           if (error != null) {
             log.warn(error.getMessage());
             quorum.fail();
@@ -204,14 +204,14 @@ public final class CandidateRole extends ActiveRole {
     }
 
     // If the vote request is not for this candidate then reject the vote.
-    if (request.candidate() == raft.getCluster().getMember().memberId()) {
-      return CompletableFuture.completedFuture(logResponse(VoteResponse.newBuilder()
+    if (request.candidate() == raft.getCluster().getMember().nodeId()) {
+      return CompletableFuture.completedFuture(logResponse(VoteResponse.builder()
           .withStatus(RaftResponse.Status.OK)
           .withTerm(raft.getTerm())
           .withVoted(true)
           .build()));
     } else {
-      return CompletableFuture.completedFuture(logResponse(VoteResponse.newBuilder()
+      return CompletableFuture.completedFuture(logResponse(VoteResponse.builder()
           .withStatus(RaftResponse.Status.OK)
           .withTerm(raft.getTerm())
           .withVoted(false)
@@ -235,8 +235,8 @@ public final class CandidateRole extends ActiveRole {
   }
 
   @Override
-  public synchronized CompletableFuture<Void> close() {
-    return super.close().thenRun(this::cancelElection);
+  public synchronized CompletableFuture<Void> stop() {
+    return super.stop().thenRun(this::cancelElection);
   }
 
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-present Open Networking Laboratory
+ * Copyright 2015-present Open Networking Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
  */
 package io.atomix.protocols.raft.proxy;
 
-import io.atomix.protocols.raft.cluster.MemberId;
+import io.atomix.cluster.NodeId;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -38,9 +38,9 @@ public enum  CommunicationStrategy {
    */
   ANY {
     @Override
-    public List<MemberId> selectConnections(MemberId leader, List<MemberId> servers) {
-      Collections.shuffle(servers);
-      return servers;
+    public List<NodeId> selectConnections(NodeId leader, List<NodeId> members) {
+      Collections.shuffle(members);
+      return members;
     }
   },
 
@@ -55,12 +55,12 @@ public enum  CommunicationStrategy {
    */
   LEADER {
     @Override
-    public List<MemberId> selectConnections(MemberId leader, List<MemberId> servers) {
+    public List<NodeId> selectConnections(NodeId leader, List<NodeId> members) {
       if (leader != null) {
         return Collections.singletonList(leader);
       }
-      Collections.shuffle(servers);
-      return servers;
+      Collections.shuffle(members);
+      return members;
     }
   },
 
@@ -73,25 +73,25 @@ public enum  CommunicationStrategy {
    */
   FOLLOWERS {
     @Override
-    public List<MemberId> selectConnections(MemberId leader, List<MemberId> servers) {
-      Collections.shuffle(servers);
-      if (leader != null && servers.size() > 1) {
-        List<MemberId> results = new ArrayList<>(servers.size());
-        for (MemberId memberId : servers) {
+    public List<NodeId> selectConnections(NodeId leader, List<NodeId> members) {
+      Collections.shuffle(members);
+      if (leader != null && members.size() > 1) {
+        List<NodeId> results = new ArrayList<>(members.size());
+        for (NodeId memberId : members) {
           if (!memberId.equals(leader)) {
             results.add(memberId);
           }
         }
         return results;
       }
-      return servers;
+      return members;
     }
   };
 
   /**
    * Returns a prioritized list of servers to which the client can connect and submit operations.
    * <p>
-   * The client will iterate the provided {@link MemberId} list in order, attempting to connect to
+   * The client will iterate the provided {@link NodeId} list in order, attempting to connect to
    * each listed server until all servers have been exhausted. Implementations should provide a
    * complete list of servers with which the client can communicate. Limiting the server list
    * only to a single server such as the {@code leader} may result in the client failing, such as in
@@ -99,11 +99,11 @@ public enum  CommunicationStrategy {
    *
    * @param leader  The current cluster leader. The {@code leader} may be {@code null} if no current
    *                leader exists.
-   * @param servers The full list of available servers. The provided server list is representative
+   * @param members The full list of available servers. The provided server list is representative
    *                of the most recent membership update received by the client. The server list
    *                may evolve over time as the structure of the cluster changes.
    * @return A collection of servers to which the client can connect.
    */
-  public abstract List<MemberId> selectConnections(MemberId leader, List<MemberId> servers);
+  public abstract List<NodeId> selectConnections(NodeId leader, List<NodeId> members);
 
 }

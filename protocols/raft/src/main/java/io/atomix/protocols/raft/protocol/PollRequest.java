@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-present Open Networking Laboratory
+ * Copyright 2015-present Open Networking Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
  */
 package io.atomix.protocols.raft.protocol;
 
-import io.atomix.protocols.raft.cluster.MemberId;
+import io.atomix.cluster.NodeId;
 
 import java.util.Objects;
 
@@ -37,7 +37,7 @@ public class PollRequest extends AbstractRaftRequest {
    *
    * @return A new poll request builder.
    */
-  public static Builder newBuilder() {
+  public static Builder builder() {
     return new Builder();
   }
 
@@ -67,8 +67,8 @@ public class PollRequest extends AbstractRaftRequest {
    *
    * @return The candidate's address.
    */
-  public MemberId candidate() {
-    return MemberId.from(candidate);
+  public NodeId candidate() {
+    return NodeId.from(candidate);
   }
 
   /**
@@ -145,7 +145,7 @@ public class PollRequest extends AbstractRaftRequest {
      * @return The poll request builder.
      * @throws IllegalArgumentException if {@code candidate} is not positive
      */
-    public Builder withCandidate(MemberId candidate) {
+    public Builder withCandidate(NodeId candidate) {
       this.candidate = checkNotNull(candidate, "candidate cannot be null").id();
       return this;
     }

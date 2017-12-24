@@ -1,5 +1,5 @@
 <!--
-  ~ Copyright 2017-present Open Networking Laboratory
+  ~ Copyright 2017-present Open Networking Foundation
   ~
   ~ Licensed under the Apache License, Version 2.0 (the "License");
   ~ you may not use this file except in compliance with the License.
@@ -19,16 +19,38 @@
   <parent>
     <groupId>io.atomix</groupId>
     <artifactId>atomix-parent</artifactId>
-    <version>2.0.0-SNAPSHOT</version>
+    <version>2.1.0-SNAPSHOT</version>
   </parent>
 
-  <packaging>pom</packaging>
-  <artifactId>atomix-storage-parent</artifactId>
-  <name>Atomix Storage Parent</name>
+  <packaging>bundle</packaging>
+  <artifactId>atomix-storage</artifactId>
+  <name>Atomix Storage</name>
 
-  <modules>
-    <module>api</module>
-    <module>buffer</module>
-    <module>journal</module>
-  </modules>
+  <dependencies>
+    <dependency>
+      <groupId>io.atomix</groupId>
+      <artifactId>atomix-utils</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.felix</groupId>
+        <artifactId>maven-bundle-plugin</artifactId>
+        <extensions>true</extensions>
+        <configuration>
+          <instructions>
+            <Export-Package>
+              io.atomix.storage.*
+            </Export-Package>
+            <Import-Package>
+              !sun.nio.ch,!sun.misc,*
+            </Import-Package>
+          </instructions>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
 </project>

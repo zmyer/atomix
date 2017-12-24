@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-present Open Networking Laboratory
+ * Copyright 2015-present Open Networking Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,8 +15,10 @@
  */
 package io.atomix.protocols.raft.storage.snapshot;
 
-import io.atomix.protocols.raft.service.ServiceId;
-import io.atomix.time.WallClockTimestamp;
+import io.atomix.primitive.PrimitiveId;
+import io.atomix.utils.time.WallClockTimestamp;
+
+import java.util.Objects;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
@@ -53,19 +55,30 @@ import static com.google.common.base.Preconditions.checkState;
  * can be recovered after a failure, and can be read by multiple readers concurrently.
  */
 public abstract class Snapshot implements AutoCloseable {
-  private final SnapshotStore store;
+  protected final SnapshotDescriptor descriptor;
+  protected final SnapshotStore store;
   private SnapshotWriter writer;
 
-  protected Snapshot(SnapshotStore store) {
+  protected Snapshot(SnapshotDescriptor descriptor, SnapshotStore store) {
+    this.descriptor = checkNotNull(descriptor, "descriptor cannot be null");
     this.store = checkNotNull(store, "store cannot be null");
   }
+
+  /**
+   * Returns the service name.
+   *
+   * @return the service name
+   */
+  public abstract String serviceName();
 
   /**
    * Returns the identifier of the state machine to which the snapshot belongs.
    *
    * @return The snapshot identifier.
    */
-  public abstract ServiceId serviceId();
+  public PrimitiveId serviceId() {
+    return PrimitiveId.from(descriptor.serviceId());
+  }
 
   /**
    * Returns the snapshot index.
@@ -74,7 +87,9 @@ public abstract class Snapshot implements AutoCloseable {
    *
    * @return The snapshot index.
    */
-  public abstract long index();
+  public long index() {
+    return descriptor.index();
+  }
 
   /**
    * Returns the snapshot timestamp.
@@ -83,7 +98,9 @@ public abstract class Snapshot implements AutoCloseable {
    *
    * @return The snapshot timestamp.
    */
-  public abstract WallClockTimestamp timestamp();
+  public WallClockTimestamp timestamp() {
+    return WallClockTimestamp.from(descriptor.timestamp());
+  }
 
   /**
    * Opens a new snapshot writer.
@@ -192,6 +209,20 @@ public abstract class Snapshot implements AutoCloseable {
    * Deletes the snapshot.
    */
   public void delete() {
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(serviceId(), index());
+  }
+
+  @Override
+  public boolean equals(Object object) {
+    if (getClass() == object.getClass()) {
+      Snapshot snapshot = (Snapshot) object;
+      return snapshot.serviceId().equals(serviceId()) && snapshot.index() == index();
+    }
+    return false;
   }
 
 }

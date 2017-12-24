@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-present Open Networking Laboratory
+ * Copyright 2015-present Open Networking Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -101,9 +101,6 @@ public abstract class AbstractRaftResponse implements RaftResponse {
      */
     protected void validate() {
       checkNotNull(status, "status cannot be null");
-      if (status == Status.ERROR) {
-        checkNotNull(error, "error cannot be null");
-      }
     }
 
     @Override

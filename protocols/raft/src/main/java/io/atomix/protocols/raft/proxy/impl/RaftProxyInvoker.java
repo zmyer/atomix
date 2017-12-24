@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-present Open Networking Laboratory
+ * Copyright 2017-present Open Networking Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,10 +15,11 @@
  */
 package io.atomix.protocols.raft.proxy.impl;
 
+import io.atomix.primitive.operation.PrimitiveOperation;
+import io.atomix.primitive.proxy.PrimitiveProxy;
 import io.atomix.protocols.raft.RaftError;
 import io.atomix.protocols.raft.RaftException;
-import io.atomix.protocols.raft.operation.OperationId;
-import io.atomix.protocols.raft.operation.RaftOperation;
+import io.atomix.protocols.raft.RaftException.ProtocolException;
 import io.atomix.protocols.raft.protocol.CommandRequest;
 import io.atomix.protocols.raft.protocol.CommandResponse;
 import io.atomix.protocols.raft.protocol.OperationRequest;
@@ -26,8 +27,6 @@ import io.atomix.protocols.raft.protocol.OperationResponse;
 import io.atomix.protocols.raft.protocol.QueryRequest;
 import io.atomix.protocols.raft.protocol.QueryResponse;
 import io.atomix.protocols.raft.protocol.RaftResponse;
-import io.atomix.protocols.raft.proxy.RaftProxy;
-import io.atomix.storage.buffer.HeapBytes;
 import io.atomix.utils.concurrent.ThreadContext;
 
 import java.net.ConnectException;
@@ -51,7 +50,8 @@ import static com.google.common.base.Preconditions.checkNotNull;
 final class RaftProxyInvoker {
   private static final int[] FIBONACCI = new int[]{1, 1, 2, 3, 5};
   private static final Predicate<Throwable> EXCEPTION_PREDICATE = e ->
-      e instanceof ConnectException
+      e instanceof ProtocolException
+          || e instanceof ConnectException
           || e instanceof TimeoutException
           || e instanceof ClosedChannelException;
   private static final Predicate<Throwable> CLOSED_PREDICATE = e ->
@@ -88,7 +88,7 @@ final class RaftProxyInvoker {
    * @param operation   The operation to submit.
    * @return A completable future to be completed once the command has been submitted.
    */
-  public CompletableFuture<byte[]> invoke(RaftOperation operation) {
+  public CompletableFuture<byte[]> invoke(PrimitiveOperation operation) {
     CompletableFuture<byte[]> future = new CompletableFuture<>();
     switch (operation.id().type()) {
       case COMMAND:
@@ -106,8 +106,8 @@ final class RaftProxyInvoker {
   /**
    * Submits a command to the cluster.
    */
-  private void invokeCommand(RaftOperation operation, CompletableFuture<byte[]> future) {
-    CommandRequest request = CommandRequest.newBuilder()
+  private void invokeCommand(PrimitiveOperation operation, CompletableFuture<byte[]> future) {
+    CommandRequest request = CommandRequest.builder()
         .withSession(state.getSessionId().id())
         .withSequence(state.nextCommandRequest())
         .withOperation(operation)
@@ -125,8 +125,8 @@ final class RaftProxyInvoker {
   /**
    * Submits a query to the cluster.
    */
-  private void invokeQuery(RaftOperation operation, CompletableFuture<byte[]> future) {
-    QueryRequest request = QueryRequest.newBuilder()
+  private void invokeQuery(PrimitiveOperation operation, CompletableFuture<byte[]> future) {
+    QueryRequest request = QueryRequest.builder()
         .withSession(state.getSessionId().id())
         .withSequence(state.getCommandRequest())
         .withOperation(operation)
@@ -148,7 +148,7 @@ final class RaftProxyInvoker {
    * @param attempt The attempt to submit.
    */
   private <T extends OperationRequest, U extends OperationResponse> void invoke(OperationAttempt<T, U> attempt) {
-    if (state.getState() == RaftProxy.State.CLOSED) {
+    if (state.getState() == PrimitiveProxy.State.CLOSED) {
       attempt.fail(new RaftException.ClosedSession("session closed"));
     } else {
       attempts.put(attempt.sequence, attempt);
@@ -281,6 +281,11 @@ final class RaftProxyInvoker {
      */
     public void fail(Throwable t) {
       complete(t);
+
+      // If the session has been closed, update the client's state.
+      if (CLOSED_PREDICATE.test(t)) {
+        state.setState(PrimitiveProxy.State.CLOSED);
+      }
     }
 
     /**
@@ -304,13 +309,11 @@ final class RaftProxyInvoker {
    * Command operation attempt.
    */
   private final class CommandAttempt extends OperationAttempt<CommandRequest, CommandResponse> {
-    private final long time = System.currentTimeMillis();
-
-    public CommandAttempt(long sequence, CommandRequest request, CompletableFuture<byte[]> future) {
+    CommandAttempt(long sequence, CommandRequest request, CompletableFuture<byte[]> future) {
       super(sequence, 1, request, future);
     }
 
-    public CommandAttempt(long sequence, int attempt, CommandRequest request, CompletableFuture<byte[]> future) {
+    CommandAttempt(long sequence, int attempt, CommandRequest request, CompletableFuture<byte[]> future) {
       super(sequence, attempt, request, future);
     }
 
@@ -340,10 +343,6 @@ final class RaftProxyInvoker {
         else if (response.error().type() == RaftError.Type.COMMAND_FAILURE) {
           resubmit(response.lastSequenceNumber(), this);
         }
-        // If the request failed with a PROTOCOL_ERROR, we need to ensure sequencing of operations is still maintained.
-        else if (response.error().type() == RaftError.Type.PROTOCOL_ERROR) {
-          completeWithNoOp(response.error().createException());
-        }
         // If an APPLICATION_ERROR occurred, complete the request exceptionally with the error message.
         else if (response.error().type() == RaftError.Type.APPLICATION_ERROR) {
           complete(response.error().createException());
@@ -353,7 +352,7 @@ final class RaftProxyInvoker {
             || response.error().type() == RaftError.Type.UNKNOWN_SESSION
             || response.error().type() == RaftError.Type.UNKNOWN_SERVICE
             || response.error().type() == RaftError.Type.CLOSED_SESSION) {
-          state.setState(RaftProxy.State.CLOSED);
+          state.setState(PrimitiveProxy.State.CLOSED);
           complete(response.error().createException());
         }
         // For all other errors, use fibonacci backoff to resubmit the command.
@@ -361,38 +360,13 @@ final class RaftProxyInvoker {
           retry(Duration.ofSeconds(FIBONACCI[Math.min(attempt - 1, FIBONACCI.length - 1)]));
         }
       } else if (EXCEPTION_PREDICATE.test(error) || (error instanceof CompletionException && EXCEPTION_PREDICATE.test(error.getCause()))) {
+        if (error instanceof ConnectException || error.getCause() instanceof ConnectException) {
+          leaderConnection.reset(null, leaderConnection.members());
+        }
         retry(Duration.ofSeconds(FIBONACCI[Math.min(attempt - 1, FIBONACCI.length - 1)]));
       } else {
         fail(error);
       }
-    }
-
-    @Override
-    public void fail(Throwable cause) {
-      super.fail(cause);
-
-      // If the session has been closed, update the client's state.
-      if (CLOSED_PREDICATE.test(cause)) {
-        state.setState(RaftProxy.State.CLOSED);
-      }
-      // Otherwise, resend the request with a NOOP command. This is necessary to ensure that sequence
-      // numbers are not skipped which could otherwise prevent the client from progressing.
-      else {
-        completeWithNoOp(cause);
-      }
-    }
-
-    /**
-     * Sends a no-op command using this command's sequence number.
-     */
-    private void completeWithNoOp(Throwable cause) {
-      CommandRequest noOpRequest = CommandRequest.newBuilder()
-          .withSession(request.session())
-          .withSequence(request.sequenceNumber())
-          .withOperation(new RaftOperation(OperationId.NOOP, HeapBytes.EMPTY))
-          .build();
-      context.execute(() -> invoke(new CommandAttempt(sequence, attempt + 1, noOpRequest, new CompletableFuture<>())));
-      complete(cause);
     }
 
     @Override
@@ -410,11 +384,11 @@ final class RaftProxyInvoker {
    * Query operation attempt.
    */
   private final class QueryAttempt extends OperationAttempt<QueryRequest, QueryResponse> {
-    public QueryAttempt(long sequence, QueryRequest request, CompletableFuture<byte[]> future) {
+    QueryAttempt(long sequence, QueryRequest request, CompletableFuture<byte[]> future) {
       super(sequence, 1, request, future);
     }
 
-    public QueryAttempt(long sequence, int attempt, QueryRequest request, CompletableFuture<byte[]> future) {
+    QueryAttempt(long sequence, int attempt, QueryRequest request, CompletableFuture<byte[]> future) {
       super(sequence, attempt, request, future);
     }
 
@@ -438,6 +412,12 @@ final class RaftProxyInvoker {
       if (error == null) {
         if (response.status() == RaftResponse.Status.OK) {
           complete(response);
+        } else if (response.error().type() == RaftError.Type.UNKNOWN_CLIENT
+            || response.error().type() == RaftError.Type.UNKNOWN_SESSION
+            || response.error().type() == RaftError.Type.UNKNOWN_SERVICE
+            || response.error().type() == RaftError.Type.CLOSED_SESSION) {
+          state.setState(PrimitiveProxy.State.CLOSED);
+          complete(response.error().createException());
         } else {
           complete(response.error().createException());
         }

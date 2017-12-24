@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-present Open Networking Laboratory
+ * Copyright 2015-present Open Networking Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@ public final class SnapshotDescriptor implements AutoCloseable {
    *
    * @return The descriptor builder.
    */
-  public static Builder newBuilder() {
+  public static Builder builder() {
     return new Builder(HeapBuffer.allocate(BYTES));
   }
 
@@ -49,12 +49,12 @@ public final class SnapshotDescriptor implements AutoCloseable {
    * @return The descriptor builder.
    * @throws NullPointerException if {@code buffer} is null
    */
-  public static Builder newBuilder(Buffer buffer) {
+  public static Builder builder(Buffer buffer) {
     return new Builder(buffer);
   }
 
   private Buffer buffer;
-  private final long id;
+  private final long serviceId;
   private final long index;
   private final long timestamp;
   private boolean locked;
@@ -64,7 +64,7 @@ public final class SnapshotDescriptor implements AutoCloseable {
    */
   public SnapshotDescriptor(Buffer buffer) {
     this.buffer = checkNotNull(buffer, "buffer cannot be null");
-    this.id = buffer.readLong();
+    this.serviceId = buffer.readLong();
     this.index = buffer.readLong();
     this.timestamp = buffer.readLong();
     this.locked = buffer.readBoolean();
@@ -72,12 +72,12 @@ public final class SnapshotDescriptor implements AutoCloseable {
   }
 
   /**
-   * Returns the snapshot identifier.
+   * Returns the service identifier.
    *
-   * @return The snapshot identifier.
+   * @return The service identifier.
    */
-  public long snapshotId() {
-    return id;
+  public long serviceId() {
+    return serviceId;
   }
 
   /**
@@ -124,7 +124,7 @@ public final class SnapshotDescriptor implements AutoCloseable {
    */
   SnapshotDescriptor copyTo(Buffer buffer) {
     this.buffer = buffer
-        .writeLong(id)
+        .writeLong(serviceId)
         .writeLong(index)
         .writeLong(timestamp)
         .writeBoolean(locked)
@@ -163,7 +163,7 @@ public final class SnapshotDescriptor implements AutoCloseable {
      * @param id The snapshot identifier.
      * @return The snapshot builder.
      */
-    public Builder withId(long id) {
+    public Builder withServiceId(long id) {
       buffer.writeLong(0, id);
       return this;
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-present Open Networking Laboratory
+ * Copyright 2017-present Open Networking Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
  */
 package io.atomix.protocols.raft.impl;
 
-import io.atomix.protocols.raft.session.RaftSessionMetadata;
+import io.atomix.primitive.session.SessionMetadata;
 
 import java.util.Set;
 
@@ -25,9 +25,9 @@ import static com.google.common.base.MoreObjects.toStringHelper;
  * Metadata result.
  */
 public final class MetadataResult {
-  final Set<RaftSessionMetadata> sessions;
+  final Set<SessionMetadata> sessions;
 
-  MetadataResult(Set<RaftSessionMetadata> sessions) {
+  MetadataResult(Set<SessionMetadata> sessions) {
     this.sessions = sessions;
   }
 
@@ -36,7 +36,7 @@ public final class MetadataResult {
    *
    * @return The session metadata.
    */
-  public Set<RaftSessionMetadata> sessions() {
+  public Set<SessionMetadata> sessions() {
     return sessions;
   }
 

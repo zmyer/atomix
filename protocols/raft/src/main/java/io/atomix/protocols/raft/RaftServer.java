@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-present Open Networking Laboratory
+ * Copyright 2015-present Open Networking Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,19 +15,24 @@
  */
 package io.atomix.protocols.raft;
 
-import io.atomix.protocols.raft.cluster.MemberId;
+import io.atomix.cluster.NodeId;
+import io.atomix.primitive.PrimitiveType;
+import io.atomix.primitive.PrimitiveTypeRegistry;
+import io.atomix.primitive.operation.OperationType;
+import io.atomix.primitive.service.PrimitiveService;
 import io.atomix.protocols.raft.cluster.RaftCluster;
 import io.atomix.protocols.raft.cluster.RaftMember;
 import io.atomix.protocols.raft.impl.DefaultRaftServer;
-import io.atomix.protocols.raft.impl.RaftServiceRegistry;
 import io.atomix.protocols.raft.protocol.RaftServerProtocol;
-import io.atomix.protocols.raft.service.RaftService;
 import io.atomix.protocols.raft.storage.RaftStorage;
 import io.atomix.protocols.raft.storage.log.RaftLog;
 import io.atomix.storage.StorageLevel;
+import io.atomix.utils.concurrent.ThreadModel;
 
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -39,14 +44,14 @@ import static com.google.common.base.Preconditions.checkNotNull;
  * Provides a standalone implementation of the <a href="http://raft.github.io/">Raft consensus algorithm</a>.
  * <p>
  * To create a new server, use the server {@link RaftServer.Builder}. Servers require
- * cluster membership information in order to perform communication. Each server must be provided a local {@link MemberId}
+ * cluster membership information in order to perform communication. Each server must be provided a local {@link NodeId}
  * to which to bind the internal {@link io.atomix.protocols.raft.protocol.RaftServerProtocol} and a set of addresses
  * for other members in the cluster.
  * <h2>State machines</h2>
- * Underlying each server is a {@link RaftService}. The state machine is responsible for maintaining the state with
- * relation to {@link io.atomix.protocols.raft.RaftCommand}s and {@link io.atomix.protocols.raft.RaftQuery}s submitted
- * to the server by a client. State machines are provided in a factory to allow servers to transition between stateful
- * and stateless states.
+ * Underlying each server is a {@link PrimitiveService}. The state machine is responsible for maintaining the state with
+ * relation to {@link OperationType#COMMAND}s and
+ * {@link OperationType#QUERY}s submitted to the server by a client. State machines
+ * are provided in a factory to allow servers to transition between stateful and stateless states.
  * <pre>
  *   {@code
  *   Address address = new Address("123.456.789.0", 5000);
@@ -57,13 +62,13 @@ import static com.google.common.base.Preconditions.checkNotNull;
  *     .build();
  *   }
  * </pre>
- * Server state machines are responsible for registering {@link io.atomix.protocols.raft.RaftCommand}s which can be
+ * Server state machines are responsible for registering {@link OperationType#COMMAND}s which can be
  * submitted to the cluster. Raft relies upon determinism to ensure consistency throughout the cluster, so <em>it is
  * imperative that each server in a cluster have the same state machine with the same commands.</em> State machines are
  * provided to the server as a {@link Supplier factory} to allow servers to {@link RaftMember#promote(RaftMember.Type) transition}
  * between stateful and stateless states.
  * <h2>Storage</h2>
- * As {@link io.atomix.protocols.raft.RaftCommand}s are received by the server, they're written to the Raft
+ * As {@link OperationType#COMMAND}s are received by the server, they're written to the Raft
  * {@link RaftLog} and replicated to other members
  * of the cluster. By default, the log is stored on disk, but users can override the default {@link RaftStorage} configuration
  * via {@link RaftServer.Builder#withStorage(RaftStorage)}. Most notably, to configure the storage module to store entries in
@@ -83,7 +88,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
  * state machine snapshots in addition to logs. See the {@link RaftStorage} documentation for more information.
  * <h2>Bootstrapping the cluster</h2>
  * Once a server has been built, it must either be {@link #bootstrap() bootstrapped} to form a new cluster or
- * {@link #join(MemberId...) joined} to an existing cluster. The simplest way to bootstrap a new cluster is to bootstrap
+ * {@link #join(NodeId...) joined} to an existing cluster. The simplest way to bootstrap a new cluster is to bootstrap
  * a single server to which additional servers can be joined.
  * <pre>
  *   {@code
@@ -94,7 +99,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
  *   }
  * </pre>
  * Alternatively, the bootstrapped cluster can include multiple servers by providing an initial configuration to the
- * {@link #bootstrap(MemberId...)} method on each server. When bootstrapping a multi-node cluster, the bootstrap configuration
+ * {@link #bootstrap(NodeId...)} method on each server. When bootstrapping a multi-node cluster, the bootstrap configuration
  * must be identical on all servers for safety.
  * <pre>
  *   {@code
@@ -113,7 +118,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
  * <h2>Adding a server to an existing cluster</h2>
  * Once a single- or multi-node cluster has been {@link #bootstrap() bootstrapped}, often times users need to
  * add additional servers to the cluster. For example, some users prefer to bootstrap a single-node cluster and
- * add additional nodes to that server. Servers can join existing bootstrapped clusters using the {@link #join(MemberId...)}
+ * add additional nodes to that server. Servers can join existing bootstrapped clusters using the {@link #join(NodeId...)}
  * method. When joining an existing cluster, the server simply needs to specify at least one reachable server in the
  * existing cluster.
  * <pre>
@@ -134,27 +139,8 @@ import static com.google.common.base.Preconditions.checkNotNull;
  *     });
  *   }
  * </pre>
- * <h2>Server types</h2>
- * Servers form new clusters and join existing clusters as active Raft voting members by default. However, for
- * large deployments Raft also supports alternative types of nodes which are configured by setting the server
- * {@link RaftMember.Type}. For example, the {@link RaftMember.Type#PASSIVE PASSIVE} server type does not participate
- * directly in the Raft consensus algorithm and instead receives state changes via an asynchronous gossip protocol.
- * This allows passive members to scale sequential reads beyond the typical three- or five-node Raft cluster. The
- * {@link RaftMember.Type#RESERVE RESERVE} server type is a stateless server that can act as a standby to the stateful
- * servers in the cluster, being {@link RaftMember#promote(RaftMember.Type) promoted} to a stateful state when necessary.
- * <p>
- * Server types are defined in the server builder simply by passing the initial {@link RaftMember.Type} to the
- * {@link Builder#withType(RaftMember.Type)} setter:
- * <pre>
- *   {@code
- *   RaftServer server = RaftServer.builder(address)
- *     .withType(Member.Type.PASSIVE)
- *     .withTransport(new NettyTransport())
- *     .build();
- *   }
- * </pre>
  *
- * @see RaftService
+ * @see PrimitiveService
  * @see RaftStorage
  */
 public interface RaftServer {
@@ -166,20 +152,33 @@ public interface RaftServer {
    *
    * @return The server builder.
    */
-  static Builder newBuilder() {
-    return newBuilder(null);
+  static Builder builder() {
+    return builder(null);
   }
 
   /**
    * Returns a new Raft server builder.
    * <p>
-   * The provided {@link MemberId} is the address to which to bind the server being constructed.
+   * The provided {@link NodeId} is the address to which to bind the server being constructed.
    *
-   * @param localMemberId The local node identifier.
+   * @param localNodeId The local node identifier.
    * @return The server builder.
    */
-  static Builder newBuilder(MemberId localMemberId) {
-    return new DefaultRaftServer.Builder(localMemberId);
+  static Builder builder(NodeId localNodeId) {
+    return new DefaultRaftServer.Builder(localNodeId);
+  }
+
+  @Deprecated
+  static Builder newBuilder() {
+    return builder();
+  }
+
+  /**
+   * @deprecated since 2.1
+   */
+  @Deprecated
+  static Builder newBuilder(NodeId localNodeId) {
+    return builder(localNodeId);
   }
 
   /**
@@ -200,19 +199,17 @@ public interface RaftServer {
     INACTIVE(false),
 
     /**
-     * Represents the state of a server that is a reserve member of the cluster.
-     * <p>
-     * Reserve servers only receive notification of leader, term, and configuration changes.
-     */
-    RESERVE(false),
-
-    /**
      * Represents the state of a server in the process of catching up its log.
      * <p>
      * Upon successfully joining an existing cluster, the server will transition to the passive state and remain there
      * until the leader determines that the server has caught up enough to be promoted to a full member.
      */
     PASSIVE(false),
+
+    /**
+     * Represents the state of a server in the process of being promoted to an active voting member.
+     */
+    PROMOTABLE(false),
 
     /**
      * Represents the state of a server participating in normal log replication.
@@ -272,12 +269,12 @@ public interface RaftServer {
    * Returns the server's cluster configuration.
    * <p>
    * The {@link RaftCluster} is representative of the server's current view of the cluster configuration. The first time
-   * the server is {@link #bootstrap() started}, the cluster configuration will be initialized using the {@link MemberId}
-   * list provided to the server {@link #newBuilder(MemberId) builder}. For {@link StorageLevel#DISK persistent}
+   * the server is {@link #bootstrap() started}, the cluster configuration will be initialized using the {@link NodeId}
+   * list provided to the server {@link #builder(NodeId) builder}. For {@link StorageLevel#DISK persistent}
    * servers, subsequent starts will result in the last known cluster configuration being loaded from disk.
    * <p>
    * The returned {@link RaftCluster} can be used to modify the state of the cluster to which this server belongs. Note,
-   * however, that users need not explicitly {@link RaftCluster#join(MemberId...) join} or {@link RaftCluster#leave() leave} the
+   * however, that users need not explicitly {@link RaftCluster#join(NodeId...) join} or {@link RaftCluster#leave() leave} the
    * cluster since starting and stopping the server results in joining and leaving the cluster respectively.
    *
    * @return The server's cluster configuration.
@@ -339,7 +336,7 @@ public interface RaftServer {
    * When the cluster is bootstrapped, the local server will be transitioned into the active state and begin
    * participating in the Raft consensus algorithm. When the cluster is first bootstrapped, no leader will exist.
    * The bootstrapped members will elect a leader amongst themselves. Once a cluster has been bootstrapped, additional
-   * members may be {@link #join(MemberId...) joined} to the cluster. In the event that the bootstrapped members cannot
+   * members may be {@link #join(NodeId...) joined} to the cluster. In the event that the bootstrapped members cannot
    * reach a quorum to elect a leader, bootstrap will continue until successful.
    * <p>
    * It is critical that all servers in a bootstrap configuration be started with the same exact set of members.
@@ -350,7 +347,9 @@ public interface RaftServer {
    *
    * @return A completable future to be completed once the cluster has been bootstrapped.
    */
-  CompletableFuture<RaftServer> bootstrap();
+  default CompletableFuture<RaftServer> bootstrap() {
+    return bootstrap(Collections.emptyList());
+  }
 
   /**
    * Bootstraps the cluster using the provided cluster configuration.
@@ -365,7 +364,7 @@ public interface RaftServer {
    * When the cluster is bootstrapped, the local server will be transitioned into the active state and begin
    * participating in the Raft consensus algorithm. When the cluster is first bootstrapped, no leader will exist.
    * The bootstrapped members will elect a leader amongst themselves. Once a cluster has been bootstrapped, additional
-   * members may be {@link #join(MemberId...) joined} to the cluster. In the event that the bootstrapped members cannot
+   * members may be {@link #join(NodeId...) joined} to the cluster. In the event that the bootstrapped members cannot
    * reach a quorum to elect a leader, bootstrap will continue until successful.
    * <p>
    * It is critical that all servers in a bootstrap configuration be started with the same exact set of members.
@@ -374,10 +373,12 @@ public interface RaftServer {
    * The {@link CompletableFuture} returned by this method will be completed once the cluster has been bootstrapped,
    * a leader has been elected, and the leader has been notified of the local server's client configurations.
    *
-   * @param cluster The bootstrap cluster configuration.
+   * @param members The bootstrap cluster configuration.
    * @return A completable future to be completed once the cluster has been bootstrapped.
    */
-  CompletableFuture<RaftServer> bootstrap(MemberId... cluster);
+  default CompletableFuture<RaftServer> bootstrap(NodeId... members) {
+    return bootstrap(Arrays.asList(members));
+  }
 
   /**
    * Bootstraps the cluster using the provided cluster configuration.
@@ -392,7 +393,7 @@ public interface RaftServer {
    * When the cluster is bootstrapped, the local server will be transitioned into the active state and begin
    * participating in the Raft consensus algorithm. When the cluster is first bootstrapped, no leader will exist.
    * The bootstrapped members will elect a leader amongst themselves. Once a cluster has been bootstrapped, additional
-   * members may be {@link #join(MemberId...) joined} to the cluster. In the event that the bootstrapped members cannot
+   * members may be {@link #join(NodeId...) joined} to the cluster. In the event that the bootstrapped members cannot
    * reach a quorum to elect a leader, bootstrap will continue until successful.
    * <p>
    * It is critical that all servers in a bootstrap configuration be started with the same exact set of members.
@@ -404,7 +405,7 @@ public interface RaftServer {
    * @param cluster The bootstrap cluster configuration.
    * @return A completable future to be completed once the cluster has been bootstrapped.
    */
-  CompletableFuture<RaftServer> bootstrap(Collection<MemberId> cluster);
+  CompletableFuture<RaftServer> bootstrap(Collection<NodeId> cluster);
 
   /**
    * Joins the cluster.
@@ -433,10 +434,12 @@ public interface RaftServer {
    * server will retry attempts to join the cluster until successful. If the server fails to reach the leader,
    * the join will be retried until successful.
    *
-   * @param cluster A collection of cluster member addresses to join.
+   * @param members A collection of cluster members to join.
    * @return A completable future to be completed once the local server has joined the cluster.
    */
-  CompletableFuture<RaftServer> join(MemberId... cluster);
+  default CompletableFuture<RaftServer> join(NodeId... members) {
+    return join(Arrays.asList(members));
+  }
 
   /**
    * Joins the cluster.
@@ -465,10 +468,28 @@ public interface RaftServer {
    * server will retry attempts to join the cluster until successful. If the server fails to reach the leader,
    * the join will be retried until successful.
    *
-   * @param cluster A collection of cluster member addresses to join.
+   * @param members A collection of cluster members to join.
    * @return A completable future to be completed once the local server has joined the cluster.
    */
-  CompletableFuture<RaftServer> join(Collection<MemberId> cluster);
+  CompletableFuture<RaftServer> join(Collection<NodeId> members);
+
+  /**
+   * Joins the cluster as a passive listener.
+   *
+   * @param cluster A collection of cluster members to join.
+   * @return A completable future to be completed once the local server has joined the cluster as a listener.
+   */
+  default CompletableFuture<RaftServer> listen(NodeId... cluster) {
+    return listen(Arrays.asList(checkNotNull(cluster)));
+  }
+
+  /**
+   * Joins the cluster as a passive listener.
+   *
+   * @param cluster A collection of cluster members to join.
+   * @return A completable future to be completed once the local server has joined the cluster as a listener.
+   */
+  CompletableFuture<RaftServer> listen(Collection<NodeId> cluster);
 
   /**
    * Promotes the server to leader if possible.
@@ -504,7 +525,7 @@ public interface RaftServer {
    * This builder should be used to programmatically configure and construct a new {@link RaftServer} instance.
    * The builder provides methods for configuring all aspects of a Raft server. The {@code RaftServer.Builder}
    * class cannot be instantiated directly. To create a new builder, use one of the
-   * {@link RaftServer#newBuilder(MemberId) server builder factory} methods.
+   * {@link RaftServer#builder(NodeId) server builder factory} methods.
    * <pre>
    *   {@code
    *   RaftServer.Builder builder = RaftServer.builder(address);
@@ -518,7 +539,7 @@ public interface RaftServer {
    *     .build();
    *   }
    * </pre>
-   * Each server <em>must</em> be configured with a {@link RaftService}. The state machine is the component of the
+   * Each server <em>must</em> be configured with a {@link PrimitiveService}. The state machine is the component of the
    * server that stores state and reacts to commands and queries submitted by clients to the cluster. State machines
    * are provided to the server in the form of a state machine {@link Supplier factory} to allow the server to reconstruct
    * its state when necessary.
@@ -533,22 +554,27 @@ public interface RaftServer {
   abstract class Builder implements io.atomix.utils.Builder<RaftServer> {
     private static final Duration DEFAULT_ELECTION_TIMEOUT = Duration.ofMillis(750);
     private static final Duration DEFAULT_HEARTBEAT_INTERVAL = Duration.ofMillis(250);
+    private static final int DEFAULT_ELECTION_THRESHOLD = 3;
     private static final Duration DEFAULT_SESSION_TIMEOUT = Duration.ofMillis(5000);
+    private static final int DEFAULT_SESSION_FAILURE_THRESHOLD = 3;
+    private static final ThreadModel DEFAULT_THREAD_MODEL = ThreadModel.SHARED_THREAD_POOL;
     private static final int DEFAULT_THREAD_POOL_SIZE = Runtime.getRuntime().availableProcessors();
 
     protected String name;
-    protected RaftMember.Type type = RaftMember.Type.ACTIVE;
-    protected MemberId localMemberId;
+    protected NodeId localNodeId;
     protected RaftServerProtocol protocol;
     protected RaftStorage storage;
     protected Duration electionTimeout = DEFAULT_ELECTION_TIMEOUT;
     protected Duration heartbeatInterval = DEFAULT_HEARTBEAT_INTERVAL;
+    protected int electionThreshold = DEFAULT_ELECTION_THRESHOLD;
     protected Duration sessionTimeout = DEFAULT_SESSION_TIMEOUT;
-    protected final RaftServiceRegistry serviceRegistry = new RaftServiceRegistry();
+    protected int sessionFailureThreshold = DEFAULT_SESSION_FAILURE_THRESHOLD;
+    protected PrimitiveTypeRegistry primitiveTypes = new PrimitiveTypeRegistry();
+    protected ThreadModel threadModel = DEFAULT_THREAD_MODEL;
     protected int threadPoolSize = DEFAULT_THREAD_POOL_SIZE;
 
-    protected Builder(MemberId localMemberId) {
-      this.localMemberId = checkNotNull(localMemberId, "localMemberId cannot be null");
+    protected Builder(NodeId localNodeId) {
+      this.localNodeId = checkNotNull(localNodeId, "localNodeId cannot be null");
     }
 
     /**
@@ -570,8 +596,8 @@ public interface RaftServer {
      * @param type The initial server member type.
      * @return The server builder.
      */
+    @Deprecated
     public Builder withType(RaftMember.Type type) {
-      this.type = checkNotNull(type, "type cannot be null");
       return this;
     }
 
@@ -583,6 +609,17 @@ public interface RaftServer {
      */
     public Builder withProtocol(RaftServerProtocol protocol) {
       this.protocol = checkNotNull(protocol, "protocol cannot be null");
+      return this;
+    }
+
+    /**
+     * Sets the server thread model.
+     *
+     * @param threadModel the server thread model
+     * @return the server builder
+     */
+    public Builder withThreadModel(ThreadModel threadModel) {
+      this.threadModel = checkNotNull(threadModel, "threadModel cannot be null");
       return this;
     }
 
@@ -599,15 +636,26 @@ public interface RaftServer {
     }
 
     /**
-     * Adds a Raft service factory.
+     * Sets the primitive types.
      *
-     * @param type    The service type name.
-     * @param factory The Raft service factory.
-     * @return The server builder.
-     * @throws NullPointerException if the {@code factory} is {@code null}
+     * @param primitiveTypes the primitive types
+     * @return the Raft server builder
+     * @throws NullPointerException if the {@code primitiveTypes} argument is {@code null}
      */
-    public Builder addService(String type, Supplier<RaftService> factory) {
-      serviceRegistry.register(type, factory);
+    public Builder withPrimitiveTypes(PrimitiveTypeRegistry primitiveTypes) {
+      this.primitiveTypes = checkNotNull(primitiveTypes, "primitiveTypes cannot be null");
+      return this;
+    }
+
+    /**
+     * Adds a primitive type to the registry.
+     *
+     * @param primitiveType the primitive type to add
+     * @return the Raft server builder
+     * @throws NullPointerException if the {@code primitiveType} is {@code null}
+     */
+    public Builder addPrimitiveType(PrimitiveType primitiveType) {
+      primitiveTypes.register(primitiveType);
       return this;
     }
 
@@ -644,6 +692,22 @@ public interface RaftServer {
     }
 
     /**
+     * Sets the election failure detection threshold.
+     * <p>
+     * This is the phi value at which a follower will attempt to start a new election after not receiving any
+     * communication from the leader.
+     *
+     * @param electionThreshold the election failure detection threshold
+     * @return The Raft server builder
+     * @throws IllegalArgumentException if the threshold is not positive
+     */
+    public Builder withElectionThreshold(int electionThreshold) {
+      checkArgument(electionThreshold > 0, "electionThreshold must be positive");
+      this.electionThreshold = electionThreshold;
+      return this;
+    }
+
+    /**
      * Sets the Raft session timeout, returning the Raft configuration for method chaining.
      *
      * @param sessionTimeout The Raft session timeout duration.
@@ -656,6 +720,21 @@ public interface RaftServer {
       checkArgument(!sessionTimeout.isNegative() && !sessionTimeout.isZero(), "sessionTimeout must be positive");
       checkArgument(sessionTimeout.toMillis() > electionTimeout.toMillis(), "sessionTimeout must be greater than electionTimeout");
       this.sessionTimeout = sessionTimeout;
+      return this;
+    }
+
+    /**
+     * Sets the session failure detection threshold.
+     * <p>
+     * The threshold is a phi value at which sessions will be expired if the leader cannot communicate with the client.
+     *
+     * @param sessionFailureThreshold the session failure threshold
+     * @return The Raft server builder.
+     * @throws IllegalArgumentException if the threshold is not positive
+     */
+    public Builder withSessionFailureThreshold(int sessionFailureThreshold) {
+      checkArgument(sessionFailureThreshold > 0, "sessionFailureThreshold must be positive");
+      this.sessionFailureThreshold = sessionFailureThreshold;
       return this;
     }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-present Open Networking Laboratory
+ * Copyright 2017-present Open Networking Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 package io.atomix.protocols.raft.storage.log;
 
 import io.atomix.protocols.raft.storage.log.entry.RaftLogEntry;
-import io.atomix.serializer.Serializer;
+import io.atomix.utils.serializer.Serializer;
 import io.atomix.storage.StorageLevel;
 import io.atomix.storage.journal.DelegatingJournal;
 import io.atomix.storage.journal.SegmentedJournal;
@@ -37,14 +37,17 @@ public class RaftLog extends DelegatingJournal<RaftLogEntry> {
     return new Builder();
   }
 
+  @Deprecated
+  public static Builder newBuilder() {
+    return builder();
+  }
+
   private final SegmentedJournal<RaftLogEntry> journal;
   private final boolean flushOnCommit;
   private final RaftLogWriter writer;
   private volatile long commitIndex;
 
-  public RaftLog(
-      SegmentedJournal<RaftLogEntry> journal,
-      boolean flushOnCommit) {
+  protected RaftLog(SegmentedJournal<RaftLogEntry> journal, boolean flushOnCommit) {
     super(journal);
     this.journal = journal;
     this.flushOnCommit = flushOnCommit;
@@ -135,7 +138,8 @@ public class RaftLog extends DelegatingJournal<RaftLogEntry> {
    */
   public static class Builder implements io.atomix.utils.Builder<RaftLog> {
     private static final boolean DEFAULT_FLUSH_ON_COMMIT = false;
-    private final SegmentedJournal.Builder<RaftLogEntry> journalBuilder = SegmentedJournal.newBuilder();
+
+    private final SegmentedJournal.Builder<RaftLogEntry> journalBuilder = SegmentedJournal.builder();
     private boolean flushOnCommit = DEFAULT_FLUSH_ON_COMMIT;
 
     protected Builder() {

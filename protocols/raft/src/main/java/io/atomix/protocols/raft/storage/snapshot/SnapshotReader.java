@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-present Open Networking Laboratory
+ * Copyright 2015-present Open Networking Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,6 @@
  */
 package io.atomix.protocols.raft.storage.snapshot;
 
-import com.google.common.base.Function;
 import io.atomix.protocols.raft.RaftServer;
 import io.atomix.storage.StorageLevel;
 import io.atomix.storage.buffer.Buffer;
@@ -34,7 +33,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
  * or disk based on the configured {@link StorageLevel}.
  * <p>
  * In addition to standard {@link BufferInput} methods, snapshot readers support reading serializable objects
- * from the snapshot via the {@link #readObject(Function)} method. Serializable types must be registered on the
+ * from the snapshot via the {@link #readObject(java.util.function.Function)} method. Serializable types must be registered on the
  * {@link RaftServer} serializer to be supported in snapshots.
  */
 public class SnapshotReader implements BufferInput<SnapshotReader> {
@@ -44,6 +43,15 @@ public class SnapshotReader implements BufferInput<SnapshotReader> {
   SnapshotReader(Buffer buffer, Snapshot snapshot) {
     this.buffer = checkNotNull(buffer, "buffer cannot be null");
     this.snapshot = checkNotNull(snapshot, "snapshot cannot be null");
+  }
+
+  /**
+   * Returns the snapshot associated with the reader.
+   *
+   * @return The snapshot associated with the reader
+   */
+  public Snapshot snapshot() {
+    return snapshot;
   }
 
   @Override
@@ -65,18 +73,6 @@ public class SnapshotReader implements BufferInput<SnapshotReader> {
   public SnapshotReader skip(int bytes) {
     buffer.skip(bytes);
     return this;
-  }
-
-  /**
-   * Reads an object from the buffer.
-   *
-   * @param decoder the object decoder
-   * @param <T> the type of the object to read
-   * @return the read object.
-   */
-  public <T> T readObject(Function<byte[], T> decoder) {
-    byte[] bytes = buffer.readBytes(buffer.readInt());
-    return decoder.apply(bytes);
   }
 
   @Override

@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-present Open Networking Laboratory
+ * Copyright 2015-present Open Networking Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
  */
 package io.atomix.protocols.raft.protocol;
 
-import io.atomix.protocols.raft.operation.RaftOperation;
+import io.atomix.primitive.operation.PrimitiveOperation;
 
 import java.util.Objects;
 
@@ -25,7 +25,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 /**
  * Client query request.
  * <p>
- * Query requests are submitted by clients to the Raft cluster to commit {@link RaftOperation}s to
+ * Query requests are submitted by clients to the Raft cluster to commit {@link PrimitiveOperation}s to
  * the replicated state machine. Each query request must be associated with a registered
  * {@link #session()} and have a unique {@link #sequenceNumber()} number within that session. Queries will
  * be applied in the cluster in the order defined by the provided sequence number. Thus, sequence numbers
@@ -39,13 +39,13 @@ public class QueryRequest extends OperationRequest {
    *
    * @return A new query request builder.
    */
-  public static Builder newBuilder() {
+  public static Builder builder() {
     return new Builder();
   }
 
   private final long index;
 
-  public QueryRequest(long session, long sequence, RaftOperation operation, long index) {
+  public QueryRequest(long session, long sequence, PrimitiveOperation operation, long index) {
     super(session, sequence, operation);
     this.index = index;
   }

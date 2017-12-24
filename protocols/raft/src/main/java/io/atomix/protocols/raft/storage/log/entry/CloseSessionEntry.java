@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-present Open Networking Laboratory
+ * Copyright 2017-present Open Networking Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,8 +23,20 @@ import static com.google.common.base.MoreObjects.toStringHelper;
  * Close session entry.
  */
 public class CloseSessionEntry extends SessionEntry {
-  public CloseSessionEntry(long term, long timestamp, long session) {
+  private final boolean expired;
+
+  public CloseSessionEntry(long term, long timestamp, long session, boolean expired) {
     super(term, timestamp, session);
+    this.expired = expired;
+  }
+
+  /**
+   * Returns whether the session is expired.
+   *
+   * @return Indicates whether the session is expired.
+   */
+  public boolean expired() {
+    return expired;
   }
 
   @Override
@@ -33,6 +45,7 @@ public class CloseSessionEntry extends SessionEntry {
         .add("term", term)
         .add("timestamp", new TimestampPrinter(timestamp))
         .add("session", session)
+        .add("expired", expired)
         .toString();
   }
 }

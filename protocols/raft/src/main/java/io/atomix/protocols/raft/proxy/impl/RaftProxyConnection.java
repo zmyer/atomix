@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-present Open Networking Laboratory
+ * Copyright 2017-present Open Networking Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,8 +15,8 @@
  */
 package io.atomix.protocols.raft.proxy.impl;
 
+import io.atomix.cluster.NodeId;
 import io.atomix.protocols.raft.RaftError;
-import io.atomix.protocols.raft.cluster.MemberId;
 import io.atomix.protocols.raft.protocol.CloseSessionRequest;
 import io.atomix.protocols.raft.protocol.CloseSessionResponse;
 import io.atomix.protocols.raft.protocol.CommandRequest;
@@ -66,7 +66,7 @@ public class RaftProxyConnection {
   private final RaftClientProtocol protocol;
   private final MemberSelector selector;
   private final ThreadContext context;
-  private MemberId member;
+  private NodeId currentNode;
 
   public RaftProxyConnection(RaftClientProtocol protocol, MemberSelector selector, ThreadContext context, LoggerContext loggerContext) {
     this.protocol = checkNotNull(protocol, "protocol cannot be null");
@@ -76,43 +76,38 @@ public class RaftProxyConnection {
   }
 
   /**
+   * Resets the member selector.
+   */
+  public void reset() {
+    selector.reset();
+  }
+
+  /**
+   * Resets the member selector.
+   *
+   * @param leader the selector leader
+   * @param servers the selector servers
+   */
+  public void reset(NodeId leader, Collection<NodeId> servers) {
+    selector.reset(leader, servers);
+  }
+
+  /**
    * Returns the current selector leader.
    *
    * @return The current selector leader.
    */
-  public MemberId leader() {
+  public NodeId leader() {
     return selector.leader();
   }
 
   /**
-   * Returns the current set of servers.
+   * Returns the current set of members.
    *
-   * @return The current set of servers.
+   * @return The current set of members.
    */
-  public Collection<MemberId> servers() {
-    return selector.servers();
-  }
-
-  /**
-   * Resets the client connection.
-   *
-   * @return The client connection.
-   */
-  public RaftProxyConnection reset() {
-    selector.reset();
-    return this;
-  }
-
-  /**
-   * Resets the client connection.
-   *
-   * @param leader  The current cluster leader.
-   * @param servers The current servers.
-   * @return The client connection.
-   */
-  public RaftProxyConnection reset(MemberId leader, Collection<MemberId> servers) {
-    selector.reset(leader, servers);
-    return this;
+  public Collection<NodeId> members() {
+    return selector.members();
   }
 
   /**
@@ -214,7 +209,7 @@ public class RaftProxyConnection {
   /**
    * Sends the given request attempt to the cluster.
    */
-  protected <T extends RaftRequest, U extends RaftResponse> void sendRequest(T request, BiFunction<MemberId, T, CompletableFuture<U>> sender, MemberId member, CompletableFuture<U> future) {
+  protected <T extends RaftRequest, U extends RaftResponse> void sendRequest(T request, BiFunction<NodeId, T, CompletableFuture<U>> sender, NodeId member, CompletableFuture<U> future) {
     if (member != null) {
       log.trace("Sending {} to {}", request, member);
       sender.apply(member, request).whenCompleteAsync((r, e) -> {
@@ -233,11 +228,11 @@ public class RaftProxyConnection {
    * Resends a request due to a request failure, resetting the connection if necessary.
    */
   @SuppressWarnings("unchecked")
-  protected <T extends RaftRequest> void retryRequest(Throwable cause, T request, BiFunction sender, MemberId member, CompletableFuture future) {
+  protected <T extends RaftRequest> void retryRequest(Throwable cause, T request, BiFunction sender, NodeId member, CompletableFuture future) {
     // If the connection has not changed, reset it and connect to the next server.
-    if (this.member == member) {
+    if (this.currentNode == member) {
       log.trace("Resetting connection. Reason: {}", cause.getMessage());
-      this.member = null;
+      this.currentNode = null;
     }
 
     // Attempt to send the request again.
@@ -248,12 +243,12 @@ public class RaftProxyConnection {
    * Handles a response from the cluster.
    */
   @SuppressWarnings("unchecked")
-  protected <T extends RaftRequest> void handleResponse(T request, BiFunction sender, MemberId member, RaftResponse response, Throwable error, CompletableFuture future) {
+  protected <T extends RaftRequest> void handleResponse(T request, BiFunction sender, NodeId member, RaftResponse response, Throwable error, CompletableFuture future) {
     if (error == null) {
+      log.trace("Received {} from {}", response, member);
       if (COMPLETE_PREDICATE.test(response)) {
-        log.trace("Received {} from {}", response, member);
         future.complete(response);
-        reset();
+        selector.reset();
       } else {
         retryRequest(response.error().createException(), request, sender, member, future);
       }
@@ -273,19 +268,19 @@ public class RaftProxyConnection {
   /**
    * Connects to the cluster.
    */
-  protected MemberId next() {
+  protected NodeId next() {
     // If a connection was already established then use that connection.
-    if (member != null) {
-      return member;
+    if (currentNode != null) {
+      return currentNode;
     }
 
     if (!selector.hasNext()) {
       log.debug("Failed to connect to the cluster");
-      reset();
+      selector.reset();
       return null;
     } else {
-      this.member = selector.next();
-      return member;
+      this.currentNode = selector.next();
+      return currentNode;
     }
   }
 }

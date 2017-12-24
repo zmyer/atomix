@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-present Open Networking Laboratory
+ * Copyright 2015-present Open Networking Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,32 +23,55 @@ import io.atomix.protocols.raft.impl.OperationResult;
 import io.atomix.protocols.raft.impl.RaftContext;
 import io.atomix.protocols.raft.protocol.AppendRequest;
 import io.atomix.protocols.raft.protocol.AppendResponse;
+import io.atomix.protocols.raft.protocol.CloseSessionRequest;
+import io.atomix.protocols.raft.protocol.CloseSessionResponse;
+import io.atomix.protocols.raft.protocol.CommandRequest;
+import io.atomix.protocols.raft.protocol.CommandResponse;
 import io.atomix.protocols.raft.protocol.InstallRequest;
 import io.atomix.protocols.raft.protocol.InstallResponse;
+import io.atomix.protocols.raft.protocol.JoinRequest;
+import io.atomix.protocols.raft.protocol.JoinResponse;
+import io.atomix.protocols.raft.protocol.KeepAliveRequest;
+import io.atomix.protocols.raft.protocol.KeepAliveResponse;
+import io.atomix.protocols.raft.protocol.LeaveRequest;
+import io.atomix.protocols.raft.protocol.LeaveResponse;
+import io.atomix.protocols.raft.protocol.MetadataRequest;
+import io.atomix.protocols.raft.protocol.MetadataResponse;
+import io.atomix.protocols.raft.protocol.OpenSessionRequest;
+import io.atomix.protocols.raft.protocol.OpenSessionResponse;
 import io.atomix.protocols.raft.protocol.OperationResponse;
+import io.atomix.protocols.raft.protocol.PollRequest;
+import io.atomix.protocols.raft.protocol.PollResponse;
 import io.atomix.protocols.raft.protocol.QueryRequest;
 import io.atomix.protocols.raft.protocol.QueryResponse;
 import io.atomix.protocols.raft.protocol.RaftResponse;
-import io.atomix.protocols.raft.service.ServiceId;
-import io.atomix.protocols.raft.session.impl.RaftSessionContext;
+import io.atomix.protocols.raft.protocol.ReconfigureRequest;
+import io.atomix.protocols.raft.protocol.ReconfigureResponse;
+import io.atomix.protocols.raft.protocol.VoteRequest;
+import io.atomix.protocols.raft.protocol.VoteResponse;
+import io.atomix.primitive.PrimitiveId;
+import io.atomix.protocols.raft.session.RaftSession;
 import io.atomix.protocols.raft.storage.log.RaftLogReader;
 import io.atomix.protocols.raft.storage.log.RaftLogWriter;
 import io.atomix.protocols.raft.storage.log.entry.QueryEntry;
 import io.atomix.protocols.raft.storage.log.entry.RaftLogEntry;
 import io.atomix.protocols.raft.storage.snapshot.Snapshot;
 import io.atomix.protocols.raft.storage.snapshot.SnapshotWriter;
+import io.atomix.storage.StorageException;
 import io.atomix.storage.journal.Indexed;
-import io.atomix.time.WallClockTimestamp;
+import io.atomix.utils.time.WallClockTimestamp;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 
+import static com.google.common.base.MoreObjects.toStringHelper;
+
 /**
  * Passive state.
  */
-public class PassiveRole extends ReserveRole {
+public class PassiveRole extends InactiveRole {
   private final Map<Long, PendingSnapshot> pendingSnapshots = new HashMap<>();
 
   public PassiveRole(RaftContext context) {
@@ -61,8 +84,8 @@ public class PassiveRole extends ReserveRole {
   }
 
   @Override
-  public CompletableFuture<RaftRole> open() {
-    return super.open()
+  public CompletableFuture<RaftRole> start() {
+    return super.start()
         .thenRun(this::truncateUncommittedEntries)
         .thenApply(v -> this);
   }
@@ -127,22 +150,22 @@ public class PassiveRole extends ReserveRole {
     RaftLogWriter writer = raft.getLogWriter();
     RaftLogReader reader = raft.getLogReader();
 
-    // Get the last entry written to the log.
-    Indexed<RaftLogEntry> lastEntry = writer.getLastEntry();
+    // If the previous term is set, validate that it matches the local log.
+    // We check the previous log term since that indicates whether any entry is present in the leader's
+    // log at the previous log index. It's possible that the leader can send a non-zero previous log index
+    // with a zero term in the event the leader has compacted its logs and is sending the first entry.
+    if (request.prevLogTerm() != 0) {
+      // Get the last entry written to the log.
+      Indexed<RaftLogEntry> lastEntry = writer.getLastEntry();
 
-    // If the local log is non-empty...
-    if (lastEntry != null) {
-      // If the previous log index is greater than the last entry index, fail the attempt.
-      if (request.prevLogIndex() > lastEntry.index()) {
-        log.debug("Rejected {}: Previous index ({}) is greater than the local log's last index ({})", request, request.prevLogIndex(), lastEntry.index());
-        return failAppend(lastEntry.index(), future);
-      }
+      // If the local log is non-empty...
+      if (lastEntry != null) {
+        // If the previous log index is greater than the last entry index, fail the attempt.
+        if (request.prevLogIndex() > lastEntry.index()) {
+          log.debug("Rejected {}: Previous index ({}) is greater than the local log's last index ({})", request, request.prevLogIndex(), lastEntry.index());
+          return failAppend(lastEntry.index(), future);
+        }
 
-      // If the previous term is set, validate that it matches the local log.
-      // We check the previous log term since that indicates whether any entry is present in the leader's
-      // log at the previous log index. It's possible that the leader can send a non-zero previous log index
-      // with a zero term in the event the leader has compacted its logs and is sending the first entry.
-      if (request.prevLogTerm() != 0) {
         // If the previous log index is less than the last written entry index, look up the entry.
         if (request.prevLogIndex() < lastEntry.index()) {
           // Reset the reader to the previous log index.
@@ -166,12 +189,12 @@ public class PassiveRole extends ReserveRole {
           log.debug("Rejected {}: Previous entry term ({}) does not equal the local log's last term ({})", request, request.prevLogTerm(), lastEntry.entry().term());
           return failAppend(request.prevLogIndex() - 1, future);
         }
-      }
-    } else {
-      // If the previous log index is set and the last entry is null, fail the append.
-      if (request.prevLogIndex() > 0) {
-        log.debug("Rejected {}: Previous index ({}) is greater than the local log's last index (0)", request, request.prevLogIndex());
-        return failAppend(0, future);
+      } else {
+        // If the previous log index is set and the last entry is null, fail the append.
+        if (request.prevLogIndex() > 0) {
+          log.debug("Rejected {}: Previous index ({}) is greater than the local log's last index (0)", request, request.prevLogIndex());
+          return failAppend(0, future);
+        }
       }
     }
     return true;
@@ -227,8 +250,9 @@ public class PassiveRole extends ReserveRole {
             // the log and append the leader's entry.
             if (existingEntry.entry().term() != entry.term()) {
               writer.truncate(index - 1);
-              Indexed<RaftLogEntry> indexed = writer.append(entry);
-              log.trace("Appended {}", indexed);
+              if (!appendEntry(index, entry, writer, future)) {
+                return;
+              }
             }
           }
           // If the last written entry is equal to the append entry index, we don't need
@@ -238,8 +262,9 @@ public class PassiveRole extends ReserveRole {
             // the log and append the leader's entry.
             if (lastEntry.entry().term() != entry.term()) {
               writer.truncate(index - 1);
-              Indexed<RaftLogEntry> indexed = writer.append(entry);
-              log.trace("Appended {}", indexed);
+              if (!appendEntry(index, entry, writer, future)) {
+                return;
+              }
             }
           }
           // Otherwise, this entry is being appended at the end of the log.
@@ -250,14 +275,16 @@ public class PassiveRole extends ReserveRole {
             }
 
             // Append the entry and log a message.
-            Indexed<RaftLogEntry> indexed = writer.append(entry);
-            log.trace("Appended {}", indexed);
+            if (!appendEntry(index, entry, writer, future)) {
+              return;
+            }
           }
         }
         // Otherwise, if the last entry is null just append the entry and log a message.
         else {
-          Indexed<RaftLogEntry> indexed = writer.append(entry);
-          log.trace("Appended {}", indexed);
+          if (!appendEntry(index, entry, writer, future)) {
+            return;
+          }
         }
 
         // If the last log index meets the commitIndex, break the append loop to avoid appending uncommitted entries.
@@ -267,19 +294,34 @@ public class PassiveRole extends ReserveRole {
       }
     }
 
+    // Set the first commit index.
+    raft.setFirstCommitIndex(request.commitIndex());
+
     // Update the context commit and global indices.
-    long previousCommitIndex = raft.getCommitIndex();
-    raft.setCommitIndex(commitIndex);
-
-    if (raft.getCommitIndex() > previousCommitIndex) {
+    long previousCommitIndex = raft.setCommitIndex(commitIndex);
+    if (previousCommitIndex < commitIndex) {
       log.trace("Committed entries up to index {}", commitIndex);
+      raft.getStateMachine().applyAll(commitIndex);
     }
-
-    // Apply commits to the state machine in batch.
-    raft.getStateMachine().applyAll(raft.getCommitIndex());
 
     // Return a successful append response.
     succeedAppend(lastLogIndex, future);
+  }
+
+  /**
+   * Attempts to append an entry, returning {@code false} if the append fails due to an {@link StorageException.OutOfDiskSpace} exception.
+   */
+  private boolean appendEntry(long index, RaftLogEntry entry, RaftLogWriter writer, CompletableFuture<AppendResponse> future) {
+    try {
+      Indexed<RaftLogEntry> indexed = writer.append(entry);
+      log.trace("Appended {}", indexed);
+    } catch (StorageException.OutOfDiskSpace e) {
+      log.trace("Append failed: {}", e);
+      raft.getLogCompactor().compact();
+      failAppend(index - 1, future);
+      return false;
+    }
+    return true;
   }
 
   /**
@@ -313,7 +355,7 @@ public class PassiveRole extends ReserveRole {
    * @return the append response status
    */
   protected boolean completeAppend(boolean succeeded, long lastLogIndex, CompletableFuture<AppendResponse> future) {
-    future.complete(logResponse(AppendResponse.newBuilder()
+    future.complete(logResponse(AppendResponse.builder()
         .withStatus(RaftResponse.Status.OK)
         .withTerm(raft.getTerm())
         .withSucceeded(succeeded)
@@ -336,7 +378,7 @@ public class PassiveRole extends ReserveRole {
     }
 
     // Look up the client's session.
-    RaftSessionContext session = raft.getStateMachine().getSessions().getSession(request.session());
+    RaftSession session = raft.getSessions().getSession(request.session());
     if (session == null) {
       log.trace("State out of sync, forwarding query to leader");
       return queryForward(request);
@@ -372,7 +414,7 @@ public class PassiveRole extends ReserveRole {
    */
   private CompletableFuture<QueryResponse> queryForward(QueryRequest request) {
     if (raft.getLeader() == null) {
-      return CompletableFuture.completedFuture(logResponse(QueryResponse.newBuilder()
+      return CompletableFuture.completedFuture(logResponse(QueryResponse.builder()
           .withStatus(RaftResponse.Status.ERROR)
           .withError(RaftError.Type.NO_LEADER)
           .build()));
@@ -380,7 +422,7 @@ public class PassiveRole extends ReserveRole {
 
     log.trace("Forwarding {}", request);
     return forward(request, raft.getProtocol()::query)
-        .exceptionally(error -> QueryResponse.newBuilder()
+        .exceptionally(error -> QueryResponse.builder()
             .withStatus(RaftResponse.Status.ERROR)
             .withError(RaftError.Type.NO_LEADER)
             .build())
@@ -402,7 +444,7 @@ public class PassiveRole extends ReserveRole {
     // indexes will be the last applied index.
     CompletableFuture<QueryResponse> future = new CompletableFuture<>();
     raft.getStateMachine().<OperationResult>apply(entry).whenComplete((result, error) -> {
-      completeOperation(result, QueryResponse.newBuilder(), error, future);
+      completeOperation(result, QueryResponse.builder(), error, future);
     });
     return future;
   }
@@ -447,14 +489,14 @@ public class PassiveRole extends ReserveRole {
 
     // If the request is for a lesser term, reject the request.
     if (request.term() < raft.getTerm()) {
-      return CompletableFuture.completedFuture(logResponse(InstallResponse.newBuilder()
+      return CompletableFuture.completedFuture(logResponse(InstallResponse.builder()
           .withStatus(RaftResponse.Status.ERROR)
           .withError(RaftError.Type.ILLEGAL_MEMBER_STATE, "Request term is less than the local term " + request.term())
           .build()));
     }
 
     // Get the pending snapshot for the associated snapshot ID.
-    PendingSnapshot pendingSnapshot = pendingSnapshots.get(request.snapshotId());
+    PendingSnapshot pendingSnapshot = pendingSnapshots.get(request.serviceId());
 
     // If a snapshot is currently being received and the snapshot versions don't match, simply
     // close the existing snapshot. This is a naive implementation that assumes that the leader
@@ -471,14 +513,15 @@ public class PassiveRole extends ReserveRole {
     if (pendingSnapshot == null) {
       // For new snapshots, the initial snapshot offset must be 0.
       if (request.chunkOffset() > 0) {
-        return CompletableFuture.completedFuture(logResponse(InstallResponse.newBuilder()
+        return CompletableFuture.completedFuture(logResponse(InstallResponse.builder()
             .withStatus(RaftResponse.Status.ERROR)
             .withError(RaftError.Type.ILLEGAL_MEMBER_STATE, "Request chunk offset is invalid")
             .build()));
       }
 
       Snapshot snapshot = raft.getSnapshotStore().newSnapshot(
-              ServiceId.from(request.snapshotId()),
+              PrimitiveId.from(request.serviceId()),
+              request.serviceName(),
               request.snapshotIndex(),
               WallClockTimestamp.from(request.snapshotTimestamp()));
       pendingSnapshot = new PendingSnapshot(snapshot);
@@ -486,7 +529,7 @@ public class PassiveRole extends ReserveRole {
 
     // If the request offset is greater than the next expected snapshot offset, fail the request.
     if (request.chunkOffset() > pendingSnapshot.nextOffset()) {
-      return CompletableFuture.completedFuture(logResponse(InstallResponse.newBuilder()
+      return CompletableFuture.completedFuture(logResponse(InstallResponse.builder()
           .withStatus(RaftResponse.Status.ERROR)
           .withError(RaftError.Type.ILLEGAL_MEMBER_STATE, "Request chunk offset does not match the next chunk offset")
           .build()));
@@ -500,23 +543,265 @@ public class PassiveRole extends ReserveRole {
     // If the snapshot is complete, store the snapshot and reset state, otherwise update the next snapshot offset.
     if (request.complete()) {
       pendingSnapshot.commit();
-      pendingSnapshots.remove(request.snapshotId());
+      pendingSnapshots.remove(request.serviceId());
     } else {
       pendingSnapshot.incrementOffset();
-      pendingSnapshots.put(request.snapshotId(), pendingSnapshot);
+      pendingSnapshots.put(request.serviceId(), pendingSnapshot);
     }
 
-    return CompletableFuture.completedFuture(logResponse(InstallResponse.newBuilder()
+    return CompletableFuture.completedFuture(logResponse(InstallResponse.builder()
         .withStatus(RaftResponse.Status.OK)
         .build()));
   }
 
   @Override
-  public CompletableFuture<Void> close() {
+  public CompletableFuture<MetadataResponse> onMetadata(MetadataRequest request) {
+    raft.checkThread();
+    logRequest(request);
+
+    if (raft.getLeader() == null) {
+      return CompletableFuture.completedFuture(logResponse(MetadataResponse.builder()
+          .withStatus(RaftResponse.Status.ERROR)
+          .withError(RaftError.Type.NO_LEADER)
+          .build()));
+    } else {
+      return forward(request, raft.getProtocol()::metadata)
+          .exceptionally(error -> MetadataResponse.builder()
+              .withStatus(RaftResponse.Status.ERROR)
+              .withError(RaftError.Type.NO_LEADER)
+              .build())
+          .thenApply(this::logResponse);
+    }
+  }
+
+  @Override
+  public CompletableFuture<PollResponse> onPoll(PollRequest request) {
+    raft.checkThread();
+    logRequest(request);
+
+    return CompletableFuture.completedFuture(logResponse(PollResponse.builder()
+        .withStatus(RaftResponse.Status.ERROR)
+        .withError(RaftError.Type.ILLEGAL_MEMBER_STATE, "Cannot poll RESERVE member")
+        .build()));
+  }
+
+  @Override
+  public CompletableFuture<VoteResponse> onVote(VoteRequest request) {
+    raft.checkThread();
+    logRequest(request);
+    updateTermAndLeader(request.term(), null);
+
+    return CompletableFuture.completedFuture(logResponse(VoteResponse.builder()
+        .withStatus(RaftResponse.Status.ERROR)
+        .withError(RaftError.Type.ILLEGAL_MEMBER_STATE, "Cannot request vote from RESERVE member")
+        .build()));
+  }
+
+  @Override
+  public CompletableFuture<CommandResponse> onCommand(CommandRequest request) {
+    raft.checkThread();
+    logRequest(request);
+
+    if (raft.getLeader() == null) {
+      return CompletableFuture.completedFuture(logResponse(CommandResponse.builder()
+          .withStatus(RaftResponse.Status.ERROR)
+          .withError(RaftError.Type.NO_LEADER)
+          .build()));
+    } else {
+      return forward(request, raft.getProtocol()::command)
+          .exceptionally(error -> CommandResponse.builder()
+              .withStatus(RaftResponse.Status.ERROR)
+              .withError(RaftError.Type.NO_LEADER)
+              .build())
+          .thenApply(this::logResponse);
+    }
+  }
+
+  @Override
+  public CompletableFuture<KeepAliveResponse> onKeepAlive(KeepAliveRequest request) {
+    raft.checkThread();
+    logRequest(request);
+
+    if (raft.getLeader() == null) {
+      return CompletableFuture.completedFuture(logResponse(KeepAliveResponse.builder()
+          .withStatus(RaftResponse.Status.ERROR)
+          .withError(RaftError.Type.NO_LEADER)
+          .build()));
+    } else {
+      return forward(request, raft.getProtocol()::keepAlive)
+          .exceptionally(error -> KeepAliveResponse.builder()
+              .withStatus(RaftResponse.Status.ERROR)
+              .withError(RaftError.Type.NO_LEADER)
+              .build())
+          .thenApply(this::logResponse);
+    }
+  }
+
+  @Override
+  public CompletableFuture<OpenSessionResponse> onOpenSession(OpenSessionRequest request) {
+    raft.checkThread();
+    logRequest(request);
+
+    if (raft.getLeader() == null) {
+      return CompletableFuture.completedFuture(logResponse(OpenSessionResponse.builder()
+          .withStatus(RaftResponse.Status.ERROR)
+          .withError(RaftError.Type.NO_LEADER)
+          .build()));
+    } else {
+      return forward(request, raft.getProtocol()::openSession)
+          .exceptionally(error -> OpenSessionResponse.builder()
+              .withStatus(RaftResponse.Status.ERROR)
+              .withError(RaftError.Type.NO_LEADER)
+              .build())
+          .thenApply(this::logResponse);
+    }
+  }
+
+  @Override
+  public CompletableFuture<CloseSessionResponse> onCloseSession(CloseSessionRequest request) {
+    raft.checkThread();
+    logRequest(request);
+
+    if (raft.getLeader() == null) {
+      return CompletableFuture.completedFuture(logResponse(CloseSessionResponse.builder()
+          .withStatus(RaftResponse.Status.ERROR)
+          .withError(RaftError.Type.NO_LEADER)
+          .build()));
+    } else {
+      return forward(request, raft.getProtocol()::closeSession)
+          .exceptionally(error -> CloseSessionResponse.builder()
+              .withStatus(RaftResponse.Status.ERROR)
+              .withError(RaftError.Type.NO_LEADER)
+              .build())
+          .thenApply(this::logResponse);
+    }
+  }
+
+  @Override
+  public CompletableFuture<JoinResponse> onJoin(JoinRequest request) {
+    raft.checkThread();
+    logRequest(request);
+
+    if (raft.getLeader() == null) {
+      return CompletableFuture.completedFuture(logResponse(JoinResponse.builder()
+          .withStatus(RaftResponse.Status.ERROR)
+          .withError(RaftError.Type.NO_LEADER)
+          .build()));
+    } else {
+      return forward(request, raft.getProtocol()::join)
+          .exceptionally(error -> JoinResponse.builder()
+              .withStatus(RaftResponse.Status.ERROR)
+              .withError(RaftError.Type.NO_LEADER)
+              .build())
+          .thenApply(this::logResponse);
+    }
+  }
+
+  @Override
+  public CompletableFuture<ReconfigureResponse> onReconfigure(ReconfigureRequest request) {
+    raft.checkThread();
+    logRequest(request);
+
+    if (raft.getLeader() == null) {
+      return CompletableFuture.completedFuture(logResponse(ReconfigureResponse.builder()
+          .withStatus(RaftResponse.Status.ERROR)
+          .withError(RaftError.Type.NO_LEADER)
+          .build()));
+    } else {
+      return forward(request, raft.getProtocol()::reconfigure)
+          .exceptionally(error -> ReconfigureResponse.builder()
+              .withStatus(RaftResponse.Status.ERROR)
+              .withError(RaftError.Type.NO_LEADER)
+              .build())
+          .thenApply(this::logResponse);
+    }
+  }
+
+  @Override
+  public CompletableFuture<LeaveResponse> onLeave(LeaveRequest request) {
+    raft.checkThread();
+    logRequest(request);
+
+    if (raft.getLeader() == null) {
+      return CompletableFuture.completedFuture(logResponse(LeaveResponse.builder()
+          .withStatus(RaftResponse.Status.ERROR)
+          .withError(RaftError.Type.NO_LEADER)
+          .build()));
+    } else {
+      return forward(request, raft.getProtocol()::leave)
+          .exceptionally(error -> LeaveResponse.builder()
+              .withStatus(RaftResponse.Status.ERROR)
+              .withError(RaftError.Type.NO_LEADER)
+              .build())
+          .thenApply(this::logResponse);
+    }
+  }
+
+  @Override
+  public CompletableFuture<Void> stop() {
     for (PendingSnapshot pendingSnapshot : pendingSnapshots.values()) {
       pendingSnapshot.rollback();
     }
-    return super.close();
+    return super.stop();
   }
 
+  /**
+   * Pending snapshot.
+   */
+  private static class PendingSnapshot {
+    private final Snapshot snapshot;
+    private long nextOffset;
+
+    public PendingSnapshot(Snapshot snapshot) {
+      this.snapshot = snapshot;
+    }
+
+    /**
+     * Returns the pending snapshot.
+     *
+     * @return the pending snapshot
+     */
+    public Snapshot snapshot() {
+      return snapshot;
+    }
+
+    /**
+     * Returns and increments the next snapshot offset.
+     *
+     * @return the next snapshot offset
+     */
+    public long nextOffset() {
+      return nextOffset;
+    }
+
+    /**
+     * Increments the next snapshot offset.
+     */
+    public void incrementOffset() {
+      nextOffset++;
+    }
+
+    /**
+     * Commits the snapshot to disk.
+     */
+    public void commit() {
+      snapshot.complete();
+    }
+
+    /**
+     * Closes and deletes the snapshot.
+     */
+    public void rollback() {
+      snapshot.close();
+      snapshot.delete();
+    }
+
+    @Override
+    public String toString() {
+      return toStringHelper(this)
+          .add("snapshot", snapshot)
+          .add("nextOffset", nextOffset)
+          .toString();
+    }
+  }
 }

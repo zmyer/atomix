@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-present Open Networking Laboratory
+ * Copyright 2015-present Open Networking Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,17 +33,19 @@ public final class RaftMemberContext {
   private long term;
   private long configIndex;
   private long snapshotIndex;
+  private long snapshotId;
   private long nextSnapshotIndex;
+  private long nextSnapshotId;
   private int nextSnapshotOffset;
   private long matchIndex;
   private long heartbeatTime;
-  private long heartbeatStartTime;
   private int appending;
   private boolean appendSucceeded;
   private long appendTime;
   private boolean configuring;
   private boolean installing;
-  private volatile int failures;
+  private int failures;
+  private long failureTime;
   private volatile RaftLogReader reader;
   private final DescriptiveStatistics timeStats = new DescriptiveStatistics(APPEND_WINDOW_SIZE);
 
@@ -60,18 +62,19 @@ public final class RaftMemberContext {
     nextSnapshotOffset = 0;
     matchIndex = 0;
     heartbeatTime = 0;
-    heartbeatStartTime = 0;
     appending = 0;
     timeStats.clear();
     configuring = false;
     installing = false;
     appendSucceeded = false;
     failures = 0;
+    failureTime = 0;
 
     switch (member.getType()) {
       case PASSIVE:
         reader = log.openReader(log.writer().getLastIndex() + 1, RaftLogReader.Mode.COMMITS);
         break;
+      case PROMOTABLE:
       case ACTIVE:
         reader = log.openReader(log.writer().getLastIndex() + 1, RaftLogReader.Mode.ALL);
         break;
@@ -151,6 +154,24 @@ public final class RaftMemberContext {
   }
 
   /**
+   * Returns the member's current snapshot identifier.
+   *
+   * @return The member's current snapshot identifier.
+   */
+  public long getSnapshotId() {
+    return snapshotId;
+  }
+
+  /**
+   * Sets the member's current snapshot identifier.
+   *
+   * @param snapshotId The member's current snapshot identifier.
+   */
+  public void setSnapshotId(long snapshotId) {
+    this.snapshotId = snapshotId;
+  }
+
+  /**
    * Returns the member's next snapshot index.
    *
    * @return The member's next snapshot index.
@@ -166,6 +187,24 @@ public final class RaftMemberContext {
    */
   public void setNextSnapshotIndex(long nextSnapshotIndex) {
     this.nextSnapshotIndex = nextSnapshotIndex;
+  }
+
+  /**
+   * Returns the member's next snapshot identifier.
+   *
+   * @return The member's next snapshot identifier.
+   */
+  public long getNextSnapshotId() {
+    return nextSnapshotId;
+  }
+
+  /**
+   * Sets the member's next snapshot identifier.
+   *
+   * @param nextSnapshotId The member's next snapshot identifier.
+   */
+  public void setNextSnapshotId(long nextSnapshotId) {
+    this.nextSnapshotId = nextSnapshotId;
   }
 
   /**
@@ -332,25 +371,7 @@ public final class RaftMemberContext {
    * @param heartbeatTime The member heartbeat time.
    */
   public void setHeartbeatTime(long heartbeatTime) {
-    this.heartbeatTime = heartbeatTime;
-  }
-
-  /**
-   * Returns the member heartbeat start time.
-   *
-   * @return The member heartbeat start time.
-   */
-  public long getHeartbeatStartTime() {
-    return heartbeatStartTime;
-  }
-
-  /**
-   * Sets the member heartbeat start time.
-   *
-   * @param startTime The member heartbeat attempt start time.
-   */
-  public void setHeartbeatStartTime(long startTime) {
-    this.heartbeatStartTime = startTime;
+    this.heartbeatTime = Math.max(this.heartbeatTime, heartbeatTime);
   }
 
   /**
@@ -368,7 +389,10 @@ public final class RaftMemberContext {
    * @return The member state.
    */
   public int incrementFailureCount() {
-    return ++failures;
+    if (failures++ == 0) {
+      failureTime = System.currentTimeMillis();
+    }
+    return failures;
   }
 
   /**
@@ -376,13 +400,23 @@ public final class RaftMemberContext {
    */
   public void resetFailureCount() {
     failures = 0;
+    failureTime = 0;
+  }
+
+  /**
+   * Returns the member failure time.
+   *
+   * @return the member failure time
+   */
+  public long getFailureTime() {
+    return failureTime;
   }
 
   @Override
   public String toString() {
     RaftLogReader reader = this.reader;
     return toStringHelper(this)
-        .add("member", member.memberId())
+        .add("member", member.nodeId())
         .add("term", term)
         .add("configIndex", configIndex)
         .add("snapshotIndex", snapshotIndex)
@@ -391,7 +425,6 @@ public final class RaftMemberContext {
         .add("matchIndex", matchIndex)
         .add("nextIndex", reader != null ? reader.getNextIndex() : matchIndex + 1)
         .add("heartbeatTime", heartbeatTime)
-        .add("heartbeatStartTime", heartbeatStartTime)
         .add("appending", appending)
         .add("appendSucceeded", appendSucceeded)
         .add("appendTime", appendTime)

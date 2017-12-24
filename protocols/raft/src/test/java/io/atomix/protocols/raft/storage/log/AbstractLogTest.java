@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-present Open Networking Laboratory
+ * Copyright 2017-present Open Networking Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,8 +15,8 @@
  */
 package io.atomix.protocols.raft.storage.log;
 
+import io.atomix.cluster.NodeId;
 import io.atomix.protocols.raft.ReadConsistency;
-import io.atomix.protocols.raft.cluster.MemberId;
 import io.atomix.protocols.raft.cluster.RaftMember;
 import io.atomix.protocols.raft.cluster.impl.DefaultRaftMember;
 import io.atomix.protocols.raft.storage.log.entry.CloseSessionEntry;
@@ -28,8 +28,8 @@ import io.atomix.protocols.raft.storage.log.entry.MetadataEntry;
 import io.atomix.protocols.raft.storage.log.entry.OpenSessionEntry;
 import io.atomix.protocols.raft.storage.log.entry.QueryEntry;
 import io.atomix.protocols.raft.storage.log.entry.RaftLogEntry;
-import io.atomix.serializer.Serializer;
-import io.atomix.serializer.kryo.KryoNamespace;
+import io.atomix.utils.serializer.Serializer;
+import io.atomix.utils.serializer.KryoNamespace;
 import io.atomix.storage.StorageLevel;
 import io.atomix.storage.journal.Indexed;
 import org.junit.After;
@@ -50,6 +50,7 @@ import java.util.HashSet;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -62,7 +63,7 @@ public abstract class AbstractLogTest {
   protected static final int MAX_SEGMENT_SIZE = 1024 * 8;
   private static final Path PATH = Paths.get("target/test-logs/");
 
-  private static final Serializer serializer = Serializer.using(KryoNamespace.newBuilder()
+  private static final Serializer serializer = Serializer.using(KryoNamespace.builder()
       .register(CloseSessionEntry.class)
       .register(CommandEntry.class)
       .register(ConfigurationEntry.class)
@@ -75,7 +76,7 @@ public abstract class AbstractLogTest {
       .register(ArrayList.class)
       .register(HashSet.class)
       .register(DefaultRaftMember.class)
-      .register(MemberId.class)
+      .register(NodeId.class)
       .register(RaftMember.Type.class)
       .register(ReadConsistency.class)
       .register(Instant.class)
@@ -105,11 +106,11 @@ public abstract class AbstractLogTest {
     // Append a couple entries.
     Indexed<RaftLogEntry> indexed;
     assertEquals(writer.getNextIndex(), 1);
-    indexed = writer.append(new OpenSessionEntry(1, System.currentTimeMillis(), "client", "test1", "test", ReadConsistency.LINEARIZABLE, 1000));
+    indexed = writer.append(new OpenSessionEntry(1, System.currentTimeMillis(), "client", "test1", "test", ReadConsistency.LINEARIZABLE, 100, 1000));
     assertEquals(indexed.index(), 1);
 
     assertEquals(writer.getNextIndex(), 2);
-    writer.append(new Indexed<>(2, new CloseSessionEntry(1, System.currentTimeMillis(), 1), 0));
+    writer.append(new Indexed<>(2, new CloseSessionEntry(1, System.currentTimeMillis(), 1, false), 0));
     reader.reset(2);
     indexed = reader.next();
     assertEquals(indexed.index(), 2);
@@ -123,7 +124,7 @@ public abstract class AbstractLogTest {
     assertEquals(openSession.entry().term(), 1);
     assertEquals(openSession.entry().serviceName(), "test1");
     assertEquals(openSession.entry().serviceType(), "test");
-    assertEquals(openSession.entry().timeout(), 1000);
+    assertEquals(openSession.entry().maxTimeout(), 1000);
     assertEquals(reader.getCurrentEntry(), openSession);
     assertEquals(reader.getCurrentIndex(), 1);
 
@@ -147,7 +148,7 @@ public abstract class AbstractLogTest {
     assertEquals(openSession.entry().term(), 1);
     assertEquals(openSession.entry().serviceName(), "test1");
     assertEquals(openSession.entry().serviceType(), "test");
-    assertEquals(openSession.entry().timeout(), 1000);
+    assertEquals(openSession.entry().maxTimeout(), 1000);
     assertEquals(reader.getCurrentEntry(), openSession);
     assertEquals(reader.getCurrentIndex(), 1);
     assertTrue(reader.hasNext());
@@ -173,7 +174,7 @@ public abstract class AbstractLogTest {
     assertEquals(openSession.entry().term(), 1);
     assertEquals(openSession.entry().serviceName(), "test1");
     assertEquals(openSession.entry().serviceType(), "test");
-    assertEquals(openSession.entry().timeout(), 1000);
+    assertEquals(openSession.entry().maxTimeout(), 1000);
     assertEquals(reader.getCurrentEntry(), openSession);
     assertEquals(reader.getCurrentIndex(), 1);
     assertTrue(reader.hasNext());
@@ -191,7 +192,7 @@ public abstract class AbstractLogTest {
     // Truncate the log and write a different entry.
     writer.truncate(1);
     assertEquals(writer.getNextIndex(), 2);
-    writer.append(new Indexed<>(2, new CloseSessionEntry(2, System.currentTimeMillis(), 1), 0));
+    writer.append(new Indexed<>(2, new CloseSessionEntry(2, System.currentTimeMillis(), 1, false), 0));
     reader.reset(2);
     indexed = reader.next();
     assertEquals(indexed.index(), 2);
@@ -212,6 +213,33 @@ public abstract class AbstractLogTest {
     assertEquals(reader.getCurrentEntry(), closeSession);
     assertEquals(reader.getCurrentIndex(), 2);
     assertFalse(reader.hasNext());
+  }
+
+  @Test
+  public void testResetTruncateZero() throws Exception {
+    RaftLog log = createLog();
+    RaftLogWriter writer = log.writer();
+    RaftLogReader reader = log.openReader(1, RaftLogReader.Mode.ALL);
+
+    assertEquals(0, writer.getLastIndex());
+    writer.reset(1);
+    assertEquals(0, writer.getLastIndex());
+    writer.append(new InitializeEntry(1, System.currentTimeMillis()));
+    assertEquals(1, writer.getLastIndex());
+    assertEquals(1, writer.getLastEntry().index());
+
+    assertTrue(reader.hasNext());
+    assertEquals(1, reader.next().index());
+
+    writer.truncate(0);
+    assertEquals(0, writer.getLastIndex());
+    assertNull(writer.getLastEntry());
+    writer.append(new InitializeEntry(1, System.currentTimeMillis()));
+    assertEquals(1, writer.getLastIndex());
+    assertEquals(1, writer.getLastEntry().index());
+
+    assertTrue(reader.hasNext());
+    assertEquals(1, reader.next().index());
   }
 
   @Test

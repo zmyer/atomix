@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-present Open Networking Laboratory
+ * Copyright 2017-present Open Networking Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,9 +15,9 @@
  */
 package io.atomix.protocols.raft.proxy.impl;
 
-import io.atomix.protocols.raft.proxy.RaftProxy;
-import io.atomix.protocols.raft.service.ServiceType;
-import io.atomix.protocols.raft.session.SessionId;
+import io.atomix.primitive.PrimitiveType;
+import io.atomix.primitive.proxy.PrimitiveProxy;
+import io.atomix.primitive.session.SessionId;
 
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
@@ -32,21 +32,20 @@ public final class RaftProxyState {
   private final String clientId;
   private final SessionId sessionId;
   private final String serviceName;
-  private final ServiceType serviceType;
+  private final PrimitiveType primitiveType;
   private final long timeout;
-  private volatile RaftProxy.State state = RaftProxy.State.CONNECTED;
-  private volatile Long suspendedTime;
+  private volatile PrimitiveProxy.State state = PrimitiveProxy.State.CONNECTED;
   private volatile long commandRequest;
   private volatile long commandResponse;
   private volatile long responseIndex;
   private volatile long eventIndex;
-  private final Set<Consumer<RaftProxy.State>> changeListeners = new CopyOnWriteArraySet<>();
+  private final Set<Consumer<PrimitiveProxy.State>> changeListeners = new CopyOnWriteArraySet<>();
 
-  RaftProxyState(String clientId, SessionId sessionId, String serviceName, ServiceType serviceType, long timeout) {
+  RaftProxyState(String clientId, SessionId sessionId, String serviceName, PrimitiveType primitiveType, long timeout) {
     this.clientId = clientId;
     this.sessionId = sessionId;
     this.serviceName = serviceName;
-    this.serviceType = serviceType;
+    this.primitiveType = primitiveType;
     this.timeout = timeout;
     this.responseIndex = sessionId.id();
     this.eventIndex = sessionId.id();
@@ -75,7 +74,7 @@ public final class RaftProxyState {
    *
    * @return The session name.
    */
-  public String getServiceName() {
+  public String getPrimitiveName() {
     return serviceName;
   }
 
@@ -84,8 +83,8 @@ public final class RaftProxyState {
    *
    * @return The session type.
    */
-  public ServiceType getServiceType() {
-    return serviceType;
+  public PrimitiveType getPrimitiveType() {
+    return primitiveType;
   }
 
   /**
@@ -102,7 +101,7 @@ public final class RaftProxyState {
    *
    * @return The session state.
    */
-  public RaftProxy.State getState() {
+  public PrimitiveProxy.State getState() {
     return state;
   }
 
@@ -111,21 +110,10 @@ public final class RaftProxyState {
    *
    * @param state The updates session state.
    */
-  public void setState(RaftProxy.State state) {
+  public void setState(PrimitiveProxy.State state) {
     if (this.state != state) {
       this.state = state;
-      if (state == RaftProxy.State.SUSPENDED) {
-        if (suspendedTime == null) {
-          suspendedTime = System.currentTimeMillis();
-        }
-      } else {
-        suspendedTime = null;
-      }
       changeListeners.forEach(l -> l.accept(state));
-    } else if (this.state == RaftProxy.State.SUSPENDED) {
-      if (System.currentTimeMillis() - suspendedTime > timeout) {
-        setState(RaftProxy.State.CLOSED);
-      }
     }
   }
 
@@ -134,7 +122,7 @@ public final class RaftProxyState {
    *
    * @param listener The state change listener callback.
    */
-  public void addStateChangeListener(Consumer<RaftProxy.State> listener) {
+  public void addStateChangeListener(Consumer<PrimitiveProxy.State> listener) {
     changeListeners.add(checkNotNull(listener));
   }
 
@@ -143,7 +131,7 @@ public final class RaftProxyState {
    *
    * @param listener the listener to remove
    */
-  public void removeStateChangeListener(Consumer<RaftProxy.State> listener) {
+  public void removeStateChangeListener(Consumer<PrimitiveProxy.State> listener) {
     changeListeners.remove(checkNotNull(listener));
   }
 

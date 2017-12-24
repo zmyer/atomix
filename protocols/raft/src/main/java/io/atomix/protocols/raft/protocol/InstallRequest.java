@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-present Open Networking Laboratory
+ * Copyright 2015-present Open Networking Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
  */
 package io.atomix.protocols.raft.protocol;
 
-import io.atomix.protocols.raft.cluster.MemberId;
+import io.atomix.cluster.NodeId;
 import io.atomix.utils.ArraySizeHashPrinter;
 
 import java.util.Arrays;
@@ -42,23 +42,25 @@ public class InstallRequest extends AbstractRaftRequest {
    *
    * @return A new install request builder.
    */
-  public static Builder newBuilder() {
+  public static Builder builder() {
     return new Builder();
   }
 
   private final long term;
-  private final MemberId leader;
-  private final long id;
+  private final NodeId leader;
+  private final long serviceId;
+  private final String serviceName;
   private final long index;
   private final long timestamp;
   private final int offset;
   private final byte[] data;
   private final boolean complete;
 
-  public InstallRequest(long term, MemberId leader, long id, long index, long timestamp, int offset, byte[] data, boolean complete) {
+  public InstallRequest(long term, NodeId leader, long serviceId, String serviceName, long index, long timestamp, int offset, byte[] data, boolean complete) {
     this.term = term;
     this.leader = leader;
-    this.id = id;
+    this.serviceId = serviceId;
+    this.serviceName = serviceName;
     this.index = index;
     this.timestamp = timestamp;
     this.offset = offset;
@@ -80,7 +82,7 @@ public class InstallRequest extends AbstractRaftRequest {
    *
    * @return The leader's address.
    */
-  public MemberId leader() {
+  public NodeId leader() {
     return leader;
   }
 
@@ -89,8 +91,17 @@ public class InstallRequest extends AbstractRaftRequest {
    *
    * @return The snapshot identifier.
    */
-  public long snapshotId() {
-    return id;
+  public long serviceId() {
+    return serviceId;
+  }
+
+  /**
+   * Returns the service name.
+   *
+   * @return The service name.
+   */
+  public String serviceName() {
+    return serviceName;
   }
 
   /**
@@ -140,7 +151,7 @@ public class InstallRequest extends AbstractRaftRequest {
 
   @Override
   public int hashCode() {
-    return Objects.hash(getClass(), term, leader, id, index, offset, complete, data);
+    return Objects.hash(getClass(), term, leader, serviceId, index, offset, complete, data);
   }
 
   @Override
@@ -149,7 +160,8 @@ public class InstallRequest extends AbstractRaftRequest {
       InstallRequest request = (InstallRequest) object;
       return request.term == term
           && request.leader == leader
-          && request.id == id
+          && request.serviceId == serviceId
+          && Objects.equals(request.serviceName, serviceName)
           && request.index == index
           && request.offset == offset
           && request.complete == complete
@@ -163,7 +175,8 @@ public class InstallRequest extends AbstractRaftRequest {
     return toStringHelper(this)
         .add("term", term)
         .add("leader", leader)
-        .add("id", id)
+        .add("id", serviceId)
+        .add("name", serviceName)
         .add("index", index)
         .add("offset", offset)
         .add("data", ArraySizeHashPrinter.of(data))
@@ -176,8 +189,9 @@ public class InstallRequest extends AbstractRaftRequest {
    */
   public static class Builder extends AbstractRaftRequest.Builder<Builder, InstallRequest> {
     private long term;
-    private MemberId leader;
-    private long id;
+    private NodeId leader;
+    private long serviceId;
+    private String serviceName;
     private long index;
     private long timestamp;
     private int offset;
@@ -204,7 +218,7 @@ public class InstallRequest extends AbstractRaftRequest {
      * @return The append request builder.
      * @throws IllegalArgumentException if the {@code leader} is not positive
      */
-    public Builder withLeader(MemberId leader) {
+    public Builder withLeader(NodeId leader) {
       this.leader = checkNotNull(leader, "leader cannot be null");
       return this;
     }
@@ -212,12 +226,23 @@ public class InstallRequest extends AbstractRaftRequest {
     /**
      * Sets the request snapshot identifier.
      *
-     * @param id The request snapshot identifier.
+     * @param serviceId The request snapshot identifier.
      * @return The request builder.
      */
-    public Builder withId(long id) {
-      checkArgument(id > 0, "id must be positive");
-      this.id = id;
+    public Builder withServiceId(long serviceId) {
+      checkArgument(serviceId > 0, "serviceId must be positive");
+      this.serviceId = serviceId;
+      return this;
+    }
+
+    /**
+     * Sets the request service name.
+     *
+     * @param serviceName The snapshot's service name.
+     * @return The request builder.
+     */
+    public Builder withServiceName(String serviceName) {
+      this.serviceName = checkNotNull(serviceName, "serviceName cannot be null");
       return this;
     }
 
@@ -285,7 +310,8 @@ public class InstallRequest extends AbstractRaftRequest {
       super.validate();
       checkArgument(term > 0, "term must be positive");
       checkNotNull(leader, "leader cannot be null");
-      checkArgument(id > 0, "id must be positive");
+      checkArgument(serviceId > 0, "serviceId must be positive");
+      checkNotNull(serviceName, "serviceName cannot be null");
       checkArgument(index >= 0, "index must be positive");
       checkArgument(offset >= 0, "offset must be positive");
       checkNotNull(data, "data cannot be null");
@@ -297,7 +323,7 @@ public class InstallRequest extends AbstractRaftRequest {
     @Override
     public InstallRequest build() {
       validate();
-      return new InstallRequest(term, leader, id, index, timestamp, offset, data, complete);
+      return new InstallRequest(term, leader, serviceId, serviceName, index, timestamp, offset, data, complete);
     }
   }
 

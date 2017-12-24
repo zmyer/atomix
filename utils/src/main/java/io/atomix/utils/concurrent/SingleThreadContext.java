@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-present Open Networking Laboratory
+ * Copyright 2017-present Open Networking Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,7 +42,7 @@ import static io.atomix.utils.concurrent.Threads.namedThreads;
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class SingleThreadContext implements ThreadContext {
-  private static final Logger LOGGER = LoggerFactory.getLogger(SingleThreadContext.class);
+  protected static final Logger LOGGER = LoggerFactory.getLogger(SingleThreadContext.class);
   private final ScheduledExecutorService executor;
   private final Executor wrappedExecutor = new Executor() {
     @Override

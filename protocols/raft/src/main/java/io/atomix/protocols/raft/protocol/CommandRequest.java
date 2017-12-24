@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-present Open Networking Laboratory
+ * Copyright 2015-present Open Networking Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
  */
 package io.atomix.protocols.raft.protocol;
 
-import io.atomix.protocols.raft.operation.RaftOperation;
+import io.atomix.primitive.operation.PrimitiveOperation;
 
 import java.util.Objects;
 
@@ -42,11 +42,11 @@ public class CommandRequest extends OperationRequest {
    *
    * @return A new submit request builder.
    */
-  public static Builder newBuilder() {
+  public static Builder builder() {
     return new Builder();
   }
 
-  public CommandRequest(long session, long sequence, RaftOperation operation) {
+  public CommandRequest(long session, long sequence, PrimitiveOperation operation) {
     super(session, sequence, operation);
   }
 
