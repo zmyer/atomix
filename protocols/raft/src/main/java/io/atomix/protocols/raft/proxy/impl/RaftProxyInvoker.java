@@ -15,6 +15,7 @@
  */
 package io.atomix.protocols.raft.proxy.impl;
 
+import io.atomix.primitive.PrimitiveException;
 import io.atomix.primitive.operation.PrimitiveOperation;
 import io.atomix.primitive.proxy.PrimitiveProxy;
 import io.atomix.protocols.raft.RaftError;
@@ -85,7 +86,7 @@ final class RaftProxyInvoker {
   /**
    * Submits a operation to the cluster.
    *
-   * @param operation   The operation to submit.
+   * @param operation The operation to submit.
    * @return A completable future to be completed once the command has been submitted.
    */
   public CompletableFuture<byte[]> invoke(PrimitiveOperation operation) {
@@ -149,7 +150,7 @@ final class RaftProxyInvoker {
    */
   private <T extends OperationRequest, U extends OperationResponse> void invoke(OperationAttempt<T, U> attempt) {
     if (state.getState() == PrimitiveProxy.State.CLOSED) {
-      attempt.fail(new RaftException.ClosedSession("session closed"));
+      attempt.fail(new PrimitiveException.ClosedSession("session closed"));
     } else {
       attempts.put(attempt.sequence, attempt);
       attempt.send();
@@ -200,7 +201,7 @@ final class RaftProxyInvoker {
    */
   public CompletableFuture<Void> close() {
     for (OperationAttempt attempt : new ArrayList<>(attempts.values())) {
-      attempt.fail(new RaftException.ClosedSession("session closed"));
+      attempt.fail(new PrimitiveException.ClosedSession("session closed"));
     }
     attempts.clear();
     return CompletableFuture.completedFuture(null);
@@ -329,7 +330,7 @@ final class RaftProxyInvoker {
 
     @Override
     protected Throwable defaultException() {
-      return new RaftException.CommandFailure("failed to complete command");
+      return new PrimitiveException.CommandFailure("failed to complete command");
     }
 
     @Override
@@ -404,7 +405,7 @@ final class RaftProxyInvoker {
 
     @Override
     protected Throwable defaultException() {
-      return new RaftException.QueryFailure("failed to complete query");
+      return new PrimitiveException.QueryFailure("failed to complete query");
     }
 
     @Override

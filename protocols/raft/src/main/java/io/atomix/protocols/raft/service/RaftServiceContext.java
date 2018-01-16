@@ -38,6 +38,7 @@ import io.atomix.protocols.raft.storage.snapshot.SnapshotReader;
 import io.atomix.protocols.raft.storage.snapshot.SnapshotWriter;
 import io.atomix.protocols.raft.utils.LoadMonitor;
 import io.atomix.storage.buffer.Bytes;
+import io.atomix.utils.concurrent.ComposableFuture;
 import io.atomix.utils.concurrent.ThreadContext;
 import io.atomix.utils.concurrent.ThreadContextFactory;
 import io.atomix.utils.logging.ContextualLoggerFactory;
@@ -77,17 +78,18 @@ public class RaftServiceContext implements ServiceContext {
   private final Map<Long, PendingSnapshot> pendingSnapshots = new ConcurrentSkipListMap<>();
   private long snapshotIndex;
   private long currentIndex;
+  private Session currentSession;
   private long currentTimestamp;
   private OperationType currentOperation;
   private final LogicalClock logicalClock = new LogicalClock() {
     @Override
-    public LogicalTimestamp time() {
+    public LogicalTimestamp getTime() {
       return new LogicalTimestamp(currentIndex);
     }
   };
   private final WallClock wallClock = new WallClock() {
     @Override
-    public WallClockTimestamp time() {
+    public WallClockTimestamp getTime() {
       return new WallClockTimestamp(currentTimestamp);
     }
   };
@@ -143,6 +145,11 @@ public class RaftServiceContext implements ServiceContext {
   @Override
   public long currentIndex() {
     return currentIndex;
+  }
+
+  @Override
+  public Session currentSession() {
+    return currentSession;
   }
 
   @Override
@@ -240,7 +247,7 @@ public class RaftServiceContext implements ServiceContext {
 
             // Update the snapshot index to ensure we don't simply install the same snapshot.
             snapshotIndex = snapshot.index();
-            pendingSnapshot.future.complete(null);
+            pendingSnapshot.future.complete(snapshotIndex);
           }
         }
       }
@@ -310,32 +317,47 @@ public class RaftServiceContext implements ServiceContext {
    * @return a future to be completed once the snapshot has been taken
    */
   public CompletableFuture<Long> takeSnapshot(long index) {
-    CompletableFuture<Long> future = new CompletableFuture<>();
+    ComposableFuture<Long> future = new ComposableFuture<>();
     serviceExecutor.execute(() -> {
       // If no entries have been applied to the state machine, skip the snapshot.
       if (currentIndex == 0) {
+        future.complete(currentIndex);
         return;
       }
 
       // Compute the snapshot index as the greater of the compaction index and the last index applied to this service.
       long snapshotIndex = Math.max(index, currentIndex);
 
-      // If there's already a snapshot taken at a higher index, skip the snapshot.
-      Snapshot currentSnapshot = raft.getSnapshotStore().getSnapshotById(primitiveId);
-      if (currentSnapshot != null && currentSnapshot.index() > index) {
+      // If a snapshot is already persisted at this index, skip the snapshot.
+      Snapshot existingSnapshot = raft.getSnapshotStore().getSnapshot(primitiveId, snapshotIndex);
+      if (existingSnapshot != null) {
+        future.complete(snapshotIndex);
         return;
       }
 
-      log.debug("Taking snapshot {}", snapshotIndex);
+      // If there's already a snapshot taken at a higher index, skip the snapshot.
+      Snapshot currentSnapshot = raft.getSnapshotStore().getSnapshotById(primitiveId);
+      if (currentSnapshot != null && currentSnapshot.index() >= index) {
+        future.complete(snapshotIndex);
+        return;
+      }
 
       // Create a temporary in-memory snapshot buffer.
       Snapshot snapshot = raft.getSnapshotStore()
           .newTemporarySnapshot(primitiveId, serviceName, snapshotIndex, WallClockTimestamp.from(currentTimestamp));
 
-      // Add the snapshot to the pending snapshots registry.
+      // Add the snapshot to the pending snapshots registry. If a snapshot is already pending for this index,
+      // skip the snapshot.
       PendingSnapshot pendingSnapshot = new PendingSnapshot(snapshot);
-      pendingSnapshots.put(snapshotIndex, pendingSnapshot);
+      PendingSnapshot existingPendingSnapshot = pendingSnapshots.putIfAbsent(snapshotIndex, pendingSnapshot);
+      if (existingPendingSnapshot != null) {
+        existingPendingSnapshot.future.whenComplete(future);
+        return;
+      }
+
       pendingSnapshot.future.whenComplete((r, e) -> pendingSnapshots.remove(snapshotIndex));
+
+      log.debug("Taking snapshot {}", snapshotIndex);
 
       // Serialize sessions to the in-memory snapshot and request a snapshot from the state machine.
       try (SnapshotWriter writer = snapshot.openWriter()) {
@@ -381,7 +403,7 @@ public class RaftServiceContext implements ServiceContext {
       return CompletableFuture.completedFuture(null);
     }
     serviceExecutor.execute(() -> maybeCompleteSnapshot(index));
-    return pendingSnapshot.future;
+    return pendingSnapshot.future.thenApply(v -> null);
   }
 
   /**
@@ -647,6 +669,8 @@ public class RaftServiceContext implements ServiceContext {
 
     OperationResult result;
     try {
+      currentSession = session;
+
       // Execute the state machine operation and get the result.
       byte[] output = service.apply(commit);
 
@@ -655,6 +679,8 @@ public class RaftServiceContext implements ServiceContext {
     } catch (Exception e) {
       // If an exception occurs during execution of the command, store the exception.
       result = OperationResult.failed(index, eventIndex, e);
+    } finally {
+      currentSession = null;
     }
 
     // Once the operation has been applied to the state machine, commit events published by the command.
@@ -748,9 +774,12 @@ public class RaftServiceContext implements ServiceContext {
 
     OperationResult result;
     try {
+      currentSession = session;
       result = OperationResult.succeeded(currentIndex, eventIndex, service.apply(commit));
     } catch (Exception e) {
       result = OperationResult.failed(currentIndex, eventIndex, e);
+    } finally {
+      currentSession = null;
     }
     future.complete(result);
   }
@@ -779,9 +808,9 @@ public class RaftServiceContext implements ServiceContext {
   /**
    * Pending snapshot.
    */
-  private class PendingSnapshot {
+  private static class PendingSnapshot {
     private volatile Snapshot snapshot;
-    private final CompletableFuture<Void> future = new CompletableFuture<>();
+    private final CompletableFuture<Long> future = new CompletableFuture<>();
 
     public PendingSnapshot(Snapshot snapshot) {
       this.snapshot = snapshot;

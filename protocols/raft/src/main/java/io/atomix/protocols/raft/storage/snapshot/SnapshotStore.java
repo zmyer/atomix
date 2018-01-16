@@ -98,12 +98,31 @@ public class SnapshotStore implements AutoCloseable {
           existingSnapshot.close();
           existingSnapshot.delete();
         }
+      } else {
+        snapshot.close();
+        snapshot.delete();
       }
     }
 
     for (Snapshot snapshot : serviceSnapshots.values()) {
       indexSnapshots.computeIfAbsent(snapshot.index(), i -> Sets.newConcurrentHashSet()).add(snapshot);
     }
+  }
+
+  /**
+   * Returns the snapshot for the given primitive at the given index.
+   *
+   * @param serviceId the primitive for which to lookup the snapshot
+   * @param index     the index for which to lookup the snapshot
+   * @return the snapshot for the given service at the given index or {@code null} if the snapshot doesn't exist
+   */
+  public Snapshot getSnapshot(PrimitiveId serviceId, long index) {
+    Collection<Snapshot> snapshots = indexSnapshots.get(index);
+    return snapshots == null ? null :
+        snapshots.stream()
+            .filter(s -> s.serviceId().equals(serviceId))
+            .findFirst()
+            .orElse(null);
   }
 
   /**
@@ -170,10 +189,10 @@ public class SnapshotStore implements AutoCloseable {
   /**
    * Creates a temporary in-memory snapshot.
    *
-   * @param primitiveId The snapshot identifier.
+   * @param primitiveId The primitive identifier.
    * @param serviceName The snapshot service name.
-   * @param index The snapshot index.
-   * @param timestamp The snapshot timestamp.
+   * @param index       The snapshot index.
+   * @param timestamp   The snapshot timestamp.
    * @return The snapshot.
    */
   public Snapshot newTemporarySnapshot(PrimitiveId primitiveId, String serviceName, long index, WallClockTimestamp timestamp) {
@@ -188,10 +207,10 @@ public class SnapshotStore implements AutoCloseable {
   /**
    * Creates a new snapshot.
    *
-   * @param primitiveId The snapshot identifier.
+   * @param primitiveId The primitive identifier.
    * @param serviceName The snapshot service name.
-   * @param index The snapshot index.
-   * @param timestamp The snapshot timestamp.
+   * @param index       The snapshot index.
+   * @param timestamp   The snapshot timestamp.
    * @return The snapshot.
    */
   public Snapshot newSnapshot(PrimitiveId primitiveId, String serviceName, long index, WallClockTimestamp timestamp) {
@@ -247,7 +266,7 @@ public class SnapshotStore implements AutoCloseable {
 
     // Only store the snapshot if no existing snapshot exists.
     Snapshot existingSnapshot = serviceSnapshots.get(snapshot.serviceId());
-    if (existingSnapshot == null || existingSnapshot.index() <= snapshot.index()) {
+    if (existingSnapshot == null || existingSnapshot.index() < snapshot.index()) {
       serviceSnapshots.put(snapshot.serviceId(), snapshot);
       indexSnapshots.computeIfAbsent(snapshot.index(), i -> Sets.newConcurrentHashSet()).add(snapshot);
 
@@ -265,6 +284,15 @@ public class SnapshotStore implements AutoCloseable {
           existingSnapshot.delete();
         }
       }
+    }
+    // If a snapshot already exists at this index, overwrite it with the new snapshot, but don't delete the old
+    // snapshot to avoid deleting the underlying snapshot file.
+    else if (existingSnapshot.index() == snapshot.index()) {
+      serviceSnapshots.put(snapshot.serviceId(), snapshot);
+      Set<Snapshot> existingSnapshots = indexSnapshots.computeIfAbsent(snapshot.index(), i -> Sets.newConcurrentHashSet());
+      existingSnapshots.remove(existingSnapshot);
+      existingSnapshots.add(snapshot);
+      existingSnapshot.close();
     }
     // If the snapshot was old, delete it if necessary.
     else if (!storage.isRetainStaleSnapshots()) {

@@ -15,9 +15,8 @@
  */
 package io.atomix.core.generator.impl;
 
-import io.atomix.core.AbstractAtomixTest;
+import io.atomix.core.AbstractPrimitiveTest;
 import io.atomix.core.generator.AsyncAtomicIdGenerator;
-import io.atomix.core.generator.impl.DelegatingIdGenerator;
 
 import org.junit.Test;
 
@@ -28,7 +27,7 @@ import static org.junit.Assert.assertEquals;
 /**
  * Unit test for {@code AtomixIdGenerator}.
  */
-public class IdGeneratorTest extends AbstractAtomixTest {
+public class IdGeneratorTest extends AbstractPrimitiveTest {
 
   /**
    * Tests generating IDs.
@@ -65,9 +64,9 @@ public class IdGeneratorTest extends AbstractAtomixTest {
    */
   @Test
   public void testNextIdBatchRollover() throws Throwable {
-    DelegatingIdGenerator idGenerator1 = new DelegatingIdGenerator(
+    DelegatingAtomicIdGenerator idGenerator1 = new DelegatingAtomicIdGenerator(
         atomix().atomicCounterBuilder("testNextIdBatchRollover").build().async(), 2);
-    DelegatingIdGenerator idGenerator2 = new DelegatingIdGenerator(
+    DelegatingAtomicIdGenerator idGenerator2 = new DelegatingAtomicIdGenerator(
         atomix().atomicCounterBuilder("testNextIdBatchRollover").build().async(), 2);
 
     CompletableFuture<Long> future11 = idGenerator1.nextId();

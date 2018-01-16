@@ -251,13 +251,17 @@ public class NettyMessagingService implements ManagedMessagingService {
       char[] tsPwd = System.getProperty("javax.net.ssl.trustStorePassword", DEFAULT_KS_PASSWORD).toCharArray();
 
       tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-      KeyStore ts = KeyStore.getInstance("JKS");
-      ts.load(new FileInputStream(tsLocation), tsPwd);
+      KeyStore ts = KeyStore.getInstance(KeyStore.getDefaultType());
+      try (FileInputStream fileInputStream = new FileInputStream(tsLocation)) {
+        ts.load(fileInputStream, tsPwd);
+      }
       tmf.init(ts);
 
       kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-      KeyStore ks = KeyStore.getInstance("JKS");
-      ks.load(new FileInputStream(ksLocation), ksPwd);
+      KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
+      try (FileInputStream fileInputStream = new FileInputStream(ksLocation)) {
+        ks.load(fileInputStream, ksPwd);
+      }
       kmf.init(ks, ksPwd);
       if (log.isInfoEnabled()) {
         logKeyStore(ks, ksLocation, ksPwd);
@@ -361,6 +365,10 @@ public class NettyMessagingService implements ManagedMessagingService {
   }
 
   private List<CompletableFuture<Channel>> getChannelPool(Endpoint endpoint) {
+    List<CompletableFuture<Channel>> channelPool = channels.get(endpoint);
+    if (channelPool != null) {
+      return channelPool;
+    }
     return channels.computeIfAbsent(endpoint, e -> {
       List<CompletableFuture<Channel>> defaultList = new ArrayList<>(CHANNEL_POOL_SIZE);
       for (int i = 0; i < CHANNEL_POOL_SIZE; i++) {
@@ -454,7 +462,10 @@ public class NettyMessagingService implements ManagedMessagingService {
 
     getChannel(endpoint, type).whenComplete((channel, channelError) -> {
       if (channelError == null) {
-        ClientConnection connection = clientConnections.computeIfAbsent(channel, RemoteClientConnection::new);
+        ClientConnection connection = clientConnections.get(channel);
+        if (connection == null) {
+          connection = clientConnections.computeIfAbsent(channel, RemoteClientConnection::new);
+        }
         callback.apply(connection).whenComplete((result, sendError) -> {
           if (sendError == null) {
             executor.execute(() -> future.complete(result));
@@ -672,12 +683,16 @@ public class NettyMessagingService implements ManagedMessagingService {
       InternalMessage message = (InternalMessage) rawMessage;
       try {
         if (message.isRequest()) {
-          RemoteServerConnection connection =
-              serverConnections.computeIfAbsent(ctx.channel(), RemoteServerConnection::new);
+          RemoteServerConnection connection = serverConnections.get(ctx.channel());
+          if (connection == null) {
+            connection = serverConnections.computeIfAbsent(ctx.channel(), RemoteServerConnection::new);
+          }
           connection.dispatch((InternalRequest) message);
         } else {
-          RemoteClientConnection connection =
-              clientConnections.computeIfAbsent(ctx.channel(), RemoteClientConnection::new);
+          RemoteClientConnection connection = clientConnections.get(ctx.channel());
+          if (connection == null) {
+            connection = clientConnections.computeIfAbsent(ctx.channel(), RemoteClientConnection::new);
+          }
           connection.dispatch((InternalReply) message);
         }
       } catch (RejectedExecutionException e) {
@@ -717,7 +732,7 @@ public class NettyMessagingService implements ManagedMessagingService {
   /**
    * Wraps a {@link CompletableFuture} and tracks its type and creation time.
    */
-  private final class Callback {
+  private static final class Callback {
     private final String type;
     private final CompletableFuture<byte[]> future;
     private final long time = System.currentTimeMillis();
@@ -820,7 +835,7 @@ public class NettyMessagingService implements ManagedMessagingService {
   /**
    * Local server connection.
    */
-  private final class LocalServerConnection implements ServerConnection {
+  private static final class LocalServerConnection implements ServerConnection {
     private final CompletableFuture<byte[]> future;
 
     LocalServerConnection(CompletableFuture<byte[]> future) {

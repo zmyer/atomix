@@ -145,6 +145,10 @@ public class DefaultClusterMetadataService
         .filter(endpoint -> !endpoint.equals(messagingService.endpoint()))
         .collect(Collectors.toSet());
     final int totalPeers = peers.size();
+    if (totalPeers == 0) {
+      return CompletableFuture.completedFuture(null);
+    }
+
     AtomicBoolean successful = new AtomicBoolean();
     AtomicInteger totalCount = new AtomicInteger();
     AtomicReference<Throwable> lastError = new AtomicReference<>();
@@ -257,8 +261,9 @@ public class DefaultClusterMetadataService
   private Optional<Endpoint> pickRandomPeer() {
     List<Endpoint> nodes = this.nodes.values()
         .stream()
+        .filter(replicatedNode -> !replicatedNode.tombstone() &&
+                !replicatedNode.endpoint().equals(messagingService.endpoint()))
         .map(Node::endpoint)
-        .filter(endpoint -> !endpoint.equals(messagingService.endpoint()))
         .collect(Collectors.toList());
     Collections.shuffle(nodes);
     return nodes.stream().findFirst();
@@ -340,7 +345,7 @@ public class DefaultClusterMetadataService
   /**
    * Endpoint serializer.
    */
-  private static class EndpointSerializer extends com.esotericsoftware.kryo.Serializer<Endpoint> {
+  static class EndpointSerializer extends com.esotericsoftware.kryo.Serializer<Endpoint> {
     @Override
     public void write(Kryo kryo, Output output, Endpoint endpoint) {
       output.writeString(endpoint.host().getHostAddress());

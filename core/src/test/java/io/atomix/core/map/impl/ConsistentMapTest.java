@@ -17,8 +17,7 @@ package io.atomix.core.map.impl;
 
 import com.google.common.base.Throwables;
 import com.google.common.collect.Sets;
-
-import io.atomix.core.AbstractAtomixTest;
+import io.atomix.core.AbstractPrimitiveTest;
 import io.atomix.core.map.AsyncConsistentMap;
 import io.atomix.core.map.ConsistentMap;
 import io.atomix.core.map.MapEvent;
@@ -30,6 +29,7 @@ import io.atomix.core.transaction.TransactionalMap;
 import io.atomix.utils.time.Versioned;
 import org.junit.Test;
 
+import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -46,7 +46,7 @@ import static org.junit.Assert.assertTrue;
 /**
  * Unit tests for {@link io.atomix.core.map.ConsistentMap}.
  */
-public class ConsistentMapTest extends AbstractAtomixTest {
+public class ConsistentMapTest extends AbstractPrimitiveTest {
 
   /**
    * Tests null values.
@@ -222,6 +222,54 @@ public class ConsistentMapTest extends AbstractAtomixTest {
     map.size().thenAccept(result -> {
       assertTrue(result == 0);
     }).join();
+
+    map.put("foo", "Hello foo!", Duration.ofSeconds(3)).thenAccept(result -> {
+      assertNull(result);
+    }).join();
+
+    Thread.sleep(1000);
+
+    map.get("foo").thenAccept(result -> {
+      assertEquals("Hello foo!", result.value());
+    }).join();
+
+    Thread.sleep(5000);
+
+    map.get("foo").thenAccept(result -> {
+      assertNull(result);
+    }).join();
+
+    map.put("bar", "Hello bar!").thenAccept(result -> {
+      assertNull(result);
+    }).join();
+
+    map.put("bar", "Goodbye bar!", Duration.ofSeconds(1)).thenAccept(result -> {
+      assertEquals("Hello bar!", result.value());
+    }).join();
+
+    map.get("bar").thenAccept(result -> {
+      assertEquals("Goodbye bar!", result.value());
+    }).join();
+
+    Thread.sleep(5000);
+
+    map.get("bar").thenAccept(result -> {
+      assertNull(result);
+    }).join();
+
+    map.putIfAbsent("baz", "Hello baz!", Duration.ofSeconds(1)).thenAccept(result -> {
+      assertNull(result);
+    }).join();
+
+    map.get("baz").thenAccept(result -> {
+      assertNotNull(result);
+    }).join();
+
+    Thread.sleep(5000);
+
+    map.get("baz").thenAccept(result -> {
+      assertNull(result);
+    }).join();
   }
 
   @Test
@@ -317,6 +365,17 @@ public class ConsistentMapTest extends AbstractAtomixTest {
     assertNotNull(event);
     assertEquals(MapEvent.Type.REMOVE, event.type());
     assertEquals(value2, event.oldValue().value());
+
+    map.put("bar", "expire", Duration.ofSeconds(1)).join();
+    event = listener.event();
+    assertNotNull(event);
+    assertEquals(MapEvent.Type.INSERT, event.type());
+    assertEquals("expire", event.newValue().value());
+
+    event = listener.event();
+    assertNotNull(event);
+    assertEquals(MapEvent.Type.REMOVE, event.type());
+    assertEquals("expire", event.oldValue().value());
 
     map.removeListener(listener).join();
   }
