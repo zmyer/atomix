@@ -182,9 +182,12 @@ final class LeaderAppender extends AbstractAppender {
     // Ensure that only one configuration attempt per member is attempted at any given time by storing the
     // member state in a set of configuring members.
     // Once the configuration is complete sendAppendRequest will be called recursively.
-    else if (member.getConfigTerm() < raft.getTerm() || member.getConfigIndex() < raft.getCluster().getConfiguration().index()) {
+    else if (member.getConfigTerm() < raft.getTerm()
+        || member.getConfigIndex() < raft.getCluster().getConfiguration().index()) {
       if (member.canConfigure()) {
         sendConfigureRequest(member, buildConfigureRequest(member));
+      } else if (member.canHeartbeat()) {
+        sendAppendRequest(member, buildAppendEmptyRequest(member));
       }
     }
     // If there's a snapshot at the member's nextIndex, replicate the snapshot.
@@ -198,6 +201,7 @@ final class LeaderAppender extends AbstractAppender {
           return;
         }
 
+        log.debug("Replicating {} snapshots to {}", snapshots.size(), member.getMember().nodeId());
         Snapshot nextSnapshot = null;
         for (Snapshot snapshot : snapshots) {
           if (snapshot.serviceId().id() > member.getSnapshotId()) {
@@ -209,7 +213,9 @@ final class LeaderAppender extends AbstractAppender {
         if (nextSnapshot != null) {
           sendInstallRequest(member, buildInstallRequest(member, nextSnapshot));
         } else if (member.canAppend()) {
+          log.debug("Completed replicating {} snapshots to {}", snapshots.size(), member.getMember().nodeId());
           member.setSnapshotIndex(currentIndex);
+          member.setSnapshotId(0);
           sendAppendRequest(member, buildAppendRequest(member, -1));
         }
       } else if (member.canAppend()) {
@@ -370,9 +376,8 @@ final class LeaderAppender extends AbstractAppender {
 
   @Override
   protected void handleAppendResponse(RaftMemberContext member, AppendRequest request, AppendResponse response, long timestamp) {
-    // Record a successful heartbeat to the member.
-    recordHeartbeat(member, timestamp);
     super.handleAppendResponse(member, request, response, timestamp);
+    recordHeartbeat(member, timestamp);
   }
 
   @Override
@@ -406,7 +411,7 @@ final class LeaderAppender extends AbstractAppender {
     else {
       member.appendFailed();
       resetMatchIndex(member, response);
-      resetNextIndex(member);
+      resetNextIndex(member, response);
 
       // If there are more entries to send then attempt to send another commit.
       if (hasMoreEntries(member)) {
@@ -449,16 +454,14 @@ final class LeaderAppender extends AbstractAppender {
 
   @Override
   protected void handleConfigureResponse(RaftMemberContext member, ConfigureRequest request, ConfigureResponse response, long timestamp) {
-    // Record a successful heartbeat to the member.
-    recordHeartbeat(member, timestamp);
     super.handleConfigureResponse(member, request, response, timestamp);
+    recordHeartbeat(member, timestamp);
   }
 
   @Override
   protected void handleInstallResponse(RaftMemberContext member, InstallRequest request, InstallResponse response, long timestamp) {
-    // Record a successful heartbeat to the member.
-    recordHeartbeat(member, timestamp);
     super.handleInstallResponse(member, request, response, timestamp);
+    recordHeartbeat(member, timestamp);
   }
 
   @Override

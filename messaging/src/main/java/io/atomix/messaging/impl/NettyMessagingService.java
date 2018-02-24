@@ -15,6 +15,7 @@
  */
 package io.atomix.messaging.impl;
 
+import com.google.common.base.Throwables;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.Lists;
@@ -151,6 +152,7 @@ public class NettyMessagingService implements ManagedMessagingService {
   }
 
   private static final long HISTORY_EXPIRE_MILLIS = Duration.ofMinutes(1).toMillis();
+  private static final long MIN_TIMEOUT_MILLIS = 100;
   private static final long MAX_TIMEOUT_MILLIS = 15000;
   private static final long TIMEOUT_INTERVAL = 50;
   private static final int WINDOW_SIZE = 100;
@@ -397,31 +399,40 @@ public class NettyMessagingService implements ManagedMessagingService {
       }
     }
 
-    CompletableFuture<Channel> future = new CompletableFuture<>();
+    final CompletableFuture<Channel> future = new CompletableFuture<>();
     final CompletableFuture<Channel> finalFuture = channelFuture;
     finalFuture.whenComplete((channel, error) -> {
       if (error == null) {
         if (!channel.isActive()) {
+          final CompletableFuture<Channel> currentFuture;
           synchronized (channelPool) {
-            CompletableFuture<Channel> currentFuture = channelPool.get(offset);
+            currentFuture = channelPool.get(offset);
             if (currentFuture == finalFuture) {
               channelPool.set(offset, null);
-              getChannel(endpoint, messageType).whenComplete((recursiveResult, recursiveError) -> {
-                if (recursiveError == null) {
-                  future.complete(recursiveResult);
-                } else {
-                  future.completeExceptionally(recursiveError);
-                }
-              });
-            } else {
-              currentFuture.whenComplete((recursiveResult, recursiveError) -> {
-                if (recursiveError == null) {
-                  future.complete(recursiveResult);
-                } else {
-                  future.completeExceptionally(recursiveError);
-                }
-              });
             }
+          }
+
+          final ClientConnection connection = clientConnections.remove(channel);
+          if (connection != null) {
+            connection.close();
+          }
+
+          if (currentFuture == finalFuture) {
+            getChannel(endpoint, messageType).whenComplete((recursiveResult, recursiveError) -> {
+              if (recursiveError == null) {
+                future.complete(recursiveResult);
+              } else {
+                future.completeExceptionally(recursiveError);
+              }
+            });
+          } else {
+            currentFuture.whenComplete((recursiveResult, recursiveError) -> {
+              if (recursiveError == null) {
+                future.complete(recursiveResult);
+              } else {
+                future.completeExceptionally(recursiveError);
+              }
+            });
           }
         } else {
           future.complete(channel);
@@ -462,14 +473,18 @@ public class NettyMessagingService implements ManagedMessagingService {
 
     getChannel(endpoint, type).whenComplete((channel, channelError) -> {
       if (channelError == null) {
-        ClientConnection connection = clientConnections.get(channel);
-        if (connection == null) {
-          connection = clientConnections.computeIfAbsent(channel, RemoteClientConnection::new);
-        }
+        final ClientConnection connection = getOrCreateRemoteClientConnection(channel);
         callback.apply(connection).whenComplete((result, sendError) -> {
           if (sendError == null) {
             executor.execute(() -> future.complete(result));
           } else {
+            final Throwable cause = Throwables.getRootCause(sendError);
+            if (!(cause instanceof TimeoutException) && !(cause instanceof MessagingException)) {
+              channel.close().addListener(f -> {
+                connection.close();
+                clientConnections.remove(channel);
+              });
+            }
             executor.execute(() -> future.completeExceptionally(sendError));
           }
         });
@@ -477,6 +492,14 @@ public class NettyMessagingService implements ManagedMessagingService {
         executor.execute(() -> future.completeExceptionally(channelError));
       }
     });
+  }
+
+  private RemoteClientConnection getOrCreateRemoteClientConnection(Channel channel) {
+    RemoteClientConnection connection = clientConnections.get(channel);
+    if (connection == null) {
+      connection = clientConnections.computeIfAbsent(channel, RemoteClientConnection::new);
+    }
+    return connection;
   }
 
   @Override
@@ -525,14 +548,16 @@ public class NettyMessagingService implements ManagedMessagingService {
     Bootstrap bootstrap = new Bootstrap();
     bootstrap.option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT);
     bootstrap.option(ChannelOption.WRITE_BUFFER_WATER_MARK,
-        new WriteBufferWaterMark(10 * 32 * 1024, 10 * 64 * 1024));
-    bootstrap.option(ChannelOption.SO_SNDBUF, 1048576);
+            new WriteBufferWaterMark(10 * 32 * 1024, 10 * 64 * 1024));
+    bootstrap.option(ChannelOption.SO_RCVBUF, 1024 * 1024);
+    bootstrap.option(ChannelOption.SO_SNDBUF, 1024 * 1024);
+    bootstrap.option(ChannelOption.SO_KEEPALIVE, true);
+    bootstrap.option(ChannelOption.TCP_NODELAY, true);
     bootstrap.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 1000);
     bootstrap.group(clientGroup);
     // TODO: Make this faster:
     // http://normanmaurer.me/presentations/2014-facebook-eng-netty/slides.html#37.0
     bootstrap.channel(clientChannelClass);
-    bootstrap.option(ChannelOption.SO_KEEPALIVE, true);
     bootstrap.remoteAddress(endpoint.host(), endpoint.port());
     if (enableNettyTls) {
       bootstrap.handler(new SslClientCommunicationChannelInitializer());
@@ -545,9 +570,12 @@ public class NettyMessagingService implements ManagedMessagingService {
   private CompletableFuture<Void> startAcceptingConnections() {
     CompletableFuture<Void> future = new CompletableFuture<>();
     ServerBootstrap b = new ServerBootstrap();
+    b.option(ChannelOption.SO_REUSEADDR, true);
+    b.option(ChannelOption.SO_BACKLOG, 128);
     b.childOption(ChannelOption.WRITE_BUFFER_WATER_MARK,
-        new WriteBufferWaterMark(8 * 1024, 32 * 1024));
-    b.option(ChannelOption.SO_RCVBUF, 1048576);
+            new WriteBufferWaterMark(8 * 1024, 32 * 1024));
+    b.childOption(ChannelOption.SO_RCVBUF, 1024 * 1024);
+    b.childOption(ChannelOption.SO_SNDBUF, 1024 * 1024);
     b.childOption(ChannelOption.SO_KEEPALIVE, true);
     b.childOption(ChannelOption.TCP_NODELAY, true);
     b.childOption(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT);
@@ -558,7 +586,6 @@ public class NettyMessagingService implements ManagedMessagingService {
     } else {
       b.childHandler(new BasicChannelInitializer());
     }
-    b.option(ChannelOption.SO_BACKLOG, 128);
 
     // Bind and start to accept incoming connections.
     b.bind(localEndpoint.port()).addListener(f -> {
@@ -689,10 +716,7 @@ public class NettyMessagingService implements ManagedMessagingService {
           }
           connection.dispatch((InternalRequest) message);
         } else {
-          RemoteClientConnection connection = clientConnections.get(ctx.channel());
-          if (connection == null) {
-            connection = clientConnections.computeIfAbsent(ctx.channel(), RemoteClientConnection::new);
-          }
+          RemoteClientConnection connection = getOrCreateRemoteClientConnection(ctx.channel());
           connection.dispatch((InternalReply) message);
         }
       } catch (RejectedExecutionException e) {
@@ -704,6 +728,20 @@ public class NettyMessagingService implements ManagedMessagingService {
     public void exceptionCaught(ChannelHandlerContext context, Throwable cause) {
       log.error("Exception inside channel handling pipeline.", cause);
 
+      RemoteClientConnection clientConnection = clientConnections.remove(context.channel());
+      if (clientConnection != null) {
+        clientConnection.close();
+      }
+
+      RemoteServerConnection serverConnection = serverConnections.remove(context.channel());
+      if (serverConnection != null) {
+        serverConnection.close();
+      }
+      context.close();
+    }
+
+    @Override
+    public void channelInactive(ChannelHandlerContext context) throws Exception {
       RemoteClientConnection clientConnection = clientConnections.remove(context.channel());
       if (clientConnection != null) {
         clientConnection.close();
@@ -801,9 +839,78 @@ public class NettyMessagingService implements ManagedMessagingService {
   }
 
   /**
+   * Remote connection implementation.
+   */
+  private abstract class AbstractClientConnection implements ClientConnection {
+    private final Cache<String, RequestMonitor> requestMonitors = CacheBuilder.newBuilder()
+            .expireAfterAccess(HISTORY_EXPIRE_MILLIS, TimeUnit.MILLISECONDS)
+            .build();
+    final Map<Long, Callback> futures = Maps.newConcurrentMap();
+    final AtomicBoolean closed = new AtomicBoolean(false);
+
+    /**
+     * Times out callbacks for this connection.
+     */
+    void timeoutCallbacks() {
+      // Store the current time.
+      long currentTime = System.currentTimeMillis();
+
+      // Iterate through future callbacks and time out callbacks that have been alive
+      // longer than the current timeout according to the message type.
+      Iterator<Map.Entry<Long, Callback>> iterator = futures.entrySet().iterator();
+      while (iterator.hasNext()) {
+        Callback callback = iterator.next().getValue();
+        try {
+          RequestMonitor requestMonitor = requestMonitors.get(callback.type, RequestMonitor::new);
+          long elapsedTime = currentTime - callback.time;
+          if (elapsedTime > MAX_TIMEOUT_MILLIS ||
+                  (elapsedTime > MIN_TIMEOUT_MILLIS && requestMonitor.isTimedOut(elapsedTime))) {
+            iterator.remove();
+            requestMonitor.addReplyTime(elapsedTime);
+            callback.completeExceptionally(
+                    new TimeoutException("Request timed out in " + elapsedTime + " milliseconds"));
+          }
+        } catch (ExecutionException e) {
+          throw new AssertionError();
+        }
+      }
+    }
+
+    protected void registerCallback(long id, String subject, CompletableFuture<byte[]> future) {
+      futures.put(id, new Callback(subject, future));
+    }
+
+    protected Callback completeCallback(long id) {
+      Callback callback = futures.remove(id);
+      if (callback != null) {
+        try {
+          RequestMonitor requestMonitor = requestMonitors.get(callback.type, RequestMonitor::new);
+          requestMonitor.addReplyTime(System.currentTimeMillis() - callback.time);
+        } catch (ExecutionException e) {
+          throw new AssertionError();
+        }
+      }
+      return callback;
+    }
+
+    protected Callback failCallback(long id) {
+      return futures.remove(id);
+    }
+
+    @Override
+    public void close() {
+      if (closed.compareAndSet(false, true)) {
+        for (Callback callback : futures.values()) {
+          callback.completeExceptionally(new ConnectException());
+        }
+      }
+    }
+  }
+
+  /**
    * Local connection implementation.
    */
-  private final class LocalClientConnection implements ClientConnection {
+  private final class LocalClientConnection extends AbstractClientConnection {
     @Override
     public CompletableFuture<Void> sendAsync(InternalRequest message) {
       BiConsumer<InternalRequest, ServerConnection> handler = handlers.get(message.subject());
@@ -819,6 +926,8 @@ public class NettyMessagingService implements ManagedMessagingService {
     @Override
     public CompletableFuture<byte[]> sendAndReceive(InternalRequest message) {
       CompletableFuture<byte[]> future = new CompletableFuture<>();
+      future.whenComplete((r, e) -> completeCallback(message.id()));
+      registerCallback(message.id(), message.subject(), future);
       BiConsumer<InternalRequest, ServerConnection> handler = handlers.get(message.subject());
       if (handler != null) {
         log.trace("{} - Received message type {} from {}", localEndpoint, message.subject(), message.sender());
@@ -861,43 +970,11 @@ public class NettyMessagingService implements ManagedMessagingService {
   /**
    * Remote connection implementation.
    */
-  private final class RemoteClientConnection implements ClientConnection {
+  private final class RemoteClientConnection extends AbstractClientConnection {
     private final Channel channel;
-    private final Map<Long, Callback> futures = Maps.newConcurrentMap();
-    private final AtomicBoolean closed = new AtomicBoolean(false);
-    private final Cache<String, RequestMonitor> requestMonitors = CacheBuilder.newBuilder()
-        .expireAfterAccess(HISTORY_EXPIRE_MILLIS, TimeUnit.MILLISECONDS)
-        .build();
 
     RemoteClientConnection(Channel channel) {
       this.channel = channel;
-    }
-
-    /**
-     * Times out callbacks for this connection.
-     */
-    private void timeoutCallbacks() {
-      // Store the current time.
-      long currentTime = System.currentTimeMillis();
-
-      // Iterate through future callbacks and time out callbacks that have been alive
-      // longer than the current timeout according to the message type.
-      Iterator<Map.Entry<Long, Callback>> iterator = futures.entrySet().iterator();
-      while (iterator.hasNext()) {
-        Callback callback = iterator.next().getValue();
-        try {
-          RequestMonitor requestMonitor = requestMonitors.get(callback.type, RequestMonitor::new);
-          long elapsedTime = currentTime - callback.time;
-          if (elapsedTime > MAX_TIMEOUT_MILLIS || requestMonitor.isTimedOut(elapsedTime)) {
-            iterator.remove();
-            requestMonitor.addReplyTime(elapsedTime);
-            callback.completeExceptionally(
-                new TimeoutException("Request timed out in " + elapsedTime + " milliseconds"));
-          }
-        } catch (ExecutionException e) {
-          throw new AssertionError();
-        }
-      }
     }
 
     @Override
@@ -916,12 +993,13 @@ public class NettyMessagingService implements ManagedMessagingService {
     @Override
     public CompletableFuture<byte[]> sendAndReceive(InternalRequest message) {
       CompletableFuture<byte[]> future = new CompletableFuture<>();
-      Callback callback = new Callback(message.subject(), future);
-      futures.put(message.id(), callback);
+      registerCallback(message.id(), message.subject(), future);
       channel.writeAndFlush(message).addListener(channelFuture -> {
         if (!channelFuture.isSuccess()) {
-          futures.remove(message.id());
-          callback.completeExceptionally(channelFuture.cause());
+          Callback callback = failCallback(message.id());
+          if (callback != null) {
+            callback.completeExceptionally(channelFuture.cause());
+          }
         }
       });
       return future;
@@ -938,7 +1016,7 @@ public class NettyMessagingService implements ManagedMessagingService {
         return;
       }
 
-      Callback callback = futures.remove(message.id());
+      Callback callback = completeCallback(message.id());
       if (callback != null) {
         if (message.status() == InternalReply.Status.OK) {
           callback.complete(message.payload());
@@ -948,13 +1026,6 @@ public class NettyMessagingService implements ManagedMessagingService {
           callback.completeExceptionally(new MessagingException.RemoteHandlerFailure());
         } else if (message.status() == InternalReply.Status.PROTOCOL_EXCEPTION) {
           callback.completeExceptionally(new MessagingException.ProtocolException());
-        }
-
-        try {
-          RequestMonitor requestMonitor = requestMonitors.get(callback.type, RequestMonitor::new);
-          requestMonitor.addReplyTime(System.currentTimeMillis() - callback.time);
-        } catch (ExecutionException e) {
-          throw new AssertionError();
         }
       } else {
         log.debug("Received a reply for message id:[{}] "
@@ -1012,7 +1083,7 @@ public class NettyMessagingService implements ManagedMessagingService {
           message.id(),
           payload.orElse(EMPTY_PAYLOAD),
           status);
-      channel.writeAndFlush(response);
+      channel.writeAndFlush(response, channel.voidPromise());
     }
   }
 

@@ -243,7 +243,7 @@ abstract class AbstractAppender implements AutoCloseable {
     // us converge on the matchIndex faster than by simply decrementing nextIndex one index at a time.
     else {
       resetMatchIndex(member, response);
-      resetNextIndex(member);
+      resetNextIndex(member, response);
 
       // If there are more entries to send then attempt to send another commit.
       if (response.lastLogIndex() != request.prevLogIndex() && hasMoreEntries(member)) {
@@ -303,21 +303,21 @@ abstract class AbstractAppender implements AutoCloseable {
    * Resets the match index when a response fails.
    */
   protected void resetMatchIndex(RaftMemberContext member, AppendResponse response) {
-    member.setMatchIndex(response.lastLogIndex());
-    log.trace("Reset match index for {} to {}", member, member.getMatchIndex());
+    if (response.lastLogIndex() < member.getMatchIndex()) {
+      member.setMatchIndex(response.lastLogIndex());
+      log.trace("Reset match index for {} to {}", member, member.getMatchIndex());
+    }
   }
 
   /**
    * Resets the next index when a response fails.
    */
-  protected void resetNextIndex(RaftMemberContext member) {
-    final RaftLogReader reader = member.getLogReader();
-    if (member.getMatchIndex() != 0) {
-      reader.reset(member.getMatchIndex() + 1);
-    } else {
-      reader.reset();
+  protected void resetNextIndex(RaftMemberContext member, AppendResponse response) {
+    long nextIndex = response.lastLogIndex() + 1;
+    if (member.getLogReader().getNextIndex() != nextIndex) {
+      member.getLogReader().reset(nextIndex);
+      log.trace("Reset next index for {} to {}", member, nextIndex);
     }
-    log.trace("Reset next index for {} to {} + 1", member, member.getMatchIndex());
   }
 
   /**
