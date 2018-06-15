@@ -15,72 +15,91 @@
  */
 package io.atomix.core;
 
-import io.atomix.cluster.ManagedClusterMetadataService;
-import io.atomix.cluster.ManagedClusterService;
-import io.atomix.cluster.Node;
-import io.atomix.cluster.messaging.ManagedClusterEventingService;
-import io.atomix.cluster.messaging.ManagedClusterMessagingService;
-import io.atomix.messaging.Endpoint;
-import io.atomix.messaging.ManagedMessagingService;
-import io.atomix.primitive.PrimitiveTypeRegistry;
-import io.atomix.primitive.partition.ManagedPartitionGroup;
-import io.atomix.primitive.partition.ManagedPartitionService;
-import io.atomix.primitive.partition.impl.DefaultPartitionService;
-import io.atomix.protocols.backup.partition.PrimaryBackupPartitionGroup;
-import io.atomix.protocols.raft.partition.RaftPartitionGroup;
-import io.atomix.storage.StorageLevel;
+import io.atomix.cluster.Member;
+import io.atomix.core.profile.Profile;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.ServerSocket;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * Base Atomix test.
  */
 public abstract class AbstractAtomixTest {
   private static final int BASE_PORT = 5000;
-  private static TestMessagingServiceFactory messagingServiceFactory;
 
   @BeforeClass
   public static void setupAtomix() throws Exception {
     deleteData();
-    messagingServiceFactory = new TestMessagingServiceFactory();
   }
 
   /**
    * Creates an Atomix instance.
    */
-  protected static Atomix createAtomix(Node.Type type, int id, Integer... ids) {
-    Node localNode = Node.builder(String.valueOf(id))
-        .withType(type)
-        .withEndpoint(Endpoint.from("localhost", BASE_PORT + id))
+  protected static Atomix.Builder buildAtomix(int id, List<Integer> members) {
+    return buildAtomix(id, members, Collections.emptyMap());
+  }
+
+  /**
+   * Creates an Atomix instance.
+   */
+  protected static Atomix.Builder buildAtomix(int id, List<Integer> memberIds, Map<String, String> metadata) {
+    Member localMember = Member.builder(String.valueOf(id))
+        .withAddress("localhost", BASE_PORT + id)
+        .withMetadata(metadata)
         .build();
 
-    Collection<Node> bootstrapNodes = Stream.of(ids)
-        .map(nodeId -> Node.builder(String.valueOf(nodeId))
-            .withType(Node.Type.DATA)
-            .withEndpoint(Endpoint.from("localhost", BASE_PORT + nodeId))
+    Collection<Member> members = memberIds.stream()
+        .map(memberId -> Member.builder(String.valueOf(memberId))
+            .withAddress("localhost", BASE_PORT + memberId)
             .build())
         .collect(Collectors.toList());
 
-    return new TestAtomix.Builder()
+    return Atomix.builder()
         .withClusterName("test")
-        .withDataDirectory(new File("target/test-logs/" + id))
-        .withLocalNode(localNode)
-        .withBootstrapNodes(bootstrapNodes)
-        .withCoordinationPartitions(3)
-        .withDataPartitions(3) // Lower number of partitions for faster testing
-        .build();
+        .withLocalMember(localMember)
+        .withMembers(members);
+  }
+
+  /**
+   * Creates an Atomix instance.
+   */
+  protected static Atomix createAtomix(int id, List<Integer> persistentIds, Profile... profiles) {
+    return createAtomix(id, persistentIds, Collections.emptyMap(), profiles);
+  }
+
+  /**
+   * Creates an Atomix instance.
+   */
+  protected static Atomix createAtomix(int id, List<Integer> persistentIds, Map<String, String> metadata, Profile... profiles) {
+    return createAtomix(id, persistentIds, metadata, b -> b.withProfiles(profiles).build());
+  }
+
+  /**
+   * Creates an Atomix instance.
+   */
+  protected static Atomix createAtomix(int id, List<Integer> persistentIds, Function<Atomix.Builder, Atomix> builderFunction) {
+    return createAtomix(id, persistentIds, Collections.emptyMap(), builderFunction);
+  }
+
+  /**
+   * Creates an Atomix instance.
+   */
+  protected static Atomix createAtomix(int id, List<Integer> persistentIds, Map<String, String> metadata, Function<Atomix.Builder, Atomix> builderFunction) {
+    return builderFunction.apply(buildAtomix(id, persistentIds, metadata));
   }
 
   @AfterClass
@@ -88,11 +107,23 @@ public abstract class AbstractAtomixTest {
     deleteData();
   }
 
+  protected static int findAvailablePort(int defaultPort) {
+    try {
+      ServerSocket socket = new ServerSocket(0);
+      socket.setReuseAddress(true);
+      int port = socket.getLocalPort();
+      socket.close();
+      return port;
+    } catch (IOException ex) {
+      return defaultPort;
+    }
+  }
+
   /**
    * Deletes data from the test data directory.
    */
   protected static void deleteData() throws Exception {
-    Path directory = Paths.get("target/test-logs/");
+    Path directory = new File(System.getProperty("user.dir"), ".data").toPath();
     if (Files.exists(directory)) {
       Files.walkFileTree(directory, new SimpleFileVisitor<Path>() {
         @Override
@@ -107,47 +138,6 @@ public abstract class AbstractAtomixTest {
           return FileVisitResult.CONTINUE;
         }
       });
-    }
-  }
-
-  /**
-   * Atomix implementation used for testing.
-   */
-  static class TestAtomix extends Atomix {
-    TestAtomix(ManagedMessagingService messagingService, ManagedClusterMetadataService metadataService, ManagedClusterService clusterService, ManagedClusterMessagingService clusterCommunicator, ManagedClusterEventingService clusterEventService, ManagedPartitionGroup corePartitionGroup, ManagedPartitionService partitions, PrimitiveTypeRegistry primitiveTypes) {
-      super(messagingService, metadataService, clusterService, clusterCommunicator, clusterEventService, corePartitionGroup, partitions, primitiveTypes);
-    }
-
-    static class Builder extends Atomix.Builder {
-      @Override
-      protected ManagedMessagingService buildMessagingService() {
-        return messagingServiceFactory.newMessagingService(localNode.endpoint());
-      }
-
-      @Override
-      protected ManagedPartitionGroup buildCorePartitionGroup() {
-        return RaftPartitionGroup.builder("core")
-            .withStorageLevel(StorageLevel.MEMORY)
-            .withDataDirectory(new File(dataDirectory, "core"))
-            .withNumPartitions(1)
-            .build();
-      }
-
-      @Override
-      protected ManagedPartitionService buildPartitionService() {
-        if (partitionGroups.isEmpty()) {
-          partitionGroups.add(RaftPartitionGroup.builder(COORDINATION_GROUP_NAME)
-              .withStorageLevel(StorageLevel.MEMORY)
-              .withDataDirectory(new File(dataDirectory, "coordination"))
-              .withNumPartitions(numCoordinationPartitions > 0 ? numCoordinationPartitions : bootstrapNodes.size())
-              .withPartitionSize(coordinationPartitionSize)
-              .build());
-          partitionGroups.add(PrimaryBackupPartitionGroup.builder(DATA_GROUP_NAME)
-              .withNumPartitions(numDataPartitions)
-              .build());
-        }
-        return new DefaultPartitionService(partitionGroups);
-      }
     }
   }
 }

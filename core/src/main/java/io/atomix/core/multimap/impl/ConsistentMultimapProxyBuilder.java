@@ -17,49 +17,48 @@
 package io.atomix.core.multimap.impl;
 
 import com.google.common.io.BaseEncoding;
-
 import io.atomix.core.multimap.AsyncConsistentMultimap;
 import io.atomix.core.multimap.ConsistentMultimap;
 import io.atomix.core.multimap.ConsistentMultimapBuilder;
+import io.atomix.core.multimap.ConsistentMultimapConfig;
 import io.atomix.primitive.PrimitiveManagementService;
-import io.atomix.primitive.PrimitiveProtocol;
+import io.atomix.primitive.proxy.ProxyClient;
+import io.atomix.primitive.service.ServiceConfig;
 import io.atomix.utils.serializer.Serializer;
 
 import java.util.concurrent.CompletableFuture;
-
-import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
  * Default {@link AsyncConsistentMultimap} builder.
  */
 public class ConsistentMultimapProxyBuilder<K, V> extends ConsistentMultimapBuilder<K, V> {
-  private final PrimitiveManagementService managementService;
-
-  public ConsistentMultimapProxyBuilder(String name, PrimitiveManagementService managementService) {
-    super(name);
-    this.managementService = checkNotNull(managementService);
+  public ConsistentMultimapProxyBuilder(String name, ConsistentMultimapConfig config, PrimitiveManagementService managementService) {
+    super(name, config, managementService);
   }
 
   @Override
   @SuppressWarnings("unchecked")
   public CompletableFuture<ConsistentMultimap<K, V>> buildAsync() {
-    PrimitiveProtocol protocol = protocol();
-    return managementService.getPartitionService()
-        .getPartitionGroup(protocol)
-        .getPartition(name())
-        .getPrimitiveClient()
-        .newProxy(name(), primitiveType(), protocol)
+    ProxyClient<ConsistentSetMultimapService> proxy = protocol().newProxy(
+        name(),
+        primitiveType(),
+        ConsistentSetMultimapService.class,
+        new ServiceConfig(),
+        managementService.getPartitionService());
+    return new ConsistentSetMultimapProxy(proxy, managementService.getPrimitiveRegistry())
         .connect()
-        .thenApply(proxy -> {
-          AsyncConsistentMultimap<String, byte[]> rawMap = new ConsistentSetMultimapProxy(proxy);
+        .thenApply(rawMultimap -> {
           Serializer serializer = serializer();
-          return new TranscodingAsyncConsistentMultimap<K, V, String, byte[]>(
-              rawMap,
+          AsyncConsistentMultimap<K, V> multimap = new TranscodingAsyncConsistentMultimap<>(
+              rawMultimap,
               key -> BaseEncoding.base16().encode(serializer.encode(key)),
               string -> serializer.decode(BaseEncoding.base16().decode(string)),
               value -> serializer.encode(value),
-              bytes -> serializer.decode(bytes))
-              .sync();
+              bytes -> serializer.decode(bytes));
+          if (config.isCacheEnabled()) {
+            multimap = new CachingAsyncConsistentMultimap<>(multimap);
+          }
+          return multimap.sync();
         });
   }
 }

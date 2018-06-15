@@ -23,6 +23,8 @@ import io.atomix.core.map.MapEvent;
 import io.atomix.core.map.MapEventListener;
 import io.atomix.core.transaction.TransactionId;
 import io.atomix.core.transaction.TransactionLog;
+import io.atomix.primitive.PrimitiveType;
+import io.atomix.primitive.protocol.PrimitiveProtocol;
 import io.atomix.utils.concurrent.Futures;
 import io.atomix.utils.time.Versioned;
 
@@ -62,6 +64,16 @@ public class TranscodingAsyncConsistentTreeMap<V1, V2> implements AsyncConsisten
     this.valueEncoder = v -> v == null ? null : valueEncoder.apply(v);
     this.valueDecoder = v -> v == null ? null : valueDecoder.apply(v);
     this.versionedValueTransform = v -> v == null ? null : v.map(valueDecoder);
+  }
+
+  @Override
+  public PrimitiveType type() {
+    return backingMap.type();
+  }
+
+  @Override
+  public PrimitiveProtocol protocol() {
+    return backingMap.protocol();
   }
 
   @Override
@@ -107,18 +119,6 @@ public class TranscodingAsyncConsistentTreeMap<V1, V2> implements AsyncConsisten
   @Override
   public CompletableFuture<Map.Entry<String, Versioned<V1>>> lastEntry() {
     return backingMap.lastEntry()
-        .thenApply(entry -> entry != null ? Maps.immutableEntry(entry.getKey(), versionedValueTransform.apply(entry.getValue())) : null);
-  }
-
-  @Override
-  public CompletableFuture<Map.Entry<String, Versioned<V1>>> pollFirstEntry() {
-    return backingMap.pollFirstEntry()
-        .thenApply(entry -> entry != null ? Maps.immutableEntry(entry.getKey(), versionedValueTransform.apply(entry.getValue())) : null);
-  }
-
-  @Override
-  public CompletableFuture<Map.Entry<String, Versioned<V1>>> pollLastEntry() {
-    return backingMap.pollLastEntry()
         .thenApply(entry -> entry != null ? Maps.immutableEntry(entry.getKey(), versionedValueTransform.apply(entry.getValue())) : null);
   }
 

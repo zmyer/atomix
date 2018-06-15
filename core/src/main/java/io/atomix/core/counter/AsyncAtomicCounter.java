@@ -15,10 +15,8 @@
  */
 package io.atomix.core.counter;
 
-import io.atomix.core.PrimitiveTypes;
 import io.atomix.primitive.AsyncPrimitive;
 import io.atomix.primitive.DistributedPrimitive;
-import io.atomix.primitive.PrimitiveType;
 
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
@@ -27,11 +25,6 @@ import java.util.concurrent.CompletableFuture;
  * An async atomic counter dispenses monotonically increasing values.
  */
 public interface AsyncAtomicCounter extends AsyncPrimitive {
-
-  @Override
-  default PrimitiveType primitiveType() {
-    return PrimitiveTypes.counter();
-  }
 
   /**
    * Atomically increment by one and return the updated value.

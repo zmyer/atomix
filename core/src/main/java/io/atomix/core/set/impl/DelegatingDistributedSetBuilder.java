@@ -15,16 +15,22 @@
  */
 package io.atomix.core.set.impl;
 
-import io.atomix.core.map.ConsistentMapBuilder;
+import com.google.common.io.BaseEncoding;
+import io.atomix.core.map.AsyncConsistentMap;
+import io.atomix.core.map.ConsistentMapType;
+import io.atomix.core.map.impl.CachingAsyncConsistentMap;
+import io.atomix.core.map.impl.ConsistentMapProxy;
+import io.atomix.core.map.impl.ConsistentMapService;
+import io.atomix.core.map.impl.TranscodingAsyncConsistentMap;
+import io.atomix.core.map.impl.UnmodifiableAsyncConsistentMap;
 import io.atomix.core.set.DistributedSet;
 import io.atomix.core.set.DistributedSetBuilder;
-import io.atomix.primitive.Consistency;
-import io.atomix.primitive.Persistence;
-import io.atomix.primitive.PrimitiveProtocol;
-import io.atomix.primitive.Replication;
+import io.atomix.core.set.DistributedSetConfig;
+import io.atomix.primitive.PrimitiveManagementService;
+import io.atomix.primitive.proxy.ProxyClient;
+import io.atomix.primitive.service.ServiceConfig;
 import io.atomix.utils.serializer.Serializer;
 
-import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -33,131 +39,38 @@ import java.util.concurrent.CompletableFuture;
  * @param <E> type for set elements
  */
 public class DelegatingDistributedSetBuilder<E> extends DistributedSetBuilder<E> {
-  private ConsistentMapBuilder<E, Boolean> mapBuilder;
-
-  public DelegatingDistributedSetBuilder(ConsistentMapBuilder<E, Boolean> mapBuilder) {
-    super(mapBuilder.name());
-    this.mapBuilder = mapBuilder;
+  public DelegatingDistributedSetBuilder(String name, DistributedSetConfig config, PrimitiveManagementService managementService) {
+    super(name, config, managementService);
   }
 
   @Override
-  public DistributedSetBuilder<E> withSerializer(Serializer serializer) {
-    mapBuilder.withSerializer(serializer);
-    return this;
-  }
-
-  @Override
-  public DistributedSetBuilder<E> withUpdatesDisabled() {
-    mapBuilder.withUpdatesDisabled();
-    return this;
-  }
-
-  @Override
-  public DistributedSetBuilder<E> withRelaxedReadConsistency() {
-    mapBuilder.withRelaxedReadConsistency();
-    return this;
-  }
-
-  @Override
-  public DistributedSetBuilder<E> withProtocol(PrimitiveProtocol protocol) {
-    mapBuilder.withProtocol(protocol);
-    return this;
-  }
-
-  @Override
-  public DistributedSetBuilder<E> withConsistency(Consistency consistency) {
-    mapBuilder.withConsistency(consistency);
-    return this;
-  }
-
-  @Override
-  public DistributedSetBuilder<E> withPersistence(Persistence persistence) {
-    mapBuilder.withPersistence(persistence);
-    return this;
-  }
-
-  @Override
-  public DistributedSetBuilder<E> withReplication(Replication replication) {
-    mapBuilder.withReplication(replication);
-    return this;
-  }
-
-  @Override
-  public DistributedSetBuilder<E> withBackups(int numBackups) {
-    mapBuilder.withBackups(numBackups);
-    return this;
-  }
-
-  @Override
-  public DistributedSetBuilder<E> withMaxRetries(int maxRetries) {
-    mapBuilder.withMaxRetries(maxRetries);
-    return this;
-  }
-
-  @Override
-  public DistributedSetBuilder<E> withRetryDelay(Duration retryDelay) {
-    mapBuilder.withRetryDelay(retryDelay);
-    return this;
-  }
-
-  @Override
-  public boolean readOnly() {
-    return mapBuilder.readOnly();
-  }
-
-  @Override
-  public boolean relaxedReadConsistency() {
-    return mapBuilder.relaxedReadConsistency();
-  }
-
-  @Override
-  public Serializer serializer() {
-    return mapBuilder.serializer();
-  }
-
-  @Override
-  public String name() {
-    return mapBuilder.name();
-  }
-
-  @Override
-  public PrimitiveProtocol protocol() {
-    return mapBuilder.protocol();
-  }
-
-  @Override
-  public Consistency consistency() {
-    return mapBuilder.consistency();
-  }
-
-  @Override
-  public Persistence persistence() {
-    return mapBuilder.persistence();
-  }
-
-  @Override
-  public Replication replication() {
-    return mapBuilder.replication();
-  }
-
-  @Override
-  public int backups() {
-    return mapBuilder.backups();
-  }
-
-  @Override
-  public int maxRetries() {
-    return mapBuilder.maxRetries();
-  }
-
-  @Override
-  public Duration retryDelay() {
-    return mapBuilder.retryDelay();
-  }
-
-  @Override
+  @SuppressWarnings("unchecked")
   public CompletableFuture<DistributedSet<E>> buildAsync() {
-    return mapBuilder.buildAsync()
-        .thenApply(map -> new DelegatingAsyncDistributedSet<>(map.async()).sync());
+    ProxyClient<ConsistentMapService> proxy = protocol().newProxy(
+        name(),
+        ConsistentMapType.instance(),
+        ConsistentMapService.class,
+        new ServiceConfig(),
+        managementService.getPartitionService());
+    return new ConsistentMapProxy(proxy, managementService.getPrimitiveRegistry())
+        .connect()
+        .thenApply(rawMap -> {
+          Serializer serializer = serializer();
+          AsyncConsistentMap<E, Boolean> map = new TranscodingAsyncConsistentMap<>(
+              rawMap,
+              key -> BaseEncoding.base16().encode(serializer.encode(key)),
+              string -> serializer.decode(BaseEncoding.base16().decode(string)),
+              value -> serializer.encode(value),
+              bytes -> serializer.decode(bytes));
+
+          if (config.isCacheEnabled()) {
+            map = new CachingAsyncConsistentMap<>(map, config.getCacheSize());
+          }
+
+          if (config.isReadOnly()) {
+            map = new UnmodifiableAsyncConsistentMap<>(map);
+          }
+          return new DelegatingAsyncDistributedSet<>(map).sync();
+        });
   }
 }

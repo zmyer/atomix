@@ -15,11 +15,13 @@
  */
 package io.atomix.protocols.raft.impl;
 
-import io.atomix.cluster.NodeId;
+import io.atomix.cluster.MemberId;
+import io.atomix.primitive.impl.ClasspathScanningPrimitiveTypeRegistry;
 import io.atomix.primitive.service.PrimitiveService;
 import io.atomix.protocols.raft.RaftServer;
 import io.atomix.protocols.raft.cluster.RaftCluster;
 import io.atomix.protocols.raft.storage.RaftStorage;
+import io.atomix.utils.concurrent.AtomixFuture;
 import io.atomix.utils.concurrent.Futures;
 import io.atomix.utils.logging.ContextualLoggerFactory;
 import io.atomix.utils.logging.LoggerContext;
@@ -79,17 +81,17 @@ public class DefaultRaftServer implements RaftServer {
   }
 
   @Override
-  public CompletableFuture<RaftServer> bootstrap(Collection<NodeId> cluster) {
+  public CompletableFuture<RaftServer> bootstrap(Collection<MemberId> cluster) {
     return start(() -> cluster().bootstrap(cluster));
   }
 
   @Override
-  public CompletableFuture<RaftServer> listen(Collection<NodeId> cluster) {
+  public CompletableFuture<RaftServer> listen(Collection<MemberId> cluster) {
     return start(() -> cluster().listen(cluster));
   }
 
   @Override
-  public CompletableFuture<RaftServer> join(Collection<NodeId> cluster) {
+  public CompletableFuture<RaftServer> join(Collection<MemberId> cluster) {
     return start(() -> cluster().join(cluster));
   }
 
@@ -103,7 +105,7 @@ public class DefaultRaftServer implements RaftServer {
     if (openFuture == null) {
       synchronized (this) {
         if (openFuture == null) {
-          CompletableFuture<RaftServer> future = new CompletableFuture<>();
+          CompletableFuture<RaftServer> future = new AtomixFuture<>();
           openFuture = future;
           joiner.get().whenComplete((result, error) -> {
             if (error == null) {
@@ -121,7 +123,7 @@ public class DefaultRaftServer implements RaftServer {
 
     return openFuture.whenComplete((result, error) -> {
       if (error == null) {
-        log.info("Server started successfully!");
+        log.debug("Server started successfully!");
       } else {
         log.warn("Failed to start server!");
       }
@@ -149,10 +151,10 @@ public class DefaultRaftServer implements RaftServer {
    */
   public CompletableFuture<Void> shutdown() {
     if (!started) {
-      return Futures.exceptionalFuture(new IllegalStateException("context not open"));
+      return Futures.exceptionalFuture(new IllegalStateException("Server not running"));
     }
 
-    CompletableFuture<Void> future = new CompletableFuture<>();
+    CompletableFuture<Void> future = new AtomixFuture<>();
     context.getThreadContext().execute(() -> {
       started = false;
       context.transition(Role.INACTIVE);
@@ -178,7 +180,7 @@ public class DefaultRaftServer implements RaftServer {
     if (closeFuture == null) {
       synchronized (this) {
         if (closeFuture == null) {
-          closeFuture = new CompletableFuture<>();
+          closeFuture = new AtomixFuture<>();
           if (openFuture == null) {
             cluster().leave().whenComplete((leaveResult, leaveError) -> {
               shutdown().whenComplete((shutdownResult, shutdownError) -> {
@@ -218,19 +220,22 @@ public class DefaultRaftServer implements RaftServer {
    * Default Raft server builder.
    */
   public static class Builder extends RaftServer.Builder {
-    public Builder(NodeId localNodeId) {
-      super(localNodeId);
+    public Builder(MemberId localMemberId) {
+      super(localMemberId);
     }
 
     @Override
     public RaftServer build() {
-      if (primitiveTypes.size() == 0) {
+      if (primitiveTypes == null) {
+        primitiveTypes = new ClasspathScanningPrimitiveTypeRegistry(Thread.currentThread().getContextClassLoader());
+      }
+      if (primitiveTypes.getPrimitiveTypes().isEmpty()) {
         throw new IllegalStateException("No primitive services registered");
       }
 
       // If the server name is null, set it to the member ID.
       if (name == null) {
-        name = localNodeId.id();
+        name = localMemberId.id();
       }
 
       // If the storage is not configured, create a new Storage instance with the configured serializer.
@@ -238,7 +243,7 @@ public class DefaultRaftServer implements RaftServer {
         storage = RaftStorage.builder().build();
       }
 
-      RaftContext raft = new RaftContext(name, localNodeId, clusterService, protocol, storage, primitiveTypes, threadModel, threadPoolSize);
+      RaftContext raft = new RaftContext(name, localMemberId, membershipService, protocol, storage, primitiveTypes, threadModel, threadPoolSize);
       raft.setElectionTimeout(electionTimeout);
       raft.setHeartbeatInterval(heartbeatInterval);
       raft.setSessionTimeout(sessionTimeout);

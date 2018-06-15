@@ -16,12 +16,13 @@
 package io.atomix.core.tree.impl;
 
 import com.google.common.collect.Maps;
-
 import io.atomix.core.tree.AsyncDocumentTree;
 import io.atomix.core.tree.DocumentPath;
 import io.atomix.core.tree.DocumentTree;
 import io.atomix.core.tree.DocumentTreeEvent;
 import io.atomix.core.tree.DocumentTreeListener;
+import io.atomix.primitive.PrimitiveType;
+import io.atomix.primitive.protocol.PrimitiveProtocol;
 import io.atomix.utils.time.Versioned;
 
 import java.time.Duration;
@@ -50,6 +51,16 @@ public class TranscodingAsyncDocumentTree<V1, V2> implements AsyncDocumentTree<V
   @Override
   public String name() {
     return backingTree.name();
+  }
+
+  @Override
+  public PrimitiveType type() {
+    return backingTree.type();
+  }
+
+  @Override
+  public PrimitiveProtocol protocol() {
+    return backingTree.protocol();
   }
 
   @Override
@@ -120,8 +131,8 @@ public class TranscodingAsyncDocumentTree<V1, V2> implements AsyncDocumentTree<V
   }
 
   @Override
-  public CompletableFuture<Void> destroy() {
-    return backingTree.destroy();
+  public CompletableFuture<Void> delete() {
+    return backingTree.delete();
   }
 
   @Override

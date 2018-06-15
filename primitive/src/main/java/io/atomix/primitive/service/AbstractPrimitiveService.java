@@ -15,31 +15,85 @@
  */
 package io.atomix.primitive.service;
 
+import com.google.common.collect.Maps;
+import io.atomix.primitive.PrimitiveException;
 import io.atomix.primitive.PrimitiveId;
+import io.atomix.primitive.PrimitiveType;
+import io.atomix.primitive.operation.OperationId;
+import io.atomix.primitive.operation.Operations;
 import io.atomix.primitive.service.impl.DefaultServiceExecutor;
 import io.atomix.primitive.session.Session;
-import io.atomix.primitive.session.Sessions;
+import io.atomix.primitive.session.SessionId;
+import io.atomix.primitive.session.impl.ClientSession;
 import io.atomix.utils.concurrent.Scheduler;
 import io.atomix.utils.logging.ContextualLoggerFactory;
 import io.atomix.utils.logging.LoggerContext;
+import io.atomix.utils.serializer.Serializer;
 import io.atomix.utils.time.Clock;
 import io.atomix.utils.time.LogicalClock;
 import io.atomix.utils.time.WallClock;
 import io.atomix.utils.time.WallClockTimestamp;
 import org.slf4j.Logger;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.util.Collection;
+import java.util.Map;
+import java.util.function.Consumer;
+
 /**
  * Raft service.
  */
-public abstract class AbstractPrimitiveService implements PrimitiveService {
+public abstract class AbstractPrimitiveService<C> implements PrimitiveService {
+  private final PrimitiveType primitiveType;
+  private final Class<C> clientInterface;
+  private final Serializer serializer;
   private Logger log;
   private ServiceContext context;
   private ServiceExecutor executor;
+  private final Map<SessionId, Session<C>> sessions = Maps.newHashMap();
+
+  protected AbstractPrimitiveService(PrimitiveType primitiveType) {
+    this(primitiveType, null);
+  }
+
+  protected AbstractPrimitiveService(PrimitiveType primitiveType, Class<C> clientInterface) {
+    this.primitiveType = primitiveType;
+    this.clientInterface = clientInterface;
+    this.serializer = Serializer.using(primitiveType.namespace());
+  }
 
   @Override
-  public void init(ServiceContext context) {
+  public Serializer serializer() {
+    return serializer;
+  }
+
+  /**
+   * Encodes the given object using the configured {@link #serializer()}.
+   *
+   * @param object the object to encode
+   * @param <T>    the object type
+   * @return the encoded bytes
+   */
+  protected <T> byte[] encode(T object) {
+    return object != null ? serializer().encode(object) : null;
+  }
+
+  /**
+   * Decodes the given object using the configured {@link #serializer()}.
+   *
+   * @param bytes the bytes to decode
+   * @param <T>   the object type
+   * @return the decoded object
+   */
+  protected <T> T decode(byte[] bytes) {
+    return bytes != null ? serializer().decode(bytes) : null;
+  }
+
+  @Override
+  public final void init(ServiceContext context) {
     this.context = context;
-    this.executor = new DefaultServiceExecutor(context);
+    this.executor = new DefaultServiceExecutor(context, serializer());
     this.log = ContextualLoggerFactory.getLogger(getClass(), LoggerContext.builder(PrimitiveService.class)
         .addValue(context.serviceId())
         .add("type", context.serviceType())
@@ -49,12 +103,12 @@ public abstract class AbstractPrimitiveService implements PrimitiveService {
   }
 
   @Override
-  public void tick(WallClockTimestamp timestamp) {
+  public final void tick(WallClockTimestamp timestamp) {
     executor.tick(timestamp);
   }
 
   @Override
-  public byte[] apply(Commit<byte[]> commit) {
+  public final byte[] apply(Commit<byte[]> commit) {
     return executor.apply(commit);
   }
 
@@ -67,7 +121,65 @@ public abstract class AbstractPrimitiveService implements PrimitiveService {
    *
    * @param executor The state machine executor.
    */
-  protected abstract void configure(ServiceExecutor executor);
+  protected void configure(ServiceExecutor executor) {
+    Operations.getOperationMap(getClass()).forEach(((operationId, method) -> configure(operationId, method, executor)));
+  }
+
+  /**
+   * Configures the given operation on the given executor.
+   *
+   * @param operationId the operation identifier
+   * @param method      the operation method
+   * @param executor    the service executor
+   */
+  private void configure(OperationId operationId, Method method, ServiceExecutor executor) {
+    if (method.getReturnType() == Void.TYPE) {
+      if (method.getParameterTypes().length == 0) {
+        executor.register(operationId, () -> {
+          try {
+            method.invoke(this);
+          } catch (IllegalAccessException | InvocationTargetException e) {
+            throw new PrimitiveException.ServiceException(e.getMessage());
+          }
+        });
+      } else {
+        executor.register(operationId, args -> {
+          try {
+            method.invoke(this, (Object[]) args.value());
+          } catch (IllegalAccessException | InvocationTargetException e) {
+            throw new PrimitiveException.ServiceException(e.getMessage());
+          }
+        });
+      }
+    } else {
+      if (method.getParameterTypes().length == 0) {
+        executor.register(operationId, () -> {
+          try {
+            return method.invoke(this);
+          } catch (IllegalAccessException | InvocationTargetException e) {
+            throw new PrimitiveException.ServiceException(e.getMessage());
+          }
+        });
+      } else {
+        executor.register(operationId, args -> {
+          try {
+            return method.invoke(this, (Object[]) args.value());
+          } catch (IllegalAccessException | InvocationTargetException e) {
+            throw new PrimitiveException.ServiceException(e.getMessage());
+          }
+        });
+      }
+    }
+  }
+
+  /**
+   * Returns the primitive type.
+   *
+   * @return the primitive type
+   */
+  protected PrimitiveType getPrimitiveType() {
+    return primitiveType;
+  }
 
   /**
    * Returns the service logger.
@@ -119,8 +231,8 @@ public abstract class AbstractPrimitiveService implements PrimitiveService {
    *
    * @return the current session
    */
-  protected Session getCurrentSession() {
-    return context.currentSession();
+  protected Session<C> getCurrentSession() {
+    return getSession(context.currentSession().sessionId());
   }
 
   /**
@@ -151,26 +263,108 @@ public abstract class AbstractPrimitiveService implements PrimitiveService {
   }
 
   /**
-   * Returns the sessions registered with the state machines.
+   * Returns the session with the given identifier.
    *
-   * @return The state machine's sessions.
+   * @param sessionId the session identifier
+   * @return the primitive session
    */
-  protected Sessions getSessions() {
-    return context.sessions();
+  protected Session<C> getSession(long sessionId) {
+    return getSession(SessionId.from(sessionId));
+  }
+
+  /**
+   * Returns the session with the given identifier.
+   *
+   * @param sessionId the session identifier
+   * @return the primitive session
+   */
+  protected Session<C> getSession(SessionId sessionId) {
+    return sessions.get(sessionId);
+  }
+
+  /**
+   * Returns the collection of open sessions.
+   *
+   * @return the collection of open sessions
+   */
+  protected Collection<Session<C>> getSessions() {
+    return sessions.values();
   }
 
   @Override
-  public void onOpen(Session session) {
-
+  @SuppressWarnings("unchecked")
+  public final void register(Session session) {
+    sessions.put(session.sessionId(), new ClientSession<>(clientInterface, session));
+    onOpen(session);
   }
 
   @Override
-  public void onExpire(Session session) {
-
+  public final void expire(SessionId sessionId) {
+    Session session = sessions.remove(sessionId);
+    if (session != null) {
+      onExpire(session);
+    }
   }
 
   @Override
-  public void onClose(Session session) {
+  public final void close(SessionId sessionId) {
+    Session session = sessions.remove(sessionId);
+    if (session != null) {
+      onClose(session);
+    }
+  }
+
+  /**
+   * Called when a new session is registered.
+   * <p>
+   * A session is registered when a new client connects to the cluster or an existing client recovers its
+   * session after being partitioned from the cluster. It's important to note that when this method is called,
+   * the {@link Session} is <em>not yet open</em> and so events cannot be {@link Session#accept(Consumer) published}
+   * to the registered session. This is because clients cannot reliably track messages pushed from server state machines
+   * to the client until the session has been fully registered. Session event messages may still be published to
+   * other already-registered sessions in reaction to a session being registered.
+   * <p>
+   * To push session event messages to a client through its session upon registration, state machines can
+   * use an asynchronous callback or schedule a callback to send a message.
+   * <pre>
+   *   {@code
+   *   public void onOpen(RaftSession session) {
+   *     executor.execute(() -> session.publish("foo", "Hello world!"));
+   *   }
+   *   }
+   * </pre>
+   * Sending a session event message in an asynchronous callback allows the server time to register the session
+   * and notify the client before the event message is sent. Published event messages sent via this method will
+   * be sent the next time an operation is applied to the state machine.
+   *
+   * @param session The session that was registered
+   */
+  protected void onOpen(Session session) {
+
+  }
+
+  /**
+   * Called when a session is expired by the system.
+   * <p>
+   * This method is called when a client fails to keep its session alive with the cluster. If the leader hasn't heard
+   * from a client for a configurable time interval, the leader will expire the session to free the related memory.
+   * This method will always be called for a given session before {@link #onClose(Session)}, and {@link #onClose(Session)}
+   * will always be called following this method.
+   *
+   * @param session The session that was expired
+   */
+  protected void onExpire(Session session) {
+
+  }
+
+  /**
+   * Called when a session was closed by the client.
+   * <p>
+   * This method is called when a client explicitly closes a session.
+   *
+   * @param session The session that was closed
+   */
+  protected void onClose(Session session) {
 
   }
 }

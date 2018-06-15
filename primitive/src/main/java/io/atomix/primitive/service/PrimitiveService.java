@@ -15,9 +15,9 @@
  */
 package io.atomix.primitive.service;
 
-import io.atomix.primitive.session.SessionListener;
-import io.atomix.storage.buffer.BufferInput;
-import io.atomix.storage.buffer.BufferOutput;
+import io.atomix.primitive.session.Session;
+import io.atomix.primitive.session.SessionId;
+import io.atomix.utils.serializer.Serializer;
 import io.atomix.utils.time.WallClockTimestamp;
 
 /**
@@ -27,7 +27,7 @@ import io.atomix.utils.time.WallClockTimestamp;
  * @see ServiceContext
  * @see ServiceExecutor
  */
-public interface PrimitiveService extends SessionListener {
+public interface PrimitiveService {
 
   /**
    * Initializes the state machine.
@@ -45,18 +45,25 @@ public interface PrimitiveService extends SessionListener {
   void tick(WallClockTimestamp timestamp);
 
   /**
+   * Returns the primitive service serializer.
+   *
+   * @return the primitive service serializer
+   */
+  Serializer serializer();
+
+  /**
    * Backs up the service state to the given buffer.
    *
    * @param output the buffer to which to back up the service state
    */
-  void backup(BufferOutput<?> output);
+  void backup(BackupOutput output);
 
   /**
    * Restores the service state from the given buffer.
    *
    * @param input the buffer from which to restore the service state
    */
-  void restore(BufferInput<?> input);
+  void restore(BackupInput input);
 
   /**
    * Applies a commit to the state machine.
@@ -65,6 +72,27 @@ public interface PrimitiveService extends SessionListener {
    * @return the commit result
    */
   byte[] apply(Commit<byte[]> commit);
+
+  /**
+   * Registers a primitive session.
+   *
+   * @param session the session to register
+   */
+  void register(Session session);
+
+  /**
+   * Expires the session with the given identifier.
+   *
+   * @param sessionId the session identifier
+   */
+  void expire(SessionId sessionId);
+
+  /**
+   * Closes the session with the given identifier.
+   *
+   * @param sessionId the session identifier
+   */
+  void close(SessionId sessionId);
 
   /**
    * Closes the state machine.

@@ -15,22 +15,37 @@
  */
 package io.atomix.protocols.raft;
 
-import io.atomix.cluster.ClusterService;
-import io.atomix.cluster.NodeId;
+import com.google.common.collect.Sets;
+import io.atomix.cluster.ClusterMembershipService;
+import io.atomix.cluster.MemberId;
+import io.atomix.primitive.AbstractAsyncPrimitive;
+import io.atomix.primitive.AsyncPrimitive;
 import io.atomix.primitive.DistributedPrimitiveBuilder;
+import io.atomix.primitive.PrimitiveInfo;
 import io.atomix.primitive.PrimitiveManagementService;
+import io.atomix.primitive.PrimitiveRegistry;
+import io.atomix.primitive.PrimitiveState;
 import io.atomix.primitive.PrimitiveType;
-import io.atomix.primitive.event.EventType;
-import io.atomix.primitive.operation.OperationId;
+import io.atomix.primitive.SyncPrimitive;
+import io.atomix.primitive.config.PrimitiveConfig;
+import io.atomix.primitive.event.Event;
+import io.atomix.primitive.operation.Command;
 import io.atomix.primitive.operation.OperationType;
 import io.atomix.primitive.operation.PrimitiveOperation;
+import io.atomix.primitive.operation.Query;
 import io.atomix.primitive.operation.impl.DefaultOperationId;
-import io.atomix.primitive.proxy.PrimitiveProxy;
+import io.atomix.primitive.partition.PartitionId;
+import io.atomix.primitive.protocol.PrimitiveProtocol;
+import io.atomix.primitive.proxy.ProxyClient;
+import io.atomix.primitive.proxy.impl.DefaultProxyClient;
 import io.atomix.primitive.service.AbstractPrimitiveService;
-import io.atomix.primitive.service.Commit;
+import io.atomix.primitive.service.BackupInput;
+import io.atomix.primitive.service.BackupOutput;
 import io.atomix.primitive.service.PrimitiveService;
-import io.atomix.primitive.service.ServiceExecutor;
+import io.atomix.primitive.service.ServiceConfig;
 import io.atomix.primitive.session.Session;
+import io.atomix.primitive.session.SessionClient;
+import io.atomix.primitive.session.SessionId;
 import io.atomix.primitive.session.SessionMetadata;
 import io.atomix.protocols.raft.cluster.RaftClusterEvent;
 import io.atomix.protocols.raft.cluster.RaftMember;
@@ -47,9 +62,9 @@ import io.atomix.protocols.raft.storage.log.entry.OpenSessionEntry;
 import io.atomix.protocols.raft.storage.log.entry.QueryEntry;
 import io.atomix.protocols.raft.storage.system.Configuration;
 import io.atomix.storage.StorageLevel;
-import io.atomix.storage.buffer.BufferInput;
-import io.atomix.storage.buffer.BufferOutput;
-import io.atomix.utils.serializer.KryoNamespace;
+import io.atomix.utils.concurrent.SingleThreadContext;
+import io.atomix.utils.concurrent.ThreadContext;
+import io.atomix.utils.serializer.Namespace;
 import io.atomix.utils.serializer.Serializer;
 import net.jodah.concurrentunit.ConcurrentTestCase;
 import org.junit.After;
@@ -68,6 +83,7 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -83,13 +99,15 @@ import java.util.stream.Collectors;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Raft test.
  */
 public class RaftTest extends ConcurrentTestCase {
-  private static final Serializer storageSerializer = Serializer.using(KryoNamespace.builder()
+  private static final Serializer storageSerializer = Serializer.using(Namespace.builder()
       .register(CloseSessionEntry.class)
       .register(CommandEntry.class)
       .register(ConfigurationEntry.class)
@@ -105,7 +123,8 @@ public class RaftTest extends ConcurrentTestCase {
       .register(ArrayList.class)
       .register(HashSet.class)
       .register(DefaultRaftMember.class)
-      .register(NodeId.class)
+      .register(MemberId.class)
+      .register(MemberId.Type.class)
       .register(RaftMember.Type.class)
       .register(Instant.class)
       .register(Configuration.class)
@@ -113,13 +132,14 @@ public class RaftTest extends ConcurrentTestCase {
       .register(long[].class)
       .build());
 
-  private static final Serializer clientSerializer = Serializer.using(KryoNamespace.DEFAULT);
+  private static final Serializer clientSerializer = Serializer.using(Namespace.DEFAULT);
 
   protected volatile int nextId;
   protected volatile List<RaftMember> members;
   protected volatile List<RaftClient> clients = new ArrayList<>();
   protected volatile List<RaftServer> servers = new ArrayList<>();
   protected volatile TestRaftProtocolFactory protocolFactory;
+  protected volatile ThreadContext context;
 
   /**
    * Tests getting session metadata.
@@ -128,17 +148,17 @@ public class RaftTest extends ConcurrentTestCase {
   public void testSessionMetadata() throws Throwable {
     createServers(3);
     RaftClient client = createClient();
-    createSession(client).invoke(WRITE).join();
-    createSession(client).invoke(WRITE).join();
+    createPrimitive(client).write("Hello world!").join();
+    createPrimitive(client).write("Hello world again!").join();
     assertNotNull(client.metadata().getLeader());
     assertNotNull(client.metadata().getServers());
     Set<SessionMetadata> typeSessions = client.metadata().getSessions(TestPrimitiveType.INSTANCE).join();
     assertEquals(2, typeSessions.size());
     typeSessions = client.metadata().getSessions(TestPrimitiveType.INSTANCE).join();
     assertEquals(2, typeSessions.size());
-    Set<SessionMetadata> serviceSessions = client.metadata().getSessions(TestPrimitiveType.INSTANCE, "test").join();
+    Set<SessionMetadata> serviceSessions = client.metadata().getSessions(TestPrimitiveType.INSTANCE, "raft-test").join();
     assertEquals(2, serviceSessions.size());
-    serviceSessions = client.metadata().getSessions(TestPrimitiveType.INSTANCE, "test").join();
+    serviceSessions = client.metadata().getSessions(TestPrimitiveType.INSTANCE, "raft-test").join();
     assertEquals(2, serviceSessions.size());
   }
 
@@ -149,13 +169,13 @@ public class RaftTest extends ConcurrentTestCase {
   public void testSingleMemberStart() throws Throwable {
     RaftServer server = createServers(1).get(0);
     server.bootstrap().thenRun(this::resume);
-    await(5000);
+    await(10000);
     RaftServer joiner1 = createServer(nextNodeId());
-    joiner1.join(server.cluster().getMember().nodeId()).thenRun(this::resume);
-    await(5000);
+    joiner1.join(server.cluster().getMember().memberId()).thenRun(this::resume);
+    await(10000);
     RaftServer joiner2 = createServer(nextNodeId());
-    joiner2.join(server.cluster().getMember().nodeId()).thenRun(this::resume);
-    await(5000);
+    joiner2.join(server.cluster().getMember().memberId()).thenRun(this::resume);
+    await(10000);
   }
 
   /**
@@ -180,33 +200,33 @@ public class RaftTest extends ConcurrentTestCase {
   private void testServerJoinLate(RaftMember.Type type, RaftServer.Role role) throws Throwable {
     createServers(3);
     RaftClient client = createClient();
-    PrimitiveProxy session = createSession(client);
-    submit(session, 0, 100);
-    await(10000);
+    TestPrimitive primitive = createPrimitive(client);
+    submit(primitive, 0, 100);
+    await(15000);
     RaftServer joiner = createServer(nextNodeId());
     joiner.addRoleChangeListener(s -> {
       if (s == role)
         resume();
     });
     if (type == RaftMember.Type.ACTIVE) {
-      joiner.join(members.stream().map(RaftMember::nodeId).collect(Collectors.toList())).thenRun(this::resume);
+      joiner.join(members.stream().map(RaftMember::memberId).collect(Collectors.toList())).thenRun(this::resume);
     } else {
-      joiner.listen(members.stream().map(RaftMember::nodeId).collect(Collectors.toList())).thenRun(this::resume);
+      joiner.listen(members.stream().map(RaftMember::memberId).collect(Collectors.toList())).thenRun(this::resume);
     }
-    await(10000, 2);
-    submit(session, 0, 10);
-    await(10000);
+    await(15000, 2);
+    submit(primitive, 0, 10);
+    await(15000);
     Thread.sleep(5000);
   }
 
   /**
    * Submits a bunch of commands recursively.
    */
-  private void submit(PrimitiveProxy session, int count, int total) {
+  private void submit(TestPrimitive primitive, int count, int total) {
     if (count < total) {
-      session.invoke(WRITE).whenComplete((result, error) -> {
+      primitive.write("Hello world!").whenComplete((result, error) -> {
         threadAssertNull(error);
-        submit(session, count + 1, total);
+        submit(primitive, count + 1, total);
       });
     } else {
       resume();
@@ -221,14 +241,14 @@ public class RaftTest extends ConcurrentTestCase {
   public void testTransferLeadership() throws Throwable {
     List<RaftServer> servers = createServers(3);
     RaftClient client = createClient();
-    PrimitiveProxy session = createSession(client);
-    submit(session, 0, 1000);
+    TestPrimitive primitive = createPrimitive(client);
+    submit(primitive, 0, 1000);
     RaftServer follower = servers.stream()
         .filter(RaftServer::isFollower)
         .findFirst()
         .get();
     follower.promote().thenRun(this::resume);
-    await(10000, 2);
+    await(15000, 2);
     assertTrue(follower.isLeader());
   }
 
@@ -239,15 +259,15 @@ public class RaftTest extends ConcurrentTestCase {
   public void testCrashRecover() throws Throwable {
     List<RaftServer> servers = createServers(3);
     RaftClient client = createClient();
-    PrimitiveProxy session = createSession(client);
-    submit(session, 0, 100);
+    TestPrimitive primitive = createPrimitive(client);
+    submit(primitive, 0, 100);
     await(30000);
     Thread.sleep(15000);
     servers.get(0).shutdown().get(10, TimeUnit.SECONDS);
-    RaftServer server = createServer(members.get(0).nodeId());
-    server.join(members.stream().map(RaftMember::nodeId).collect(Collectors.toList())).thenRun(this::resume);
+    RaftServer server = createServer(members.get(0).memberId());
+    server.join(members.stream().map(RaftMember::memberId).collect(Collectors.toList())).thenRun(this::resume);
     await(30000);
-    submit(session, 0, 100);
+    submit(primitive, 0, 100);
     await(30000);
   }
 
@@ -280,9 +300,9 @@ public class RaftTest extends ConcurrentTestCase {
   public void testClientKeepAlive() throws Throwable {
     createServers(3);
     RaftClient client = createClient();
-    PrimitiveProxy session = createSession(client);
+    SessionClient session = createSession(client);
     Thread.sleep(Duration.ofSeconds(10).toMillis());
-    threadAssertTrue(session.getState() == PrimitiveProxy.State.CONNECTED);
+    threadAssertTrue(session.getState() == PrimitiveState.CONNECTED);
   }
 
   /**
@@ -308,11 +328,11 @@ public class RaftTest extends ConcurrentTestCase {
     createServers(3);
     RaftServer server = createServer(nextNodeId());
     if (type == RaftMember.Type.ACTIVE) {
-      server.join(members.stream().map(RaftMember::nodeId).collect(Collectors.toList())).thenRun(this::resume);
+      server.join(members.stream().map(RaftMember::memberId).collect(Collectors.toList())).thenRun(this::resume);
     } else {
-      server.listen(members.stream().map(RaftMember::nodeId).collect(Collectors.toList())).thenRun(this::resume);
+      server.listen(members.stream().map(RaftMember::memberId).collect(Collectors.toList())).thenRun(this::resume);
     }
-    await(10000);
+    await(15000);
   }
 
   /**
@@ -322,10 +342,10 @@ public class RaftTest extends ConcurrentTestCase {
   public void testResize() throws Throwable {
     RaftServer server = createServers(1).get(0);
     RaftServer joiner = createServer(nextNodeId());
-    joiner.join(members.stream().map(RaftMember::nodeId).collect(Collectors.toList())).thenRun(this::resume);
-    await(10000);
+    joiner.join(members.stream().map(RaftMember::memberId).collect(Collectors.toList())).thenRun(this::resume);
+    await(15000);
     server.leave().thenRun(this::resume);
-    await(10000);
+    await(15000);
     joiner.leave().thenRun(this::resume);
   }
 
@@ -356,18 +376,18 @@ public class RaftTest extends ConcurrentTestCase {
     RaftServer server = servers.get(0);
     server.cluster().addListener(event -> {
       if (event.type() == RaftClusterEvent.Type.JOIN) {
-        threadAssertEquals(event.subject().nodeId(), member.nodeId());
+        threadAssertEquals(event.subject().memberId(), member.memberId());
         resume();
       }
     });
 
-    RaftServer joiner = createServer(member.nodeId());
+    RaftServer joiner = createServer(member.memberId());
     if (type == RaftMember.Type.ACTIVE) {
-      joiner.join(members.stream().map(RaftMember::nodeId).collect(Collectors.toList())).thenRun(this::resume);
+      joiner.join(members.stream().map(RaftMember::memberId).collect(Collectors.toList())).thenRun(this::resume);
     } else {
-      joiner.listen(members.stream().map(RaftMember::nodeId).collect(Collectors.toList())).thenRun(this::resume);
+      joiner.listen(members.stream().map(RaftMember::memberId).collect(Collectors.toList())).thenRun(this::resume);
     }
-    await(10000, 2);
+    await(15000, 2);
   }
 
   /**
@@ -387,12 +407,12 @@ public class RaftTest extends ConcurrentTestCase {
         .findFirst()
         .get();
 
-    follower.cluster().getMember(leader.cluster().getMember().nodeId()).addTypeChangeListener(t -> {
+    follower.cluster().getMember(leader.cluster().getMember().memberId()).addTypeChangeListener(t -> {
       threadAssertEquals(t, RaftMember.Type.PASSIVE);
       resume();
     });
     leader.cluster().getMember().demote(RaftMember.Type.PASSIVE).thenRun(this::resume);
-    await(10000, 2);
+    await(15000, 2);
   }
 
   /**
@@ -442,8 +462,8 @@ public class RaftTest extends ConcurrentTestCase {
     createServers(nodes);
 
     RaftClient client = createClient();
-    PrimitiveProxy session = createSession(client);
-    session.invoke(WRITE).thenRun(this::resume);
+    TestPrimitive primitive = createPrimitive(client);
+    primitive.write("Hello world!").thenRun(this::resume);
 
     await(30000);
   }
@@ -479,8 +499,8 @@ public class RaftTest extends ConcurrentTestCase {
     createServers(live, total);
 
     RaftClient client = createClient();
-    PrimitiveProxy session = createSession(client);
-    session.invoke(WRITE).thenRun(this::resume);
+    TestPrimitive primitive = createPrimitive(client);
+    primitive.write("Hello world!").thenRun(this::resume);
 
     await(30000);
   }
@@ -612,8 +632,8 @@ public class RaftTest extends ConcurrentTestCase {
     createServers(nodes);
 
     RaftClient client = createClient();
-    PrimitiveProxy session = createSession(client, consistency);
-    session.invoke(READ).thenRun(this::resume);
+    TestPrimitive primitive = createPrimitive(client, consistency);
+    primitive.read().thenRun(this::resume);
 
     await(30000);
   }
@@ -668,14 +688,14 @@ public class RaftTest extends ConcurrentTestCase {
     AtomicLong index = new AtomicLong();
 
     RaftClient client = createClient();
-    PrimitiveProxy session = createSession(client);
-    session.<Long>addEventListener(CHANGE_EVENT, clientSerializer::decode, event -> {
+    TestPrimitive primitive = createPrimitive(client);
+    primitive.onEvent(event -> {
       threadAssertEquals(count.incrementAndGet(), 2L);
       threadAssertEquals(index.get(), event);
       resume();
-    });
+    }).join();
 
-    session.<Boolean, Long>invoke(EVENT, clientSerializer::encode, true, clientSerializer::decode)
+    primitive.sendEvent(true)
         .thenAccept(result -> {
           threadAssertNotNull(result);
           threadAssertEquals(count.incrementAndGet(), 1L);
@@ -733,21 +753,21 @@ public class RaftTest extends ConcurrentTestCase {
     createServers(nodes);
 
     RaftClient client = createClient();
-    PrimitiveProxy session = createSession(client);
-    session.addEventListener(event -> {
+    TestPrimitive primitive = createPrimitive(client);
+    primitive.onEvent(event -> {
       threadAssertNotNull(event);
       resume();
-    });
-    createSession(createClient()).addEventListener(event -> {
+    }).join();
+    createPrimitive(createClient()).onEvent(event -> {
       threadAssertNotNull(event);
       resume();
-    });
-    createSession(createClient()).addEventListener(event -> {
+    }).join();
+    createPrimitive(createClient()).onEvent(event -> {
       threadAssertNotNull(event);
       resume();
-    });
+    }).join();
 
-    session.invoke(EVENT, clientSerializer::encode, false).thenRun(this::resume);
+    primitive.sendEvent(false).thenRun(this::resume);
 
     await(30000, 4);
   }
@@ -786,36 +806,39 @@ public class RaftTest extends ConcurrentTestCase {
     AtomicLong index = new AtomicLong();
 
     RaftClient client = createClient();
-    PrimitiveProxy session = createSession(client);
-    session.<Long>addEventListener(CHANGE_EVENT, clientSerializer::decode, event -> {
+    TestPrimitive primitive = createPrimitive(client, consistency);
+    primitive.onEvent(value -> {
       threadAssertEquals(counter.incrementAndGet(), 3);
-      threadAssertTrue(event >= index.get());
-      index.set(event);
+      threadAssertTrue(value >= index.get());
+      index.set(value);
       resume();
     });
 
-    session.<Long>invoke(WRITE, clientSerializer::decode).thenAccept(result -> {
-      threadAssertNotNull(result);
-      threadAssertEquals(counter.incrementAndGet(), 1);
-      threadAssertTrue(index.compareAndSet(0, result));
-      resume();
-    });
+    primitive.write("Hello world!")
+        .thenAccept(result -> {
+          threadAssertNotNull(result);
+          threadAssertEquals(counter.incrementAndGet(), 1);
+          threadAssertTrue(index.compareAndSet(0, result));
+          resume();
+        });
 
-    session.<Boolean, Long>invoke(EVENT, clientSerializer::encode, true, clientSerializer::decode).thenAccept(result -> {
-      threadAssertNotNull(result);
-      threadAssertEquals(counter.incrementAndGet(), 2);
-      threadAssertTrue(result > index.get());
-      index.set(result);
-      resume();
-    });
+    primitive.sendEvent(true)
+        .thenAccept(result -> {
+          threadAssertNotNull(result);
+          threadAssertEquals(counter.incrementAndGet(), 2);
+          threadAssertTrue(result > index.get());
+          index.set(result);
+          resume();
+        });
 
-    session.<Long>invoke(READ, clientSerializer::decode).thenAccept(result -> {
-      threadAssertNotNull(result);
-      threadAssertEquals(counter.incrementAndGet(), 4);
-      long i = index.get();
-      threadAssertTrue(result >= i);
-      resume();
-    });
+    primitive.read()
+        .thenAccept(result -> {
+          threadAssertNotNull(result);
+          threadAssertEquals(counter.incrementAndGet(), 4);
+          long i = index.get();
+          threadAssertTrue(result >= i);
+          resume();
+        });
 
     await(30000, 4);
   }
@@ -830,20 +853,19 @@ public class RaftTest extends ConcurrentTestCase {
     AtomicLong index = new AtomicLong();
 
     RaftClient client = createClient();
-    PrimitiveProxy session = createSession(client);
+    TestPrimitive primitive = createPrimitive(client);
 
-    session.<Long>addEventListener(CHANGE_EVENT, clientSerializer::decode, event -> {
+    primitive.onEvent(event -> {
       threadAssertEquals(index.get(), event);
       try {
-        threadAssertTrue(index.get() <= session.<Long>invoke(READ, clientSerializer::decode)
-            .get(5, TimeUnit.SECONDS));
+        threadAssertTrue(index.get() <= primitive.read().get(10, TimeUnit.SECONDS));
       } catch (InterruptedException | TimeoutException | ExecutionException e) {
         threadFail(e);
       }
       resume();
     });
 
-    session.<Boolean, Long>invoke(EVENT, clientSerializer::encode, true, clientSerializer::decode)
+    primitive.sendEvent(true)
         .thenAccept(result -> {
           threadAssertNotNull(result);
           index.compareAndSet(0, result);
@@ -868,15 +890,14 @@ public class RaftTest extends ConcurrentTestCase {
     createServers(nodes);
 
     RaftClient client = createClient();
-    PrimitiveProxy session = createSession(client);
-    session.addEventListener(message -> {
+    TestPrimitive primitive = createPrimitive(client);
+    primitive.onEvent(message -> {
       threadAssertNotNull(message);
       resume();
     });
 
     for (int i = 0; i < 10; i++) {
-      session.invoke(EVENT, clientSerializer::encode, true).thenRun(this::resume);
-
+      primitive.sendEvent(true).thenRun(this::resume);
       await(30000, 2);
     }
   }
@@ -904,15 +925,14 @@ public class RaftTest extends ConcurrentTestCase {
     List<RaftServer> servers = createServers(nodes);
 
     RaftClient client = createClient();
-    PrimitiveProxy session = createSession(client);
-    session.addEventListener(event -> {
+    TestPrimitive primitive = createPrimitive(client);
+    primitive.onEvent(event -> {
       threadAssertNotNull(event);
       resume();
     });
 
     for (int i = 0; i < 10; i++) {
-      session.invoke(EVENT, clientSerializer::encode, true).thenRun(this::resume);
-
+      primitive.sendEvent(true).thenRun(this::resume);
       await(30000, 2);
     }
 
@@ -920,8 +940,7 @@ public class RaftTest extends ConcurrentTestCase {
     leader.shutdown().get(10, TimeUnit.SECONDS);
 
     for (int i = 0; i < 10; i++) {
-      session.invoke(EVENT, clientSerializer::encode, true).thenRun(this::resume);
-
+      primitive.sendEvent(true).thenRun(this::resume);
       await(30000, 2);
     }
   }
@@ -949,19 +968,18 @@ public class RaftTest extends ConcurrentTestCase {
     List<RaftServer> servers = createServers(nodes);
 
     RaftClient client = createClient();
-    PrimitiveProxy session = createSession(client);
-    session.addEventListener(event -> {
+    TestPrimitive primitive = createPrimitive(client);
+    primitive.onEvent(event -> {
       threadAssertNotNull(event);
       resume();
     });
 
     for (int i = 0; i < 10; i++) {
-      session.invoke(EVENT, clientSerializer::encode, true).thenRun(this::resume);
-
+      primitive.sendEvent(true).thenRun(this::resume);
       await(30000, 2);
     }
 
-    session.invoke(EVENT, clientSerializer::encode, true).thenRun(this::resume);
+    primitive.sendEvent(true).thenRun(this::resume);
 
     RaftServer follower = servers.stream().filter(s -> s.getRole() == RaftServer.Role.FOLLOWER).findFirst().get();
     follower.shutdown().get(10, TimeUnit.SECONDS);
@@ -969,8 +987,7 @@ public class RaftTest extends ConcurrentTestCase {
     await(30000, 2);
 
     for (int i = 0; i < 10; i++) {
-      session.invoke(EVENT, clientSerializer::encode, true).thenRun(this::resume);
-
+      primitive.sendEvent(true).thenRun(this::resume);
       await(30000, 2);
     }
   }
@@ -990,19 +1007,18 @@ public class RaftTest extends ConcurrentTestCase {
     List<RaftServer> servers = createServers(nodes);
 
     RaftClient client = createClient();
-    PrimitiveProxy session = createSession(client);
-    session.addEventListener(event -> {
+    TestPrimitive primitive = createPrimitive(client);
+    primitive.onEvent(event -> {
       threadAssertNotNull(event);
       resume();
     });
 
     for (int i = 0; i < 10; i++) {
-      session.invoke(EVENT, clientSerializer::encode, true).thenRun(this::resume);
-
+      primitive.sendEvent(true).thenRun(this::resume);
       await(30000, 2);
     }
 
-    session.invoke(EVENT, clientSerializer::encode, true).thenRun(this::resume);
+    primitive.sendEvent(true).thenRun(this::resume);
 
     RaftServer leader = servers.stream().filter(s -> s.getRole() == RaftServer.Role.LEADER).findFirst().get();
     leader.shutdown().get(10, TimeUnit.SECONDS);
@@ -1010,8 +1026,7 @@ public class RaftTest extends ConcurrentTestCase {
     await(30000);
 
     for (int i = 0; i < 10; i++) {
-      session.invoke(EVENT, clientSerializer::encode, true).thenRun(this::resume);
-
+      primitive.sendEvent(true).thenRun(this::resume);
       await(30000, 2);
     }
   }
@@ -1031,25 +1046,24 @@ public class RaftTest extends ConcurrentTestCase {
     createServers(nodes);
 
     RaftClient client = createClient();
-    PrimitiveProxy session = createSession(client);
-    session.addEventListener(event -> {
+    TestPrimitive primitive = createPrimitive(client);
+    primitive.onEvent(event -> {
       threadAssertNotNull(event);
       resume();
     });
 
-    createSession(createClient()).addEventListener(event -> {
+    createPrimitive(createClient()).onEvent(event -> {
       threadAssertNotNull(event);
       resume();
     });
 
-    createSession(createClient()).addEventListener(event -> {
+    createPrimitive(createClient()).onEvent(event -> {
       threadAssertNotNull(event);
       resume();
     });
 
     for (int i = 0; i < 10; i++) {
-      session.invoke(EVENT, clientSerializer::encode, false).thenRun(this::resume);
-
+      primitive.sendEvent(false).thenRun(this::resume);
       await(10000, 4);
     }
   }
@@ -1085,11 +1099,10 @@ public class RaftTest extends ConcurrentTestCase {
     createServers(nodes);
 
     RaftClient client1 = createClient();
-    PrimitiveProxy session1 = createSession(client1);
+    TestPrimitive primitive1 = createPrimitive(client1);
     RaftClient client2 = createClient();
     createSession(client2);
-    session1.addEventListener(EXPIRE_EVENT, this::resume);
-    session1.invoke(EXPIRE).thenRun(this::resume);
+    primitive1.onExpire(event -> resume()).thenRun(this::resume);
     client2.close().thenRun(this::resume);
     await(Duration.ofSeconds(10).toMillis(), 3);
   }
@@ -1125,11 +1138,10 @@ public class RaftTest extends ConcurrentTestCase {
     createServers(nodes);
 
     RaftClient client1 = createClient();
-    PrimitiveProxy session1 = createSession(client1);
+    TestPrimitive primitive1 = createPrimitive(client1);
     RaftClient client2 = createClient();
-    session1.invoke(CLOSE).thenRun(this::resume);
+    primitive1.onClose(event -> resume()).thenRun(this::resume);
     await(Duration.ofSeconds(10).toMillis(), 1);
-    session1.addEventListener(CLOSE_EVENT, this::resume);
     createSession(client2).close().thenRun(this::resume);
     await(Duration.ofSeconds(10).toMillis(), 2);
   }
@@ -1139,8 +1151,8 @@ public class RaftTest extends ConcurrentTestCase {
    *
    * @return The next unique member identifier.
    */
-  private NodeId nextNodeId() {
-    return NodeId.from(String.valueOf(++nextId));
+  private MemberId nextNodeId() {
+    return MemberId.from(String.valueOf(++nextId));
   }
 
   /**
@@ -1164,11 +1176,11 @@ public class RaftTest extends ConcurrentTestCase {
     }
 
     for (int i = 0; i < nodes; i++) {
-      RaftServer server = createServer(members.get(i).nodeId());
+      RaftServer server = createServer(members.get(i).memberId());
       if (members.get(i).getType() == RaftMember.Type.ACTIVE) {
-        server.bootstrap(members.stream().map(RaftMember::nodeId).collect(Collectors.toList())).thenRun(this::resume);
+        server.bootstrap(members.stream().map(RaftMember::memberId).collect(Collectors.toList())).thenRun(this::resume);
       } else {
-        server.listen(members.stream().map(RaftMember::nodeId).collect(Collectors.toList())).thenRun(this::resume);
+        server.listen(members.stream().map(RaftMember::memberId).collect(Collectors.toList())).thenRun(this::resume);
       }
       servers.add(server);
     }
@@ -1189,11 +1201,11 @@ public class RaftTest extends ConcurrentTestCase {
     }
 
     for (int i = 0; i < live; i++) {
-      RaftServer server = createServer(members.get(i).nodeId());
+      RaftServer server = createServer(members.get(i).memberId());
       if (members.get(i).getType() == RaftMember.Type.ACTIVE) {
-        server.bootstrap(members.stream().map(RaftMember::nodeId).collect(Collectors.toList())).thenRun(this::resume);
+        server.bootstrap(members.stream().map(RaftMember::memberId).collect(Collectors.toList())).thenRun(this::resume);
       } else {
-        server.listen(members.stream().map(RaftMember::nodeId).collect(Collectors.toList())).thenRun(this::resume);
+        server.listen(members.stream().map(RaftMember::memberId).collect(Collectors.toList())).thenRun(this::resume);
       }
       servers.add(server);
     }
@@ -1206,18 +1218,17 @@ public class RaftTest extends ConcurrentTestCase {
   /**
    * Creates a Raft server.
    */
-  private RaftServer createServer(NodeId nodeId) {
-    RaftServer.Builder builder = RaftServer.builder(nodeId)
-        .withClusterService(mock(ClusterService.class))
-        .withProtocol(protocolFactory.newServerProtocol(nodeId))
+  private RaftServer createServer(MemberId memberId) {
+    RaftServer.Builder builder = RaftServer.builder(memberId)
+        .withMembershipService(mock(ClusterMembershipService.class))
+        .withProtocol(protocolFactory.newServerProtocol(memberId))
         .withStorage(RaftStorage.builder()
             .withStorageLevel(StorageLevel.DISK)
-            .withDirectory(new File(String.format("target/test-logs/%s", nodeId)))
+            .withDirectory(new File(String.format("target/test-logs/%s", memberId)))
             .withSerializer(storageSerializer)
             .withMaxSegmentSize(1024 * 10)
             .withMaxEntriesPerSegment(10)
-            .build())
-        .addPrimitiveType(TestPrimitiveType.INSTANCE);
+            .build());
 
     RaftServer server = builder.build();
     servers.add(server);
@@ -1228,12 +1239,13 @@ public class RaftTest extends ConcurrentTestCase {
    * Creates a Raft client.
    */
   private RaftClient createClient() throws Throwable {
-    NodeId nodeId = nextNodeId();
+    MemberId memberId = nextNodeId();
     RaftClient client = RaftClient.builder()
-        .withNodeId(nodeId)
-        .withProtocol(protocolFactory.newClientProtocol(nodeId))
+        .withMemberId(memberId)
+        .withPartitionId(PartitionId.from("test", 1))
+        .withProtocol(protocolFactory.newClientProtocol(memberId))
         .build();
-    client.connect(members.stream().map(RaftMember::nodeId).collect(Collectors.toList())).thenRun(this::resume);
+    client.connect(members.stream().map(RaftMember::memberId).collect(Collectors.toList())).thenRun(this::resume);
     await(30000);
     clients.add(client);
     return client;
@@ -1242,21 +1254,45 @@ public class RaftTest extends ConcurrentTestCase {
   /**
    * Creates a test session.
    */
-  private PrimitiveProxy createSession(RaftClient client) throws Exception {
+  private SessionClient createSession(RaftClient client) throws Exception {
     return createSession(client, ReadConsistency.LINEARIZABLE);
   }
 
   /**
    * Creates a test session.
    */
-  private PrimitiveProxy createSession(RaftClient client, ReadConsistency consistency) throws Exception {
-    return client.newProxy("test", TestPrimitiveType.INSTANCE, RaftProtocol.builder()
+  private SessionClient createSession(RaftClient client, ReadConsistency consistency) throws Exception {
+    return client.sessionBuilder("raft-test", TestPrimitiveType.INSTANCE, new ServiceConfig())
         .withReadConsistency(consistency)
         .withMinTimeout(Duration.ofMillis(250))
         .withMaxTimeout(Duration.ofSeconds(5))
-        .build())
+        .build()
         .connect()
-        .get(5, TimeUnit.SECONDS);
+        .get(10, TimeUnit.SECONDS);
+  }
+
+  /**
+   * Creates a new primitive instance.
+   */
+  private TestPrimitive createPrimitive(RaftClient client) throws Exception {
+    return createPrimitive(client, ReadConsistency.LINEARIZABLE);
+  }
+
+  /**
+   * Creates a new primitive instance.
+   */
+  private TestPrimitive createPrimitive(RaftClient client, ReadConsistency consistency) throws Exception {
+    SessionClient partition = createSession(client, consistency);
+    ProxyClient<TestPrimitiveService> proxy = new DefaultProxyClient<>(
+        "test",
+        TestPrimitiveType.INSTANCE,
+        MultiRaftProtocol.builder().build(),
+        TestPrimitiveService.class,
+        Collections.singletonList(partition),
+        (key, partitions) -> partitions.get(0));
+    PrimitiveRegistry registry = mock(PrimitiveRegistry.class);
+    when(registry.createPrimitive(any(String.class), any(PrimitiveType.class))).thenReturn(CompletableFuture.completedFuture(new PrimitiveInfo("raft-test", TestPrimitiveType.INSTANCE)));
+    return new TestPrimitiveImpl(proxy, registry);
   }
 
   @Before
@@ -1295,111 +1331,238 @@ public class RaftTest extends ConcurrentTestCase {
       });
     }
 
+    if (context != null) {
+      context.close();
+    }
+
     members = new ArrayList<>();
     nextId = 0;
     clients = new ArrayList<>();
     servers = new ArrayList<>();
-    protocolFactory = new TestRaftProtocolFactory();
+    context = new SingleThreadContext("raft-test-messaging-%d");
+    protocolFactory = new TestRaftProtocolFactory(context);
   }
 
-  private static final OperationId WRITE = OperationId.command("write");
-  private static final OperationId EVENT = OperationId.command("event");
-  private static final OperationId EXPIRE = OperationId.command("expire");
-  private static final OperationId CLOSE = OperationId.command("close");
+  public static class TestPrimitiveType implements PrimitiveType {
+    private static final TestPrimitiveType INSTANCE = new TestPrimitiveType();
 
-  private static final OperationId READ = OperationId.query("read");
+    @Override
+    public String name() {
+      return "raft-test";
+    }
 
-  private static final EventType CHANGE_EVENT = EventType.from("change");
-  private static final EventType EXPIRE_EVENT = EventType.from("expire");
-  private static final EventType CLOSE_EVENT = EventType.from("close");
+    @Override
+    public PrimitiveConfig newConfig() {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public DistributedPrimitiveBuilder newBuilder(String primitiveName, PrimitiveConfig config, PrimitiveManagementService managementService) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public PrimitiveService newService(ServiceConfig config) {
+      return new TestPrimitiveServiceImpl(config);
+    }
+  }
 
   /**
-   * Test primitive type.
+   * Test primitive.
    */
-  private static class TestPrimitiveType implements PrimitiveType {
-    static final TestPrimitiveType INSTANCE = new TestPrimitiveType();
+  public interface TestPrimitive extends AsyncPrimitive {
+    CompletableFuture<Long> write(String value);
 
-    @Override
-    public String id() {
-      return "test";
+    CompletableFuture<Long> read();
+
+    CompletableFuture<Long> sendEvent(boolean sender);
+
+    CompletableFuture<Void> onEvent(Consumer<Long> callback);
+
+    CompletableFuture<Void> onExpire(Consumer<String> callback);
+
+    CompletableFuture<Void> onClose(Consumer<String> callback);
+  }
+
+  /**
+   * Test primitive client interface.
+   */
+  public interface TestPrimitiveClient {
+    @Event("event")
+    void event(long index);
+
+    @Event("expire")
+    void expire(String value);
+
+    @Event("close")
+    void close(String value);
+  }
+
+  /**
+   * Test primitive service interface.
+   */
+  public interface TestPrimitiveService {
+    @Command
+    long write(String value);
+
+    @Query
+    long read();
+
+    @Command
+    long sendEvent(boolean sender);
+
+    @Command
+    void onExpire();
+
+    @Command
+    void onClose();
+  }
+
+  public static class TestPrimitiveImpl
+      extends AbstractAsyncPrimitive<TestPrimitive, TestPrimitiveService>
+      implements TestPrimitive, TestPrimitiveClient {
+    private final Set<Consumer<Long>> eventListeners = Sets.newCopyOnWriteArraySet();
+    private final Set<Consumer<String>> expireListeners = Sets.newCopyOnWriteArraySet();
+    private final Set<Consumer<String>> closeListeners = Sets.newCopyOnWriteArraySet();
+
+    public TestPrimitiveImpl(ProxyClient<TestPrimitiveService> proxy, PrimitiveRegistry registry) {
+      super(proxy, registry);
     }
 
     @Override
-    public PrimitiveService newService() {
-      return new TestPrimitiveService();
-    }
-
-    @Override
-    public DistributedPrimitiveBuilder newPrimitiveBuilder(String name, PrimitiveManagementService managementService) {
+    public PrimitiveProtocol protocol() {
       throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public CompletableFuture<Long> write(String value) {
+      return getProxyClient().applyBy(name(), service -> service.write(value));
+    }
+
+    @Override
+    public CompletableFuture<Long> read() {
+      return getProxyClient().applyBy(name(), service -> service.read());
+    }
+
+    @Override
+    public CompletableFuture<Long> sendEvent(boolean sender) {
+      return getProxyClient().applyBy(name(), service -> service.sendEvent(sender));
+    }
+
+    @Override
+    public CompletableFuture<Void> onEvent(Consumer<Long> callback) {
+      eventListeners.add(callback);
+      return CompletableFuture.completedFuture(null);
+    }
+
+    @Override
+    public CompletableFuture<Void> onExpire(Consumer<String> callback) {
+      expireListeners.add(callback);
+      return getProxyClient().acceptBy(name(), service -> service.onExpire());
+    }
+
+    @Override
+    public CompletableFuture<Void> onClose(Consumer<String> callback) {
+      closeListeners.add(callback);
+      return getProxyClient().acceptBy(name(), service -> service.onClose());
+    }
+
+    @Override
+    public void event(long index) {
+      eventListeners.forEach(l -> l.accept(index));
+    }
+
+    @Override
+    public void expire(String value) {
+      expireListeners.forEach(l -> l.accept(value));
+    }
+
+    @Override
+    public void close(String value) {
+      closeListeners.forEach(l -> l.accept(value));
+    }
+
+    @Override
+    public SyncPrimitive sync() {
+      return null;
+    }
+
+    @Override
+    public SyncPrimitive sync(Duration operationTimeout) {
+      return null;
     }
   }
 
   /**
    * Test state machine.
    */
-  public static class TestPrimitiveService extends AbstractPrimitiveService {
-    private Commit<Void> expire;
-    private Commit<Void> close;
+  public static class TestPrimitiveServiceImpl extends AbstractPrimitiveService<TestPrimitiveClient> implements TestPrimitiveService {
+    private SessionId expire;
+    private SessionId close;
+
+    public TestPrimitiveServiceImpl(ServiceConfig config) {
+      super(TestPrimitiveType.INSTANCE, TestPrimitiveClient.class);
+    }
 
     @Override
-    protected void configure(ServiceExecutor executor) {
-      executor.register(WRITE, this::write, clientSerializer::encode);
-      executor.register(READ, this::read, clientSerializer::encode);
-      executor.register(EVENT, clientSerializer::decode, this::event, clientSerializer::encode);
-      executor.register(CLOSE, c -> close(c));
-      executor.register(EXPIRE, this::expire);
+    public Serializer serializer() {
+      return Serializer.using(TestPrimitiveType.INSTANCE.namespace());
     }
 
     @Override
     public void onExpire(Session session) {
       if (expire != null) {
-        expire.session().publish(EXPIRE_EVENT);
+        getSession(expire).accept(client -> client.expire("Hello world!"));
       }
     }
 
     @Override
     public void onClose(Session session) {
-      if (close != null && !session.equals(close.session())) {
-        close.session().publish(CLOSE_EVENT);
+      if (close != null && !session.sessionId().equals(close)) {
+        getSession(close).accept(client -> client.close("Hello world!"));
       }
     }
 
     @Override
-    public void backup(BufferOutput<?> writer) {
+    public void backup(BackupOutput writer) {
       writer.writeLong(10);
     }
 
     @Override
-    public void restore(BufferInput<?> reader) {
+    public void restore(BackupInput reader) {
       assertEquals(10, reader.readLong());
     }
 
-    protected long write(Commit<Void> commit) {
-      return commit.index();
+    @Override
+    public long write(String value) {
+      return getCurrentIndex();
     }
 
-    protected long read(Commit<Void> commit) {
-      return commit.index();
+    @Override
+    public long read() {
+      return getCurrentIndex();
     }
 
-    protected long event(Commit<Boolean> commit) {
-      if (commit.value()) {
-        commit.session().publish(CHANGE_EVENT, clientSerializer::encode, commit.index());
+    @Override
+    public long sendEvent(boolean sender) {
+      if (sender) {
+        getCurrentSession().accept(service -> service.event(getCurrentIndex()));
       } else {
-        for (Session session : getSessions()) {
-          session.publish(CHANGE_EVENT, clientSerializer::encode, commit.index());
+        for (Session<TestPrimitiveClient> session : getSessions()) {
+          session.accept(service -> service.event(getCurrentIndex()));
         }
       }
-      return commit.index();
+      return getCurrentIndex();
     }
 
-    public void close(Commit<Void> commit) {
-      this.close = commit;
+    @Override
+    public void onExpire() {
+      expire = getCurrentSession().sessionId();
     }
 
-    public void expire(Commit<Void> commit) {
-      this.expire = commit;
+    @Override
+    public void onClose() {
+      close = getCurrentSession().sessionId();
     }
   }
 
@@ -1407,17 +1570,17 @@ public class RaftTest extends ConcurrentTestCase {
    * Test member.
    */
   public static class TestMember implements RaftMember {
-    private final NodeId nodeId;
+    private final MemberId memberId;
     private final Type type;
 
-    TestMember(NodeId nodeId, Type type) {
-      this.nodeId = nodeId;
+    TestMember(MemberId memberId, Type type) {
+      this.memberId = memberId;
       this.type = type;
     }
 
     @Override
-    public NodeId nodeId() {
-      return nodeId;
+    public MemberId memberId() {
+      return memberId;
     }
 
     @Override

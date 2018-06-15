@@ -15,11 +15,11 @@
  */
 package io.atomix.protocols.raft.storage.snapshot;
 
-import io.atomix.primitive.PrimitiveId;
 import io.atomix.utils.time.WallClockTimestamp;
 
 import java.util.Objects;
 
+import static com.google.common.base.MoreObjects.toStringHelper;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
@@ -62,22 +62,6 @@ public abstract class Snapshot implements AutoCloseable {
   protected Snapshot(SnapshotDescriptor descriptor, SnapshotStore store) {
     this.descriptor = checkNotNull(descriptor, "descriptor cannot be null");
     this.store = checkNotNull(store, "store cannot be null");
-  }
-
-  /**
-   * Returns the service name.
-   *
-   * @return the service name
-   */
-  public abstract String serviceName();
-
-  /**
-   * Returns the identifier of the state machine to which the snapshot belongs.
-   *
-   * @return The snapshot identifier.
-   */
-  public PrimitiveId serviceId() {
-    return PrimitiveId.from(descriptor.serviceId());
   }
 
   /**
@@ -162,7 +146,7 @@ public abstract class Snapshot implements AutoCloseable {
    * Closes the current snapshot reader.
    */
   protected void closeReader(SnapshotReader reader) {
-    reader = null;
+
   }
 
   /**
@@ -213,16 +197,20 @@ public abstract class Snapshot implements AutoCloseable {
 
   @Override
   public int hashCode() {
-    return Objects.hash(serviceId(), index());
+    return Objects.hash(index());
   }
 
   @Override
   public boolean equals(Object object) {
-    if (this == object) return true;
-    if (object == null || !getClass().isAssignableFrom(object.getClass())) return false;
-
+    if (object == null || getClass() != object.getClass()) return false;
     Snapshot snapshot = (Snapshot) object;
-    return snapshot.serviceId().equals(serviceId()) && snapshot.index() == index();
+    return snapshot.index() == index();
   }
 
+  @Override
+  public String toString() {
+    return toStringHelper(this)
+        .add("index", index())
+        .toString();
+  }
 }

@@ -24,7 +24,7 @@
 
   <groupId>io.atomix</groupId>
   <artifactId>atomix-parent</artifactId>
-  <version>2.1.0-SNAPSHOT</version>
+  <version>3.0.0-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>Atomix Parent Pom</name>
   <description>Distributed systems framework.</description>
@@ -49,18 +49,24 @@
 
     <!-- Core dependencies -->
     <guava.version>22.0</guava.version>
-    <kryo.version>4.0.1</kryo.version>
-    <commons.lang3.version>3.5</commons.lang3.version>
+    <kryo.version>4.0.2</kryo.version>
+    <commons.lang3.version>3.7</commons.lang3.version>
     <commons.math3.version>3.6.1</commons.math3.version>
-    <netty.version>4.1.21.Final</netty.version>
+    <netty.version>4.1.24.Final</netty.version>
     <vertx.version>3.5.0</vertx.version>
+    <jaxrs.version>2.0</jaxrs.version>
+    <jackson.version>2.9.5</jackson.version>
+    <config.version>1.3.2</config.version>
+    <fast-classpath-scanner.version>2.21</fast-classpath-scanner.version>
     <resteasy.version>3.1.4.Final</resteasy.version>
+    <rest-assured.version>3.0.7</rest-assured.version>
     <argparse4j.version>0.7.0</argparse4j.version>
 
     <!-- Maven plugins -->
     <maven.source.plugin.version>2.2.1</maven.source.plugin.version>
     <maven.compiler.plugin.version>3.0</maven.compiler.plugin.version>
-    <maven.failsafe.plugin.version>2.14</maven.failsafe.plugin.version>
+    <maven.failsafe.plugin.version>2.21.0</maven.failsafe.plugin.version>
+    <maven.surefire.plugin.version>2.21.0</maven.surefire.plugin.version>
     <maven.clean.plugin.version>2.5</maven.clean.plugin.version>
     <maven.resources.plugin.version>2.6</maven.resources.plugin.version>
     <maven.dependency.plugin.version>2.7</maven.dependency.plugin.version>
@@ -100,7 +106,6 @@
     <module>agent</module>
     <module>cluster</module>
     <module>core</module>
-    <module>messaging</module>
     <module>primitive</module>
     <module>protocols</module>
     <module>rest</module>
@@ -115,6 +120,13 @@
         <groupId>io.netty</groupId>
         <artifactId>netty-bom</artifactId>
         <version>${netty.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>com.fasterxml.jackson</groupId>
+        <artifactId>jackson-bom</artifactId>
+        <version>${jackson.version}</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>
@@ -168,6 +180,16 @@
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>${maven.surefire.plugin.version}</version>
+        <configuration>
+          <shutdown>kill</shutdown>
+          <argLine>${argLine} -Xss256k -Xms2G -Xmx4G -XX:+UseConcMarkSweepGC -XX:+UseParNewGC -Dio.atomix.scanSpec=io.atomix</argLine>
+        </configuration>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-source-plugin</artifactId>
         <version>${maven.source.plugin.version}</version>
         <executions>
@@ -215,19 +237,21 @@
           <doctitle>Atomix API Reference (${jv})</doctitle>
           <windowtitle>Atomix API Reference (${jv})</windowtitle>
           <aggregate>true</aggregate>
-          <excludePackageNames>io.atomix.examples*:*.impl*</excludePackageNames>
+          <stylesheetfile>${basedir}/docs/style.css</stylesheetfile>
+          <excludePackageNames>*.impl*:io.atomix.core.config.jackson:io.atomix.core.utils:io.atomix.rest*:io.atomix.agent*:io.atomix.storage.buffer:io.atomix.storage.journal*:io.atomix.storage.statistics:io.atomix.protocols.raft.utils:io.atomix.utils.serializer.serializers:io.atomix.utils.concurrent:io.atomix.utils.logging:io.atomix.utils.misc:io.atomix.utils.memory:io.atomix.protocols.raft.roles:io.atomix.protocols.raft.protocol:io.atomix.protocols.raft.storage:io.atomix.protocols.raft.cluster:io.atomix.protocols.raft.test:io.atomix.protocols.backup.roles:io.atomix.protocols.backup.protocol
+          </excludePackageNames>
           <additionalparam>
             -Xdoclint:none
             -notimestamp
             -link http://docs.oracle.com/javase/8/docs/api/
-            -group "Atomix core" io.atomix
-            -group "Cluster" io.atomix.cluster*
+            -group "Core" io.atomix.core*
+            -group "Primitives" io.atomix.core.counter:io.atomix.core.election:io.atomix.core.generator:io.atomix.core.lock:io.atomix.core.map:io.atomix.core.multimap:io.atomix.core.queue:io.atomix.core.semaphore:io.atomix.core.set:io.atomix.core.transaction:io.atomix.core.tree:io.atomix.core.value
+            -group "Cluster Management" io.atomix.cluster*:io.atomix.messaging*:io.atomix.cluster.messaging*
+            -group "Primitive API" io.atomix.primitive*
+            -group "Raft Protocol" io.atomix.protocols.raft*
+            -group "Primary-Backup Protocol" io.atomix.protocols.backup*
             -group "Storage" io.atomix.storage*
-            -group "Time" io.atomix.time*
-            -group "Distributed primitives" io.atomix.primitives*
-            -group "Raft protocol" io.atomix.protocols.raft*
-            -group "Gossip protocol" io.atomix.protocols.gossip*
-            -group "Utilities" io.atomix.logging:io.atomix.serializer*:io.atomix.time:io.atomix.storage:io.atomix.buffer
+            -group "Utilities" io.atomix.utils*
           </additionalparam>
         </configuration>
       </plugin>
@@ -255,12 +279,15 @@
       <plugin>
         <groupId>org.eluder.coveralls</groupId>
         <artifactId>coveralls-maven-plugin</artifactId>
-        <version>4.0.0</version>
+        <version>4.3.0</version>
+        <configuration>
+          <repoToken>${env.repoToken}</repoToken>
+        </configuration>
       </plugin>
       <plugin>
         <groupId>org.jacoco</groupId>
         <artifactId>jacoco-maven-plugin</artifactId>
-        <version>0.7.5.201505241946</version>
+        <version>0.8.1</version>
         <executions>
           <execution>
             <id>prepare-agent</id>

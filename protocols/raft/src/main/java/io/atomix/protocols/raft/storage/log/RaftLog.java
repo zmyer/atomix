@@ -16,10 +16,10 @@
 package io.atomix.protocols.raft.storage.log;
 
 import io.atomix.protocols.raft.storage.log.entry.RaftLogEntry;
-import io.atomix.utils.serializer.Serializer;
 import io.atomix.storage.StorageLevel;
 import io.atomix.storage.journal.DelegatingJournal;
 import io.atomix.storage.journal.SegmentedJournal;
+import io.atomix.utils.serializer.Serializer;
 
 import java.io.File;
 
@@ -35,11 +35,6 @@ public class RaftLog extends DelegatingJournal<RaftLogEntry> {
    */
   public static Builder builder() {
     return new Builder();
-  }
-
-  @Deprecated
-  public static Builder newBuilder() {
-    return builder();
   }
 
   private final SegmentedJournal<RaftLogEntry> journal;
@@ -68,7 +63,7 @@ public class RaftLog extends DelegatingJournal<RaftLogEntry> {
    * Opens a new Raft log reader with the given reader mode.
    *
    * @param index The index from which to begin reading entries.
-   * @param mode The mode in which to read entries.
+   * @param mode  The mode in which to read entries.
    * @return The Raft log reader.
    */
   public RaftLogReader openReader(long index, RaftLogReader.Mode mode) {
@@ -242,6 +237,33 @@ public class RaftLog extends DelegatingJournal<RaftLogEntry> {
      */
     public Builder withMaxEntriesPerSegment(int maxEntriesPerSegment) {
       journalBuilder.withMaxEntriesPerSegment(maxEntriesPerSegment);
+      return this;
+    }
+
+    /**
+     * Sets the log index density.
+     * <p>
+     * The index density is the frequency at which the position of entries written to the journal will be recorded in
+     * an in-memory index for faster seeking.
+     *
+     * @param indexDensity the index density
+     * @return the log builder
+     * @throws IllegalArgumentException if the density is not between 0 and 1
+     */
+    public Builder withIndexDensity(double indexDensity) {
+      journalBuilder.withIndexDensity(indexDensity);
+      return this;
+    }
+
+    /**
+     * Sets the log cache size.
+     *
+     * @param cacheSize the log cache size
+     * @return the log builder
+     * @throws IllegalArgumentException if the cache size is not positive
+     */
+    public Builder withCacheSize(int cacheSize) {
+      journalBuilder.withCacheSize(cacheSize);
       return this;
     }
 

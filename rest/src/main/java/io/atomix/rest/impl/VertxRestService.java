@@ -15,20 +15,27 @@
  */
 package io.atomix.rest.impl;
 
-import io.atomix.cluster.ClusterService;
-import io.atomix.cluster.messaging.ClusterMessagingService;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.MapperFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.module.SimpleModule;
+import io.atomix.cluster.ClusterMembershipService;
+import io.atomix.cluster.messaging.ClusterCommunicationService;
+import io.atomix.cluster.messaging.ClusterEventService;
 import io.atomix.core.Atomix;
 import io.atomix.core.PrimitivesService;
-import io.atomix.cluster.messaging.ClusterEventingService;
-import io.atomix.messaging.Endpoint;
+import io.atomix.core.utils.EventManager;
+import io.atomix.primitive.config.PrimitiveConfig;
+import io.atomix.primitive.partition.PartitionGroupConfig;
+import io.atomix.primitive.protocol.PrimitiveProtocolConfig;
 import io.atomix.rest.ManagedRestService;
 import io.atomix.rest.RestService;
 import io.atomix.rest.resources.ClusterResource;
 import io.atomix.rest.resources.EventsResource;
 import io.atomix.rest.resources.MessagesResource;
 import io.atomix.rest.resources.PrimitivesResource;
-import io.atomix.rest.utils.EventManager;
-import io.atomix.rest.utils.PrimitiveCache;
+import io.atomix.rest.resources.StatusResource;
+import io.atomix.utils.net.Address;
 import io.vertx.core.Vertx;
 import io.vertx.core.http.HttpServer;
 import org.jboss.resteasy.plugins.server.vertx.VertxRequestHandler;
@@ -36,6 +43,11 @@ import org.jboss.resteasy.plugins.server.vertx.VertxResteasyDeployment;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.ws.rs.Consumes;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.ext.ContextResolver;
+import javax.ws.rs.ext.Provider;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -46,19 +58,23 @@ import static com.google.common.base.Preconditions.checkNotNull;
  */
 public class VertxRestService implements ManagedRestService {
   private static final Logger LOGGER = LoggerFactory.getLogger(VertxRestService.class);
-  private static final int PRIMITIVE_CACHE_SIZE = 1000;
 
   private final Atomix atomix;
-  private final Endpoint endpoint;
+  private final Address address;
   private final Vertx vertx;
   private HttpServer server;
   private VertxResteasyDeployment deployment;
   private final AtomicBoolean open = new AtomicBoolean();
 
-  public VertxRestService(Atomix atomix, Endpoint endpoint) {
+  public VertxRestService(Atomix atomix, Address address) {
     this.atomix = checkNotNull(atomix, "atomix cannot be null");
-    this.endpoint = checkNotNull(endpoint, "endpoint cannot be null");
+    this.address = checkNotNull(address, "address cannot be null");
     this.vertx = Vertx.vertx();
+  }
+
+  @Override
+  public Address address() {
+    return address;
   }
 
   @Override
@@ -68,27 +84,28 @@ public class VertxRestService implements ManagedRestService {
     deployment.start();
 
     deployment.getDispatcher().getDefaultContextObjects()
-        .put(ClusterService.class, atomix.clusterService());
+        .put(ClusterMembershipService.class, atomix.getMembershipService());
     deployment.getDispatcher().getDefaultContextObjects()
-        .put(ClusterMessagingService.class, atomix.messagingService());
+        .put(ClusterCommunicationService.class, atomix.getCommunicationService());
     deployment.getDispatcher().getDefaultContextObjects()
-        .put(ClusterEventingService.class, atomix.eventingService());
+        .put(ClusterEventService.class, atomix.getEventService());
     deployment.getDispatcher().getDefaultContextObjects()
-        .put(PrimitivesService.class, atomix.primitivesService());
-    deployment.getDispatcher().getDefaultContextObjects()
-        .put(PrimitiveCache.class, new PrimitiveCache(atomix.primitivesService(), PRIMITIVE_CACHE_SIZE));
+        .put(PrimitivesService.class, atomix.getPrimitivesService());
     deployment.getDispatcher().getDefaultContextObjects()
         .put(EventManager.class, new EventManager());
 
+    deployment.getRegistry().addPerInstanceResource(StatusResource.class);
     deployment.getRegistry().addPerInstanceResource(ClusterResource.class);
     deployment.getRegistry().addPerInstanceResource(EventsResource.class);
     deployment.getRegistry().addPerInstanceResource(MessagesResource.class);
     deployment.getRegistry().addPerInstanceResource(PrimitivesResource.class);
 
+    deployment.getDispatcher().getProviderFactory().register(new JacksonProvider(createObjectMapper()));
+
     server.requestHandler(new VertxRequestHandler(vertx, deployment));
 
     CompletableFuture<RestService> future = new CompletableFuture<>();
-    server.listen(endpoint.port(), endpoint.host().getHostAddress(), result -> {
+    server.listen(address.port(), address.address().getHostAddress(), result -> {
       if (result.succeeded()) {
         open.set(true);
         LOGGER.info("Started");
@@ -120,6 +137,24 @@ public class VertxRestService implements ManagedRestService {
     return CompletableFuture.completedFuture(null);
   }
 
+  private ObjectMapper createObjectMapper() {
+    ObjectMapper mapper = new ObjectMapper();
+
+    mapper.setPropertyNamingStrategy(new ConfigPropertyNamingStrategy());
+    mapper.enable(MapperFeature.ACCEPT_CASE_INSENSITIVE_ENUMS);
+    mapper.enable(MapperFeature.ACCEPT_CASE_INSENSITIVE_PROPERTIES);
+    mapper.configure(JsonParser.Feature.ALLOW_COMMENTS, true);
+    mapper.configure(JsonParser.Feature.ALLOW_YAML_COMMENTS, true);
+
+    SimpleModule module = new SimpleModule("PolymorphicTypes");
+    module.addDeserializer(PartitionGroupConfig.class, new PartitionGroupDeserializer(atomix.getRegistry()));
+    module.addDeserializer(PrimitiveProtocolConfig.class, new PrimitiveProtocolDeserializer(atomix.getRegistry()));
+    module.addDeserializer(PrimitiveConfig.class, new PrimitiveConfigDeserializer(atomix.getRegistry()));
+    mapper.registerModule(module);
+
+    return mapper;
+  }
+
   /**
    * Vert.x REST service builder.
    */
@@ -129,10 +164,26 @@ public class VertxRestService implements ManagedRestService {
 
     @Override
     public ManagedRestService build() {
-      if (endpoint == null) {
-        endpoint = Endpoint.from(DEFAULT_HOST, DEFAULT_PORT);
+      if (address == null) {
+        address = Address.from(DEFAULT_HOST, DEFAULT_PORT);
       }
-      return new VertxRestService(atomix, endpoint);
+      return new VertxRestService(atomix, address);
+    }
+  }
+
+  @Provider
+  @Consumes(MediaType.APPLICATION_JSON)
+  @Produces(MediaType.APPLICATION_JSON)
+  private static class JacksonProvider implements ContextResolver<ObjectMapper> {
+    private final ObjectMapper mapper;
+
+    JacksonProvider(ObjectMapper mapper) {
+      this.mapper = mapper;
+    }
+
+    @Override
+    public ObjectMapper getContext(Class<?> type) {
+      return mapper;
     }
   }
 }

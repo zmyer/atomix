@@ -15,13 +15,11 @@
  */
 package io.atomix.protocols.raft.partition;
 
-import io.atomix.cluster.NodeId;
-import io.atomix.primitive.PrimitiveClient;
+import io.atomix.cluster.MemberId;
 import io.atomix.primitive.partition.Partition;
 import io.atomix.primitive.partition.PartitionId;
 import io.atomix.primitive.partition.PartitionManagementService;
 import io.atomix.primitive.partition.PartitionMetadata;
-import io.atomix.protocols.raft.RaftProtocol;
 import io.atomix.protocols.raft.partition.impl.RaftClientCommunicator;
 import io.atomix.protocols.raft.partition.impl.RaftNamespaces;
 import io.atomix.protocols.raft.partition.impl.RaftPartitionClient;
@@ -40,17 +38,21 @@ import static com.google.common.base.MoreObjects.toStringHelper;
 /**
  * Abstract partition.
  */
-public class RaftPartition implements Partition<RaftProtocol> {
+public class RaftPartition implements Partition {
   private final PartitionId partitionId;
   private final StorageLevel storageLevel;
+  private final long segmentSize;
+  private final boolean flushOnCommit;
   private final File dataDirectory;
   private PartitionMetadata partition;
   private RaftPartitionClient client;
   private RaftPartitionServer server;
 
-  public RaftPartition(PartitionId partitionId, StorageLevel storageLevel, File dataDirectory) {
+  public RaftPartition(PartitionId partitionId, StorageLevel storageLevel, long segmentSize, boolean flushOnCommit, File dataDirectory) {
     this.partitionId = partitionId;
     this.storageLevel = storageLevel;
+    this.segmentSize = segmentSize;
+    this.flushOnCommit = flushOnCommit;
     this.dataDirectory = dataDirectory;
   }
 
@@ -74,13 +76,13 @@ public class RaftPartition implements Partition<RaftProtocol> {
   }
 
   @Override
-  public NodeId primary() {
+  public MemberId primary() {
     return client != null ? client.leader() : null;
   }
 
   @Override
-  public Collection<NodeId> backups() {
-    NodeId leader = primary();
+  public Collection<MemberId> backups() {
+    MemberId leader = primary();
     if (leader == null) {
       return members();
     }
@@ -89,12 +91,8 @@ public class RaftPartition implements Partition<RaftProtocol> {
         .collect(Collectors.toSet());
   }
 
-  /**
-   * Returns the identifiers of partition members.
-   *
-   * @return partition member instance ids
-   */
-  public Collection<NodeId> members() {
+  @Override
+  public Collection<MemberId> members() {
     return partition != null ? partition.members() : Collections.emptyList();
   }
 
@@ -108,6 +106,24 @@ public class RaftPartition implements Partition<RaftProtocol> {
   }
 
   /**
+   * Returns the log segment size.
+   *
+   * @return the log segment size
+   */
+  public long segmentSize() {
+    return segmentSize;
+  }
+
+  /**
+   * Returns whether to flush logs to disk on commit.
+   *
+   * @return whether to flush logs to disk on commit
+   */
+  public boolean flushOnCommit() {
+    return flushOnCommit;
+  }
+
+  /**
    * Returns the partition data directory.
    *
    * @return the partition data directory
@@ -117,7 +133,7 @@ public class RaftPartition implements Partition<RaftProtocol> {
   }
 
   @Override
-  public PrimitiveClient<RaftProtocol> getPrimitiveClient() {
+  public RaftPartitionClient getClient() {
     return client;
   }
 
@@ -127,7 +143,7 @@ public class RaftPartition implements Partition<RaftProtocol> {
   CompletableFuture<Partition> open(PartitionMetadata metadata, PartitionManagementService managementService) {
     this.partition = metadata;
     this.client = createClient(managementService);
-    if (partition.members().contains(managementService.getClusterService().getLocalNode().id())) {
+    if (partition.members().contains(managementService.getMembershipService().getLocalMember().id())) {
       server = createServer(managementService);
       return server.start()
           .thenCompose(v -> client.start())
@@ -141,10 +157,10 @@ public class RaftPartition implements Partition<RaftProtocol> {
    * Updates the partition with the given metadata.
    */
   CompletableFuture<Void> update(PartitionMetadata metadata, PartitionManagementService managementService) {
-    if (server == null && metadata.members().contains(managementService.getClusterService().getLocalNode().id())) {
+    if (server == null && metadata.members().contains(managementService.getMembershipService().getLocalMember().id())) {
       server = createServer(managementService);
       return server.join(metadata.members());
-    } else if (server != null && !metadata.members().contains(managementService.getClusterService().getLocalNode().id())) {
+    } else if (server != null && !metadata.members().contains(managementService.getMembershipService().getLocalMember().id())) {
       return server.leave().thenRun(() -> server = null);
     }
     return CompletableFuture.completedFuture(null);
@@ -154,7 +170,10 @@ public class RaftPartition implements Partition<RaftProtocol> {
    * Closes the partition.
    */
   CompletableFuture<Void> close() {
-    return closeClient().thenCompose(v -> closeServer());
+    return closeClient()
+        .exceptionally(v -> null)
+        .thenCompose(v -> closeServer())
+        .exceptionally(v -> null);
   }
 
   private CompletableFuture<Void> closeClient() {
@@ -177,9 +196,9 @@ public class RaftPartition implements Partition<RaftProtocol> {
   protected RaftPartitionServer createServer(PartitionManagementService managementService) {
     return new RaftPartitionServer(
         this,
-        managementService.getClusterService().getLocalNode().id(),
-        managementService.getClusterService(),
-        managementService.getCommunicationService(),
+        managementService.getMembershipService().getLocalMember().id(),
+        managementService.getMembershipService(),
+        managementService.getMessagingService(),
         managementService.getPrimitiveTypes());
   }
 
@@ -189,11 +208,11 @@ public class RaftPartition implements Partition<RaftProtocol> {
   private RaftPartitionClient createClient(PartitionManagementService managementService) {
     return new RaftPartitionClient(
         this,
-        managementService.getClusterService().getLocalNode().id(),
+        managementService.getMembershipService().getLocalMember().id(),
         new RaftClientCommunicator(
             name(),
             Serializer.using(RaftNamespaces.RAFT_PROTOCOL),
-            managementService.getCommunicationService()));
+            managementService.getMessagingService()));
   }
 
   /**

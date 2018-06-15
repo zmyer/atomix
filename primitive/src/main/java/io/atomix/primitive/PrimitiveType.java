@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-present Open Networking Foundation
+ * Copyright 2018-present Open Networking Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,36 +15,63 @@
  */
 package io.atomix.primitive;
 
+import io.atomix.primitive.config.PrimitiveConfig;
+import io.atomix.primitive.resource.PrimitiveResource;
 import io.atomix.primitive.service.PrimitiveService;
-import io.atomix.utils.Identifier;
+import io.atomix.primitive.service.ServiceConfig;
+import io.atomix.utils.NamedType;
+import io.atomix.utils.serializer.Namespace;
+import io.atomix.utils.serializer.Namespaces;
 
 /**
- * Raft service type.
+ * Primitive type.
  */
-public interface PrimitiveType<B extends DistributedPrimitiveBuilder<B, P>, P extends DistributedPrimitive> extends Identifier<String> {
+public interface PrimitiveType<B extends DistributedPrimitiveBuilder, C extends PrimitiveConfig, P extends DistributedPrimitive> extends NamedType {
 
   /**
-   * Returns the primitive type name.
+   * Returns the primitive type namespace.
    *
-   * @return the primitive type name
+   * @return the primitive type namespace
    */
-  @Override
-  String id();
+  default Namespace namespace() {
+    return Namespace.builder()
+        .register(Namespaces.BASIC)
+        .register(ServiceConfig.class)
+        .build();
+  }
 
   /**
-   * Returns a new primitive service instance.
+   * Returns a new configuration for the primitive type.
    *
-   * @return a new primitive service instance
+   * @return a new primitive configuration
    */
-  PrimitiveService newService();
+  C newConfig();
 
   /**
-   * Returns a new primitive builder for the given partition.
+   * Returns a new primitive builder.
    *
-   * @param name the primitive name
+   * @param primitiveName     the primitive name
+   * @param config            the primitive configuration
    * @param managementService the primitive management service
-   * @return the primitive builder
+   * @return a new primitive builder
    */
-  B newPrimitiveBuilder(String name, PrimitiveManagementService managementService);
+  B newBuilder(String primitiveName, C config, PrimitiveManagementService managementService);
 
+  /**
+   * Creates a new service instance from the given configuration.
+   *
+   * @param config the service configuration
+   * @return the service instance
+   */
+  PrimitiveService newService(ServiceConfig config);
+
+  /**
+   * Creates a new resource for the given primitive.
+   *
+   * @param primitive the primitive instance
+   * @return a new resource for the given primitive instance
+   */
+  default PrimitiveResource newResource(P primitive) {
+    return null;
+  }
 }

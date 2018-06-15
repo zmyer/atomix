@@ -17,34 +17,32 @@ package io.atomix.core.counter.impl;
 
 import io.atomix.core.counter.AtomicCounter;
 import io.atomix.core.counter.AtomicCounterBuilder;
+import io.atomix.core.counter.AtomicCounterConfig;
 import io.atomix.primitive.PrimitiveManagementService;
-import io.atomix.primitive.PrimitiveProtocol;
+import io.atomix.primitive.proxy.ProxyClient;
+import io.atomix.primitive.service.ServiceConfig;
 
 import java.util.concurrent.CompletableFuture;
-
-import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
  * Atomic counter proxy builder.
  */
 public class AtomicCounterProxyBuilder extends AtomicCounterBuilder {
-  private final PrimitiveManagementService managementService;
-
-  public AtomicCounterProxyBuilder(String name, PrimitiveManagementService managementService) {
-    super(name);
-    this.managementService = checkNotNull(managementService);
+  public AtomicCounterProxyBuilder(String name, AtomicCounterConfig config, PrimitiveManagementService managementService) {
+    super(name, config, managementService);
   }
 
   @Override
   @SuppressWarnings("unchecked")
   public CompletableFuture<AtomicCounter> buildAsync() {
-    PrimitiveProtocol protocol = protocol();
-    return managementService.getPartitionService()
-        .getPartitionGroup(protocol)
-        .getPartition(name())
-        .getPrimitiveClient()
-        .newProxy(name(), primitiveType(), protocol)
+    ProxyClient<AtomicCounterService> proxy = protocol().newProxy(
+        name(),
+        primitiveType(),
+        AtomicCounterService.class,
+        new ServiceConfig(),
+        managementService.getPartitionService());
+    return new AtomicCounterProxy(proxy, managementService.getPrimitiveRegistry())
         .connect()
-        .thenApply(proxy -> new AtomicCounterProxy(proxy).sync());
+        .thenApply(counter -> counter.sync());
   }
 }

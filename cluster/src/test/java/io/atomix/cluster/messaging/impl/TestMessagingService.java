@@ -15,13 +15,14 @@
  */
 package io.atomix.cluster.messaging.impl;
 
-import io.atomix.messaging.Endpoint;
-import io.atomix.messaging.ManagedMessagingService;
-import io.atomix.messaging.MessagingException.NoRemoteHandler;
-import io.atomix.messaging.MessagingService;
+import io.atomix.utils.net.Address;
+import io.atomix.cluster.messaging.ManagedMessagingService;
+import io.atomix.cluster.messaging.MessagingException.NoRemoteHandler;
+import io.atomix.cluster.messaging.MessagingService;
 import io.atomix.utils.concurrent.ComposableFuture;
 import io.atomix.utils.concurrent.Futures;
 
+import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -37,33 +38,33 @@ import static com.google.common.base.Preconditions.checkNotNull;
  * Test messaging service.
  */
 public class TestMessagingService implements ManagedMessagingService {
-  private final Endpoint endpoint;
-  private final Map<Endpoint, TestMessagingService> services;
-  private final Map<String, BiFunction<Endpoint, byte[], CompletableFuture<byte[]>>> handlers = new ConcurrentHashMap<>();
+  private final Address address;
+  private final Map<Address, TestMessagingService> services;
+  private final Map<String, BiFunction<Address, byte[], CompletableFuture<byte[]>>> handlers = new ConcurrentHashMap<>();
   private final AtomicBoolean started = new AtomicBoolean();
 
-  public TestMessagingService(Endpoint endpoint, Map<Endpoint, TestMessagingService> services) {
-    this.endpoint = endpoint;
+  public TestMessagingService(Address address, Map<Address, TestMessagingService> services) {
+    this.address = address;
     this.services = services;
   }
 
   /**
-   * Returns the test service for the given endpoint or {@code null} if none has been created.
+   * Returns the test service for the given address or {@code null} if none has been created.
    */
-  private TestMessagingService getService(Endpoint endpoint) {
-    checkNotNull(endpoint);
-    return services.get(endpoint);
+  private TestMessagingService getService(Address address) {
+    checkNotNull(address);
+    return services.get(address);
   }
 
   /**
-   * Returns the given handler for the given endpoint.
+   * Returns the given handler for the given address.
    */
-  private BiFunction<Endpoint, byte[], CompletableFuture<byte[]>> getHandler(Endpoint endpoint, String type) {
-    TestMessagingService service = getService(endpoint);
+  private BiFunction<Address, byte[], CompletableFuture<byte[]>> getHandler(Address address, String type) {
+    TestMessagingService service = getService(address);
     if (service == null) {
       return (e, p) -> Futures.exceptionalFuture(new NoRemoteHandler());
     }
-    BiFunction<Endpoint, byte[], CompletableFuture<byte[]>> handler = service.handlers.get(checkNotNull(type));
+    BiFunction<Address, byte[], CompletableFuture<byte[]>> handler = service.handlers.get(checkNotNull(type));
     if (handler == null) {
       return (e, p) -> Futures.exceptionalFuture(new NoRemoteHandler());
     }
@@ -71,29 +72,41 @@ public class TestMessagingService implements ManagedMessagingService {
   }
 
   @Override
-  public Endpoint endpoint() {
-    return endpoint;
+  public Address address() {
+    return address;
   }
 
   @Override
-  public CompletableFuture<Void> sendAsync(Endpoint ep, String type, byte[] payload) {
-    return getHandler(ep, type).apply(endpoint, payload).thenApply(v -> null);
+  public CompletableFuture<Void> sendAsync(Address address, String type, byte[] payload) {
+    return getHandler(address, type).apply(this.address, payload).thenApply(v -> null);
   }
 
   @Override
-  public CompletableFuture<byte[]> sendAndReceive(Endpoint ep, String type, byte[] payload) {
-    return getHandler(ep, type).apply(endpoint, payload);
+  public CompletableFuture<byte[]> sendAndReceive(Address address, String type, byte[] payload) {
+    return getHandler(address, type).apply(this.address, payload);
   }
 
   @Override
-  public CompletableFuture<byte[]> sendAndReceive(Endpoint ep, String type, byte[] payload, Executor executor) {
+  public CompletableFuture<byte[]> sendAndReceive(Address address, String type, byte[] payload, Executor executor) {
     ComposableFuture<byte[]> future = new ComposableFuture<>();
-    sendAndReceive(ep, type, payload).whenCompleteAsync(future, executor);
+    sendAndReceive(address, type, payload).whenCompleteAsync(future, executor);
     return future;
   }
 
   @Override
-  public void registerHandler(String type, BiConsumer<Endpoint, byte[]> handler, Executor executor) {
+  public CompletableFuture<byte[]> sendAndReceive(Address address, String type, byte[] payload, Duration timeout) {
+    return getHandler(address, type).apply(this.address, payload);
+  }
+
+  @Override
+  public CompletableFuture<byte[]> sendAndReceive(Address address, String type, byte[] payload, Duration timeout, Executor executor) {
+    ComposableFuture<byte[]> future = new ComposableFuture<>();
+    sendAndReceive(address, type, payload).whenCompleteAsync(future, executor);
+    return future;
+  }
+
+  @Override
+  public void registerHandler(String type, BiConsumer<Address, byte[]> handler, Executor executor) {
     checkNotNull(type);
     checkNotNull(handler);
     handlers.put(type, (e, p) -> {
@@ -107,7 +120,7 @@ public class TestMessagingService implements ManagedMessagingService {
   }
 
   @Override
-  public void registerHandler(String type, BiFunction<Endpoint, byte[], byte[]> handler, Executor executor) {
+  public void registerHandler(String type, BiFunction<Address, byte[], byte[]> handler, Executor executor) {
     checkNotNull(type);
     checkNotNull(handler);
     handlers.put(type, (e, p) -> {
@@ -122,7 +135,7 @@ public class TestMessagingService implements ManagedMessagingService {
   }
 
   @Override
-  public void registerHandler(String type, BiFunction<Endpoint, byte[], CompletableFuture<byte[]>> handler) {
+  public void registerHandler(String type, BiFunction<Address, byte[], CompletableFuture<byte[]>> handler) {
     checkNotNull(type);
     checkNotNull(handler);
     handlers.put(type, handler);
@@ -135,7 +148,7 @@ public class TestMessagingService implements ManagedMessagingService {
 
   @Override
   public CompletableFuture<MessagingService> start() {
-    services.put(endpoint, this);
+    services.put(address, this);
     started.set(true);
     return CompletableFuture.completedFuture(this);
   }
@@ -147,7 +160,7 @@ public class TestMessagingService implements ManagedMessagingService {
 
   @Override
   public CompletableFuture<Void> stop() {
-    services.remove(endpoint);
+    services.remove(address);
     started.set(false);
     return CompletableFuture.completedFuture(null);
   }

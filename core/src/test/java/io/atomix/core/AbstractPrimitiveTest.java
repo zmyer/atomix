@@ -15,22 +15,36 @@
  */
 package io.atomix.core;
 
-import io.atomix.cluster.Node;
+import io.atomix.primitive.protocol.PrimitiveProtocol;
+import io.atomix.protocols.backup.partition.PrimaryBackupPartitionGroup;
+import io.atomix.protocols.raft.partition.RaftPartitionGroup;
+import org.junit.After;
 import org.junit.AfterClass;
+import org.junit.Before;
 import org.junit.BeforeClass;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
  * Base Atomix test.
  */
 public abstract class AbstractPrimitiveTest extends AbstractAtomixTest {
-  private static List<Atomix> instances;
+  private static List<Atomix> servers;
+  private static List<Atomix> clients;
   private static int id = 10;
+
+  /**
+   * Returns the primitive protocol with which to test.
+   *
+   * @return the protocol with which to test
+   */
+  protected abstract PrimitiveProtocol protocol();
 
   /**
    * Returns a new Atomix instance.
@@ -38,30 +52,60 @@ public abstract class AbstractPrimitiveTest extends AbstractAtomixTest {
    * @return a new Atomix instance.
    */
   protected Atomix atomix() throws Exception {
-    Atomix instance = createAtomix(Node.Type.CLIENT, id++, 1, 2, 3).start().get(10, TimeUnit.SECONDS);
-    instances.add(instance);
+    Atomix instance = createAtomix(id++, Arrays.asList(1, 2, 3));
+    clients.add(instance);
+    instance.start().get(30, TimeUnit.SECONDS);
     return instance;
   }
 
   @BeforeClass
-  public static void setupAtomix() throws Exception {
+  public static void setupCluster() throws Exception {
     AbstractAtomixTest.setupAtomix();
-    instances = new ArrayList<>();
-    instances.add(createAtomix(Node.Type.DATA, 1, 1, 2, 3));
-    instances.add(createAtomix(Node.Type.DATA, 2, 1, 2, 3));
-    instances.add(createAtomix(Node.Type.DATA, 3, 1, 2, 3));
-    List<CompletableFuture<Atomix>> futures = instances.stream().map(Atomix::start).collect(Collectors.toList());
+    Function<Atomix.Builder, Atomix> build = builder ->
+        builder.withManagementGroup(RaftPartitionGroup.builder("system")
+            .withNumPartitions(1)
+            .withMembers("1", "2", "3")
+            .build())
+            .addPartitionGroup(RaftPartitionGroup.builder("raft")
+                .withNumPartitions(3)
+                .withMembers("1", "2", "3")
+                .build())
+            .addPartitionGroup(PrimaryBackupPartitionGroup.builder("data")
+                .withNumPartitions(7)
+                .build())
+            .build();
+    servers = new ArrayList<>();
+    servers.add(createAtomix(1, Arrays.asList(1, 2, 3), build));
+    servers.add(createAtomix(2, Arrays.asList(1, 2, 3), build));
+    servers.add(createAtomix(3, Arrays.asList(1, 2, 3), build));
+    List<CompletableFuture<Atomix>> futures = servers.stream().map(a -> a.start().thenApply(v -> a)).collect(Collectors.toList());
     CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()])).get(30, TimeUnit.SECONDS);
   }
 
   @AfterClass
-  public static void teardownAtomix() throws Exception {
-    List<CompletableFuture<Void>> futures = instances.stream().map(Atomix::stop).collect(Collectors.toList());
+  public static void teardownCluster() throws Exception {
+    List<CompletableFuture<Void>> futures = servers.stream().map(Atomix::stop).collect(Collectors.toList());
     try {
       CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()])).join();
     } catch (Exception e) {
       // Do nothing
     }
     AbstractAtomixTest.teardownAtomix();
+  }
+
+  @Before
+  public void setupTest() throws Exception {
+    clients = new ArrayList<>();
+    id = 10;
+  }
+
+  @After
+  public void teardownTest() throws Exception {
+    List<CompletableFuture<Void>> futures = clients.stream().map(Atomix::stop).collect(Collectors.toList());
+    try {
+      CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()])).join();
+    } catch (Exception e) {
+      // Do nothing
+    }
   }
 }

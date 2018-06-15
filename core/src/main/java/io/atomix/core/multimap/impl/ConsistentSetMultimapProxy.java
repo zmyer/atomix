@@ -16,55 +16,28 @@
 
 package io.atomix.core.multimap.impl;
 
+import com.google.common.collect.HashMultiset;
 import com.google.common.collect.Multiset;
-
-import io.atomix.primitive.impl.AbstractAsyncPrimitive;
-import io.atomix.primitive.proxy.PrimitiveProxy;
+import com.google.common.collect.Multisets;
 import io.atomix.core.multimap.AsyncConsistentMultimap;
 import io.atomix.core.multimap.ConsistentMultimap;
 import io.atomix.core.multimap.MultimapEvent;
 import io.atomix.core.multimap.MultimapEventListener;
-import io.atomix.core.multimap.impl.ConsistentSetMultimapOperations.ContainsEntry;
-import io.atomix.core.multimap.impl.ConsistentSetMultimapOperations.ContainsKey;
-import io.atomix.core.multimap.impl.ConsistentSetMultimapOperations.ContainsValue;
-import io.atomix.core.multimap.impl.ConsistentSetMultimapOperations.Get;
-import io.atomix.core.multimap.impl.ConsistentSetMultimapOperations.MultiRemove;
-import io.atomix.core.multimap.impl.ConsistentSetMultimapOperations.Put;
-import io.atomix.core.multimap.impl.ConsistentSetMultimapOperations.RemoveAll;
-import io.atomix.core.multimap.impl.ConsistentSetMultimapOperations.Replace;
-import io.atomix.utils.serializer.KryoNamespace;
-import io.atomix.utils.serializer.KryoNamespaces;
-import io.atomix.utils.serializer.Serializer;
+import io.atomix.primitive.AbstractAsyncPrimitive;
+import io.atomix.primitive.PrimitiveRegistry;
+import io.atomix.primitive.PrimitiveState;
+import io.atomix.primitive.proxy.ProxyClient;
 import io.atomix.utils.time.Versioned;
-
-import static io.atomix.core.multimap.impl.ConsistentSetMultimapEvents.CHANGE;
-import static io.atomix.core.multimap.impl.ConsistentSetMultimapOperations.ADD_LISTENER;
-import static io.atomix.core.multimap.impl.ConsistentSetMultimapOperations.CLEAR;
-import static io.atomix.core.multimap.impl.ConsistentSetMultimapOperations.CONTAINS_ENTRY;
-import static io.atomix.core.multimap.impl.ConsistentSetMultimapOperations.CONTAINS_KEY;
-import static io.atomix.core.multimap.impl.ConsistentSetMultimapOperations.CONTAINS_VALUE;
-import static io.atomix.core.multimap.impl.ConsistentSetMultimapOperations.ENTRIES;
-import static io.atomix.core.multimap.impl.ConsistentSetMultimapOperations.GET;
-import static io.atomix.core.multimap.impl.ConsistentSetMultimapOperations.IS_EMPTY;
-import static io.atomix.core.multimap.impl.ConsistentSetMultimapOperations.KEYS;
-import static io.atomix.core.multimap.impl.ConsistentSetMultimapOperations.KEY_SET;
-import static io.atomix.core.multimap.impl.ConsistentSetMultimapOperations.PUT;
-import static io.atomix.core.multimap.impl.ConsistentSetMultimapOperations.REMOVE;
-import static io.atomix.core.multimap.impl.ConsistentSetMultimapOperations.REMOVE_ALL;
-import static io.atomix.core.multimap.impl.ConsistentSetMultimapOperations.REMOVE_LISTENER;
-import static io.atomix.core.multimap.impl.ConsistentSetMultimapOperations.REPLACE;
-import static io.atomix.core.multimap.impl.ConsistentSetMultimapOperations.SIZE;
-import static io.atomix.core.multimap.impl.ConsistentSetMultimapOperations.VALUES;
 
 import java.time.Duration;
 import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 /**
  * Set based implementation of the {@link AsyncConsistentMultimap}.
@@ -72,136 +45,118 @@ import java.util.concurrent.Executor;
  * Note: this implementation does not allow null entries or duplicate entries.
  */
 public class ConsistentSetMultimapProxy
-    extends AbstractAsyncPrimitive
-    implements AsyncConsistentMultimap<String, byte[]> {
-
-  private static final Serializer SERIALIZER = Serializer.using(KryoNamespace.builder()
-      .register(KryoNamespaces.BASIC)
-      .register(ConsistentSetMultimapOperations.NAMESPACE)
-      .register(ConsistentSetMultimapEvents.NAMESPACE)
-      .build());
+    extends AbstractAsyncPrimitive<AsyncConsistentMultimap<String, byte[]>, ConsistentSetMultimapService>
+    implements AsyncConsistentMultimap<String, byte[]>, ConsistentSetMultimapClient {
 
   private final Map<MultimapEventListener<String, byte[]>, Executor> mapEventListeners = new ConcurrentHashMap<>();
 
-  public ConsistentSetMultimapProxy(PrimitiveProxy proxy) {
-    super(proxy);
-    proxy.addEventListener(CHANGE, SERIALIZER::decode, this::handleEvent);
-    proxy.addStateChangeListener(state -> {
-      if (state == PrimitiveProxy.State.CONNECTED && isListening()) {
-        proxy.invoke(ADD_LISTENER);
-      }
-    });
+  public ConsistentSetMultimapProxy(ProxyClient<ConsistentSetMultimapService> proxy, PrimitiveRegistry registry) {
+    super(proxy, registry);
   }
 
-  private void handleEvent(List<MultimapEvent<String, byte[]>> events) {
-    events.forEach(event ->
-        mapEventListeners.forEach((listener, executor) -> executor.execute(() -> listener.event(event))));
+  @Override
+  public void onChange(String key, byte[] oldValue, byte[] newValue) {
+    MultimapEvent<String, byte[]> event = new MultimapEvent<>(name(), key, newValue, oldValue);
+    mapEventListeners.forEach((listener, executor) -> executor.execute(() -> listener.event(event)));
   }
 
   @Override
   public CompletableFuture<Integer> size() {
-    return proxy.invoke(SIZE, SERIALIZER::decode);
+    return getProxyClient().applyAll(service -> service.size())
+        .thenApply(results -> results.reduce(Math::addExact).orElse(0));
   }
 
   @Override
   public CompletableFuture<Boolean> isEmpty() {
-    return proxy.invoke(IS_EMPTY, SERIALIZER::decode);
+    return getProxyClient().applyAll(service -> service.isEmpty())
+        .thenApply(results -> results.allMatch(Predicate.isEqual(true)));
   }
 
   @Override
   public CompletableFuture<Boolean> containsKey(String key) {
-    return proxy.invoke(CONTAINS_KEY, SERIALIZER::encode, new ContainsKey(key), SERIALIZER::decode);
+    return getProxyClient().applyBy(key, service -> service.containsKey(key));
   }
 
   @Override
   public CompletableFuture<Boolean> containsValue(byte[] value) {
-    return proxy.invoke(CONTAINS_VALUE, SERIALIZER::encode, new ContainsValue(value), SERIALIZER::decode);
+    return getProxyClient().applyAll(service -> service.containsValue(value))
+        .thenApply(results -> results.anyMatch(Predicate.isEqual(true)));
   }
 
   @Override
   public CompletableFuture<Boolean> containsEntry(String key, byte[] value) {
-    return proxy.invoke(CONTAINS_ENTRY, SERIALIZER::encode, new ContainsEntry(key, value), SERIALIZER::decode);
+    return getProxyClient().applyBy(key, service -> service.containsEntry(key, value));
   }
 
   @Override
   public CompletableFuture<Boolean> put(String key, byte[] value) {
-    return proxy.invoke(
-        PUT,
-        SERIALIZER::encode,
-        new Put(key, Collections.singletonList(value), null),
-        SERIALIZER::decode);
+    return getProxyClient().applyBy(key, service -> service.put(key, value));
   }
 
   @Override
   public CompletableFuture<Boolean> remove(String key, byte[] value) {
-    return proxy.invoke(REMOVE, SERIALIZER::encode, new MultiRemove(key,
-            Collections.singletonList(value), null), SERIALIZER::decode);
+    return getProxyClient().applyBy(key, service -> service.remove(key, value));
   }
 
   @Override
   public CompletableFuture<Boolean> removeAll(String key, Collection<? extends byte[]> values) {
-    return proxy.invoke(
-        REMOVE,
-        SERIALIZER::encode,
-        new MultiRemove(key, (Collection<byte[]>) values, null),
-        SERIALIZER::decode);
+    return getProxyClient().applyBy(key, service -> service.removeAll(key, values));
   }
 
   @Override
   public CompletableFuture<Versioned<Collection<? extends byte[]>>> removeAll(String key) {
-    return proxy.invoke(REMOVE_ALL, SERIALIZER::encode, new RemoveAll(key, null), SERIALIZER::decode);
+    return getProxyClient().applyBy(key, service -> service.removeAll(key));
   }
 
   @Override
-  public CompletableFuture<Boolean> putAll(
-      String key, Collection<? extends byte[]> values) {
-    return proxy.invoke(PUT, SERIALIZER::encode, new Put(key, values, null), SERIALIZER::decode);
+  public CompletableFuture<Boolean> putAll(String key, Collection<? extends byte[]> values) {
+    return getProxyClient().applyBy(key, service -> service.putAll(key, values));
   }
 
   @Override
   public CompletableFuture<Versioned<Collection<? extends byte[]>>> replaceValues(
       String key, Collection<byte[]> values) {
-    return proxy.invoke(
-        REPLACE,
-        SERIALIZER::encode,
-        new Replace(key, values, null),
-        SERIALIZER::decode);
+    return getProxyClient().applyBy(key, service -> service.replaceValues(key, values));
   }
 
   @Override
   public CompletableFuture<Void> clear() {
-    return proxy.invoke(CLEAR);
+    return getProxyClient().acceptAll(service -> service.clear());
   }
 
   @Override
   public CompletableFuture<Versioned<Collection<? extends byte[]>>> get(String key) {
-    return proxy.invoke(GET, SERIALIZER::encode, new Get(key), SERIALIZER::decode);
+    return getProxyClient().applyBy(key, service -> service.get(key));
   }
 
   @Override
   public CompletableFuture<Set<String>> keySet() {
-    return proxy.invoke(KEY_SET, SERIALIZER::decode);
+    return getProxyClient().applyAll(service -> service.keySet())
+        .thenApply(results -> results.flatMap(Collection::stream).collect(Collectors.toSet()));
   }
 
   @Override
   public CompletableFuture<Multiset<String>> keys() {
-    return proxy.invoke(KEYS, SERIALIZER::decode);
+    return getProxyClient().applyAll(service -> service.keys())
+        .thenApply(results -> results.reduce(Multisets::sum).orElse(HashMultiset.create()));
   }
 
   @Override
   public CompletableFuture<Multiset<byte[]>> values() {
-    return proxy.invoke(VALUES, SERIALIZER::decode);
+    return getProxyClient().applyAll(service -> service.values())
+        .thenApply(results -> results.reduce(Multisets::sum).orElse(HashMultiset.create()));
   }
 
   @Override
   public CompletableFuture<Collection<Map.Entry<String, byte[]>>> entries() {
-    return proxy.invoke(ENTRIES, SERIALIZER::decode);
+    return getProxyClient().applyAll(service -> service.entries())
+        .thenApply(results -> results.flatMap(Collection::stream).collect(Collectors.toList()));
   }
 
   @Override
   public CompletableFuture<Void> addListener(MultimapEventListener<String, byte[]> listener, Executor executor) {
     if (mapEventListeners.isEmpty()) {
-      return proxy.invoke(ADD_LISTENER).thenRun(() -> mapEventListeners.put(listener, executor));
+      return getProxyClient().acceptAll(service -> service.listen());
     } else {
       mapEventListeners.put(listener, executor);
       return CompletableFuture.completedFuture(null);
@@ -211,7 +166,7 @@ public class ConsistentSetMultimapProxy
   @Override
   public CompletableFuture<Void> removeListener(MultimapEventListener<String, byte[]> listener) {
     if (mapEventListeners.remove(listener) != null && mapEventListeners.isEmpty()) {
-      return proxy.invoke(REMOVE_LISTENER).thenApply(v -> null);
+      return getProxyClient().acceptAll(service -> service.unlisten());
     }
     return CompletableFuture.completedFuture(null);
   }
@@ -223,6 +178,19 @@ public class ConsistentSetMultimapProxy
 
   private boolean isListening() {
     return !mapEventListeners.isEmpty();
+  }
+
+  @Override
+  public CompletableFuture<AsyncConsistentMultimap<String, byte[]>> connect() {
+    return super.connect()
+        .thenRun(() -> getProxyClient().getPartitionIds().forEach(partition -> {
+          getProxyClient().getPartition(partition).addStateChangeListener(state -> {
+            if (state == PrimitiveState.CONNECTED && isListening()) {
+              getProxyClient().acceptOn(partition, service -> service.listen());
+            }
+          });
+        }))
+        .thenApply(v -> this);
   }
 
   @Override

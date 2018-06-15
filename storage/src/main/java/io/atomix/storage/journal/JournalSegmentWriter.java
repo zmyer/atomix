@@ -21,6 +21,7 @@ import io.atomix.storage.buffer.FileBuffer;
 import io.atomix.storage.buffer.HeapBuffer;
 import io.atomix.storage.buffer.MappedBuffer;
 import io.atomix.storage.buffer.SlicedBuffer;
+import io.atomix.storage.journal.index.JournalIndex;
 
 import java.util.zip.CRC32;
 import java.util.zip.Checksum;
@@ -38,18 +39,22 @@ import java.util.zip.Checksum;
  * <li>n-bit entry bytes</li>
  * </ul>
  *
- * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class JournalSegmentWriter<E> implements JournalWriter<E> {
   private final JournalSegmentDescriptor descriptor;
+  private final JournalSegmentCache cache;
+  private final JournalIndex index;
   private final Buffer buffer;
   private final Serializer serializer;
   private final HeapBuffer memory = HeapBuffer.allocate();
   private final long firstIndex;
   private Indexed<E> lastEntry;
 
-  public JournalSegmentWriter(JournalSegmentDescriptor descriptor, Serializer serializer) {
+  public JournalSegmentWriter(JournalSegmentDescriptor descriptor, JournalSegmentCache cache, JournalIndex index, Serializer serializer) {
     this.descriptor = descriptor;
+    this.cache = cache;
+    this.index = index;
     this.buffer = descriptor.buffer().slice();
     this.serializer = serializer;
     this.firstIndex = descriptor.index();
@@ -65,6 +70,9 @@ public class JournalSegmentWriter<E> implements JournalWriter<E> {
 
     // Clear the buffer indexes.
     buffer.clear();
+
+    // Record the current buffer position.
+    int position = buffer.position();
 
     // Read the entry length.
     int length = buffer.mark().readInt();
@@ -87,12 +95,14 @@ public class JournalSegmentWriter<E> implements JournalWriter<E> {
       if (checksum == crc32.getValue()) {
         final E entry = serializer.decode(memory.array());
         lastEntry = new Indexed<>(nextIndex, entry, length);
+        this.index.index(nextIndex, position);
         nextIndex++;
       } else {
         break;
       }
 
       // Read the next entry length.
+      position = buffer.position();
       length = buffer.mark().readInt();
     }
 
@@ -186,6 +196,9 @@ public class JournalSegmentWriter<E> implements JournalWriter<E> {
     crc32.update(bytes, 0, length);
     final long checksum = crc32.getValue();
 
+    // Record the current buffer position;
+    int position = buffer.position();
+
     // Write the entry length and entry to the segment.
     buffer.writeInt(length)
         .writeUnsignedInt(checksum)
@@ -194,6 +207,8 @@ public class JournalSegmentWriter<E> implements JournalWriter<E> {
     // Update the last entry with the correct index/term/length.
     Indexed<E> indexedEntry = new Indexed<>(index, entry, length);
     this.lastEntry = indexedEntry;
+    this.cache.put(indexedEntry);
+    this.index.index(index, position);
     return (Indexed<T>) indexedEntry;
   }
 
@@ -211,8 +226,14 @@ public class JournalSegmentWriter<E> implements JournalWriter<E> {
     // If the index is less than the segment index, clear the segment buffer.
     if (index < descriptor.index()) {
       buffer.zero().clear();
+      this.cache.truncate(index);
+      this.index.truncate(index);
       return;
     }
+
+    // Truncate the index.
+    this.cache.truncate(index);
+    this.index.truncate(index);
 
     // Reset the writer to the given index.
     reset(index);

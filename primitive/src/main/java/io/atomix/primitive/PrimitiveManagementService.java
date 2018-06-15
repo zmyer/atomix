@@ -15,10 +15,14 @@
  */
 package io.atomix.primitive;
 
-import io.atomix.cluster.ClusterService;
-import io.atomix.cluster.messaging.ClusterMessagingService;
-import io.atomix.cluster.messaging.ClusterEventingService;
+import io.atomix.cluster.ClusterMembershipService;
+import io.atomix.cluster.messaging.ClusterCommunicationService;
+import io.atomix.cluster.messaging.ClusterEventService;
+import io.atomix.primitive.partition.PartitionGroupTypeRegistry;
 import io.atomix.primitive.partition.PartitionService;
+import io.atomix.primitive.protocol.PrimitiveProtocolTypeRegistry;
+
+import java.util.concurrent.ScheduledExecutorService;
 
 /**
  * Primitive management service.
@@ -26,25 +30,32 @@ import io.atomix.primitive.partition.PartitionService;
 public interface PrimitiveManagementService {
 
   /**
+   * Returns the primitive thread pool.
+   *
+   * @return the primitive thread pool
+   */
+  ScheduledExecutorService getExecutorService();
+
+  /**
    * Returns the cluster service.
    *
    * @return the cluster service
    */
-  ClusterService getClusterService();
+  ClusterMembershipService getMembershipService();
 
   /**
    * Returns the cluster communication service.
    *
    * @return the cluster communication service
    */
-  ClusterMessagingService getCommunicationService();
+  ClusterCommunicationService getCommunicationService();
 
   /**
    * Returns the cluster event service.
    *
    * @return the cluster event service
    */
-  ClusterEventingService getEventService();
+  ClusterEventService getEventService();
 
   /**
    * Returns the partition service.
@@ -52,5 +63,33 @@ public interface PrimitiveManagementService {
    * @return the partition service
    */
   PartitionService getPartitionService();
+
+  /**
+   * Returns the primitive registry.
+   *
+   * @return the primitive registry
+   */
+  PrimitiveRegistry getPrimitiveRegistry();
+
+  /**
+   * Returns the primitive type registry.
+   *
+   * @return the primitive type registry
+   */
+  PrimitiveTypeRegistry getPrimitiveTypeRegistry();
+
+  /**
+   * Returns the primitive protocol type registry.
+   *
+   * @return the primitive protocol type registry
+   */
+  PrimitiveProtocolTypeRegistry getProtocolTypeRegistry();
+
+  /**
+   * Returns the partition group type registry.
+   *
+   * @return the partition group type registry
+   */
+  PartitionGroupTypeRegistry getPartitionGroupTypeRegistry();
 
 }

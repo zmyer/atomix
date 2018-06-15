@@ -16,9 +16,10 @@
 package io.atomix.protocols.raft.protocol;
 
 import com.google.common.collect.Maps;
-import io.atomix.cluster.NodeId;
+import io.atomix.cluster.MemberId;
 import io.atomix.primitive.session.SessionId;
 import io.atomix.utils.concurrent.Futures;
+import io.atomix.utils.concurrent.ThreadContext;
 
 import java.net.ConnectException;
 import java.util.Map;
@@ -35,12 +36,16 @@ public class TestRaftClientProtocol extends TestRaftProtocol implements RaftClie
   private Function<HeartbeatRequest, CompletableFuture<HeartbeatResponse>> heartbeatHandler;
   private final Map<Long, Consumer<PublishRequest>> publishListeners = Maps.newConcurrentMap();
 
-  public TestRaftClientProtocol(NodeId memberId, Map<NodeId, TestRaftServerProtocol> servers, Map<NodeId, TestRaftClientProtocol> clients) {
-    super(servers, clients);
+  public TestRaftClientProtocol(
+      MemberId memberId,
+      Map<MemberId, TestRaftServerProtocol> servers,
+      Map<MemberId, TestRaftClientProtocol> clients,
+      ThreadContext context) {
+    super(servers, clients, context);
     clients.put(memberId, this);
   }
 
-  private CompletableFuture<TestRaftServerProtocol> getServer(NodeId memberId) {
+  private CompletableFuture<TestRaftServerProtocol> getServer(MemberId memberId) {
     TestRaftServerProtocol server = server(memberId);
     if (server != null) {
       return Futures.completedFuture(server);
@@ -68,37 +73,37 @@ public class TestRaftClientProtocol extends TestRaftProtocol implements RaftClie
   }
 
   @Override
-  public CompletableFuture<OpenSessionResponse> openSession(NodeId memberId, OpenSessionRequest request) {
-    return getServer(memberId).thenCompose(protocol -> protocol.openSession(request));
+  public CompletableFuture<OpenSessionResponse> openSession(MemberId memberId, OpenSessionRequest request) {
+    return scheduleTimeout(getServer(memberId).thenCompose(protocol -> protocol.openSession(request)));
   }
 
   @Override
-  public CompletableFuture<CloseSessionResponse> closeSession(NodeId memberId, CloseSessionRequest request) {
-    return getServer(memberId).thenCompose(protocol -> protocol.closeSession(request));
+  public CompletableFuture<CloseSessionResponse> closeSession(MemberId memberId, CloseSessionRequest request) {
+    return scheduleTimeout(getServer(memberId).thenCompose(protocol -> protocol.closeSession(request)));
   }
 
   @Override
-  public CompletableFuture<KeepAliveResponse> keepAlive(NodeId memberId, KeepAliveRequest request) {
-    return getServer(memberId).thenCompose(protocol -> protocol.keepAlive(request));
+  public CompletableFuture<KeepAliveResponse> keepAlive(MemberId memberId, KeepAliveRequest request) {
+    return scheduleTimeout(getServer(memberId).thenCompose(protocol -> protocol.keepAlive(request)));
   }
 
   @Override
-  public CompletableFuture<QueryResponse> query(NodeId memberId, QueryRequest request) {
-    return getServer(memberId).thenCompose(protocol -> protocol.query(request));
+  public CompletableFuture<QueryResponse> query(MemberId memberId, QueryRequest request) {
+    return scheduleTimeout(getServer(memberId).thenCompose(protocol -> protocol.query(request)));
   }
 
   @Override
-  public CompletableFuture<CommandResponse> command(NodeId memberId, CommandRequest request) {
-    return getServer(memberId).thenCompose(protocol -> protocol.command(request));
+  public CompletableFuture<CommandResponse> command(MemberId memberId, CommandRequest request) {
+    return scheduleTimeout(getServer(memberId).thenCompose(protocol -> protocol.command(request)));
   }
 
   @Override
-  public CompletableFuture<MetadataResponse> metadata(NodeId memberId, MetadataRequest request) {
-    return getServer(memberId).thenCompose(protocol -> protocol.metadata(request));
+  public CompletableFuture<MetadataResponse> metadata(MemberId memberId, MetadataRequest request) {
+    return scheduleTimeout(getServer(memberId).thenCompose(protocol -> protocol.metadata(request)));
   }
 
   @Override
-  public void reset(Set<NodeId> members, ResetRequest request) {
+  public void reset(Set<MemberId> members, ResetRequest request) {
     members.forEach(member -> {
       TestRaftServerProtocol server = server(member);
       if (server != null) {

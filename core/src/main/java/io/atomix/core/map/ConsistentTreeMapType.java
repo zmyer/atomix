@@ -16,10 +16,12 @@
 package io.atomix.core.map;
 
 import io.atomix.core.map.impl.ConsistentTreeMapProxyBuilder;
-import io.atomix.core.map.impl.ConsistentTreeMapService;
+import io.atomix.core.map.impl.DefaultConsistentTreeMapService;
 import io.atomix.primitive.PrimitiveManagementService;
 import io.atomix.primitive.PrimitiveType;
 import io.atomix.primitive.service.PrimitiveService;
+import io.atomix.primitive.service.ServiceConfig;
+import io.atomix.utils.serializer.Namespace;
 
 import static com.google.common.base.MoreObjects.toStringHelper;
 
@@ -27,8 +29,9 @@ import static com.google.common.base.MoreObjects.toStringHelper;
  * Consistent tree map primitive type.
  */
 public class ConsistentTreeMapType<V>
-    implements PrimitiveType<ConsistentTreeMapBuilder<V>, ConsistentTreeMap<V>> {
-  private static final String NAME = "CONSISTENT_TREEMAP";
+    implements PrimitiveType<ConsistentTreeMapBuilder<V>, ConsistentTreeMapConfig, ConsistentTreeMap<V>> {
+  private static final String NAME = "consistent-tree-map";
+  private static final ConsistentTreeMapType INSTANCE = new ConsistentTreeMapType();
 
   /**
    * Returns a new consistent tree map type.
@@ -36,32 +39,40 @@ public class ConsistentTreeMapType<V>
    * @param <V> the value type
    * @return a new consistent tree map type
    */
+  @SuppressWarnings("unchecked")
   public static <V> ConsistentTreeMapType<V> instance() {
-    return new ConsistentTreeMapType<>();
-  }
-
-  private ConsistentTreeMapType() {
+    return INSTANCE;
   }
 
   @Override
-  public String id() {
+  public String name() {
     return NAME;
   }
 
   @Override
-  public PrimitiveService newService() {
-    return new ConsistentTreeMapService();
+  public Namespace namespace() {
+    return ConsistentMapType.instance().namespace();
   }
 
   @Override
-  public ConsistentTreeMapBuilder<V> newPrimitiveBuilder(String name, PrimitiveManagementService managementService) {
-    return new ConsistentTreeMapProxyBuilder<>(name, managementService);
+  public PrimitiveService newService(ServiceConfig config) {
+    return new DefaultConsistentTreeMapService();
+  }
+
+  @Override
+  public ConsistentTreeMapConfig newConfig() {
+    return new ConsistentTreeMapConfig();
+  }
+
+  @Override
+  public ConsistentTreeMapBuilder<V> newBuilder(String name, ConsistentTreeMapConfig config, PrimitiveManagementService managementService) {
+    return new ConsistentTreeMapProxyBuilder<>(name, config, managementService);
   }
 
   @Override
   public String toString() {
     return toStringHelper(this)
-        .add("id", id())
+        .add("name", name())
         .toString();
   }
 }

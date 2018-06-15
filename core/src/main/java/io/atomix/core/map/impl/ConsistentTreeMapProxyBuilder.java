@@ -18,13 +18,13 @@ package io.atomix.core.map.impl;
 import io.atomix.core.map.AsyncConsistentTreeMap;
 import io.atomix.core.map.ConsistentTreeMap;
 import io.atomix.core.map.ConsistentTreeMapBuilder;
+import io.atomix.core.map.ConsistentTreeMapConfig;
 import io.atomix.primitive.PrimitiveManagementService;
-import io.atomix.primitive.PrimitiveProtocol;
+import io.atomix.primitive.proxy.ProxyClient;
+import io.atomix.primitive.service.ServiceConfig;
 import io.atomix.utils.serializer.Serializer;
 
 import java.util.concurrent.CompletableFuture;
-
-import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
  * Default {@link AsyncConsistentTreeMap} builder.
@@ -32,29 +32,26 @@ import static com.google.common.base.Preconditions.checkNotNull;
  * @param <V> type for map value
  */
 public class ConsistentTreeMapProxyBuilder<V> extends ConsistentTreeMapBuilder<V> {
-  private final PrimitiveManagementService managementService;
-
-  public ConsistentTreeMapProxyBuilder(String name, PrimitiveManagementService managementService) {
-    super(name);
-    this.managementService = checkNotNull(managementService);
+  public ConsistentTreeMapProxyBuilder(String name, ConsistentTreeMapConfig config, PrimitiveManagementService managementService) {
+    super(name, config, managementService);
   }
 
   @Override
   @SuppressWarnings("unchecked")
   public CompletableFuture<ConsistentTreeMap<V>> buildAsync() {
-    PrimitiveProtocol protocol = protocol();
-    return managementService.getPartitionService()
-        .getPartitionGroup(protocol)
-        .getPartition(name())
-        .getPrimitiveClient()
-        .newProxy(name(), primitiveType(), protocol)
+    ProxyClient<ConsistentTreeMapService> proxy = protocol().newProxy(
+        name(),
+        primitiveType(),
+        ConsistentTreeMapService.class,
+        new ServiceConfig(),
+        managementService.getPartitionService());
+    return new ConsistentTreeMapProxy(proxy, managementService.getPrimitiveRegistry())
         .connect()
-        .thenApply(proxy -> {
-          ConsistentTreeMapProxy rawMap = new ConsistentTreeMapProxy(proxy);
+        .thenApply(map -> {
           Serializer serializer = serializer();
           return new TranscodingAsyncConsistentTreeMap<V, byte[]>(
-              rawMap,
-              value -> value == null ? null : serializer.encode(value),
+              (AsyncConsistentTreeMap) map,
+              value -> serializer.encode(value),
               bytes -> serializer.decode(bytes))
               .sync();
         });

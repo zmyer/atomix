@@ -15,57 +15,42 @@
  */
 package io.atomix.core.election.impl;
 
-import com.google.common.collect.Maps;
-
-import io.atomix.core.election.AsyncLeaderElector;
 import io.atomix.core.election.LeaderElector;
 import io.atomix.core.election.LeaderElectorBuilder;
+import io.atomix.core.election.LeaderElectorConfig;
 import io.atomix.primitive.PrimitiveManagementService;
-import io.atomix.primitive.PrimitiveProtocol;
-import io.atomix.primitive.partition.Partition;
-import io.atomix.primitive.partition.PartitionGroup;
-import io.atomix.primitive.partition.PartitionId;
-import io.atomix.primitive.partition.Partitioner;
-import io.atomix.primitive.proxy.PrimitiveProxy;
-import io.atomix.utils.concurrent.Futures;
+import io.atomix.primitive.proxy.ProxyClient;
+import io.atomix.primitive.service.ServiceConfig;
+import io.atomix.utils.serializer.Serializer;
 
-import java.util.ArrayList;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-
-import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
  * Default implementation of {@code LeaderElectorBuilder}.
  */
 public class LeaderElectorProxyBuilder<T> extends LeaderElectorBuilder<T> {
-  private final PrimitiveManagementService managementService;
-
-  public LeaderElectorProxyBuilder(String name, PrimitiveManagementService managementService) {
-    super(name);
-    this.managementService = checkNotNull(managementService);
-  }
-
-  private CompletableFuture<AsyncLeaderElector<T>> newLeaderElector(PrimitiveProxy proxy) {
-    return proxy.connect()
-        .thenApply(p -> new TranscodingAsyncLeaderElector<T, byte[]>(
-            new LeaderElectorProxy(proxy), serializer()::encode, serializer()::decode));
+  public LeaderElectorProxyBuilder(String name, LeaderElectorConfig config, PrimitiveManagementService managementService) {
+    super(name, config, managementService);
   }
 
   @Override
   @SuppressWarnings("unchecked")
   public CompletableFuture<LeaderElector<T>> buildAsync() {
-    PrimitiveProtocol protocol = protocol();
-    PartitionGroup partitions = managementService.getPartitionService().getPartitionGroup(protocol);
-
-    Map<PartitionId, CompletableFuture<AsyncLeaderElector<T>>> electors = Maps.newConcurrentMap();
-    for (Partition partition : partitions.getPartitions()) {
-      electors.put(partition.id(),
-          newLeaderElector(partition.getPrimitiveClient().newProxy(name(), primitiveType(), protocol)));
-    }
-
-    Partitioner<String> partitioner = topic -> partitions.getPartition(topic).id();
-    return Futures.allOf(new ArrayList<>(electors.values()))
-        .thenApply(e -> new PartitionedAsyncLeaderElector<T>(name(), Maps.transformValues(electors, v -> v.getNow(null)), partitioner).sync());
+    ProxyClient<LeaderElectorService> proxy = protocol().newProxy(
+        name(),
+        primitiveType(),
+        LeaderElectorService.class,
+        new ServiceConfig(),
+        managementService.getPartitionService());
+    return new LeaderElectorProxy(proxy, managementService.getPrimitiveRegistry())
+        .connect()
+        .thenApply(elector -> {
+          Serializer serializer = serializer();
+          return new TranscodingAsyncLeaderElector<T, byte[]>(
+              elector,
+              key -> serializer.encode(key),
+              bytes -> serializer.decode(bytes))
+              .sync();
+        });
   }
 }

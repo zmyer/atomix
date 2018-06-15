@@ -15,49 +15,95 @@
  */
 package io.atomix.core.impl;
 
-import io.atomix.cluster.ClusterService;
-import io.atomix.cluster.messaging.ClusterMessagingService;
-import io.atomix.cluster.messaging.ClusterEventingService;
+import io.atomix.cluster.ClusterMembershipService;
+import io.atomix.cluster.messaging.ClusterCommunicationService;
+import io.atomix.cluster.messaging.ClusterEventService;
 import io.atomix.primitive.PrimitiveManagementService;
+import io.atomix.primitive.PrimitiveRegistry;
+import io.atomix.primitive.PrimitiveTypeRegistry;
+import io.atomix.primitive.partition.PartitionGroupTypeRegistry;
 import io.atomix.primitive.partition.PartitionService;
+import io.atomix.primitive.protocol.PrimitiveProtocolTypeRegistry;
+
+import java.util.concurrent.ScheduledExecutorService;
 
 /**
  * Default primitive management service.
  */
 public class CorePrimitiveManagementService implements PrimitiveManagementService {
-  private final ClusterService clusterService;
-  private final ClusterMessagingService communicationService;
-  private final ClusterEventingService eventService;
+  private final ScheduledExecutorService executorService;
+  private final ClusterMembershipService membershipService;
+  private final ClusterCommunicationService communicationService;
+  private final ClusterEventService eventService;
   private final PartitionService partitionService;
+  private final PrimitiveRegistry primitiveRegistry;
+  private final PrimitiveTypeRegistry primitiveTypeRegistry;
+  private final PrimitiveProtocolTypeRegistry protocolTypeRegistry;
+  private final PartitionGroupTypeRegistry partitionGroupTypeRegistry;
 
   public CorePrimitiveManagementService(
-      ClusterService clusterService,
-      ClusterMessagingService communicationService,
-      ClusterEventingService eventService,
-      PartitionService partitionService) {
-    this.clusterService = clusterService;
+      ScheduledExecutorService executorService,
+      ClusterMembershipService membershipService,
+      ClusterCommunicationService communicationService,
+      ClusterEventService eventService,
+      PartitionService partitionService,
+      PrimitiveRegistry primitiveRegistry,
+      PrimitiveTypeRegistry primitiveTypeRegistry,
+      PrimitiveProtocolTypeRegistry protocolTypeRegistry,
+      PartitionGroupTypeRegistry partitionGroupTypeRegistry) {
+    this.executorService = executorService;
+    this.membershipService = membershipService;
     this.communicationService = communicationService;
     this.eventService = eventService;
     this.partitionService = partitionService;
+    this.primitiveRegistry = primitiveRegistry;
+    this.primitiveTypeRegistry = primitiveTypeRegistry;
+    this.protocolTypeRegistry = protocolTypeRegistry;
+    this.partitionGroupTypeRegistry = partitionGroupTypeRegistry;
   }
 
   @Override
-  public ClusterService getClusterService() {
-    return clusterService;
+  public ScheduledExecutorService getExecutorService() {
+    return executorService;
   }
 
   @Override
-  public ClusterMessagingService getCommunicationService() {
+  public ClusterMembershipService getMembershipService() {
+    return membershipService;
+  }
+
+  @Override
+  public ClusterCommunicationService getCommunicationService() {
     return communicationService;
   }
 
   @Override
-  public ClusterEventingService getEventService() {
+  public ClusterEventService getEventService() {
     return eventService;
   }
 
   @Override
   public PartitionService getPartitionService() {
     return partitionService;
+  }
+
+  @Override
+  public PrimitiveRegistry getPrimitiveRegistry() {
+    return primitiveRegistry;
+  }
+
+  @Override
+  public PrimitiveTypeRegistry getPrimitiveTypeRegistry() {
+    return primitiveTypeRegistry;
+  }
+
+  @Override
+  public PrimitiveProtocolTypeRegistry getProtocolTypeRegistry() {
+    return protocolTypeRegistry;
+  }
+
+  @Override
+  public PartitionGroupTypeRegistry getPartitionGroupTypeRegistry() {
+    return partitionGroupTypeRegistry;
   }
 }

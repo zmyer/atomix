@@ -17,34 +17,40 @@ package io.atomix.core.queue.impl;
 
 import io.atomix.core.queue.WorkQueue;
 import io.atomix.core.queue.WorkQueueBuilder;
+import io.atomix.core.queue.WorkQueueConfig;
 import io.atomix.primitive.PrimitiveManagementService;
-import io.atomix.primitive.PrimitiveProtocol;
+import io.atomix.primitive.proxy.ProxyClient;
+import io.atomix.primitive.service.ServiceConfig;
+import io.atomix.utils.serializer.Serializer;
 
 import java.util.concurrent.CompletableFuture;
-
-import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
  * Default work queue builder implementation.
  */
 public class WorkQueueProxyBuilder<E> extends WorkQueueBuilder<E> {
-  private final PrimitiveManagementService managementService;
-
-  public WorkQueueProxyBuilder(String name, PrimitiveManagementService managementService) {
-    super(name);
-    this.managementService = checkNotNull(managementService);
+  public WorkQueueProxyBuilder(String name, WorkQueueConfig config, PrimitiveManagementService managementService) {
+    super(name, config, managementService);
   }
 
   @Override
   @SuppressWarnings("unchecked")
   public CompletableFuture<WorkQueue<E>> buildAsync() {
-    PrimitiveProtocol protocol = protocol();
-    return managementService.getPartitionService()
-        .getPartitionGroup(protocol)
-        .getPartition(name())
-        .getPrimitiveClient()
-        .newProxy(name(), primitiveType(), protocol)
+    ProxyClient<WorkQueueService> proxy = protocol().newProxy(
+        name(),
+        primitiveType(),
+        WorkQueueService.class,
+        new ServiceConfig(),
+        managementService.getPartitionService());
+    return new WorkQueueProxy(proxy, managementService.getPrimitiveRegistry())
         .connect()
-        .thenApply(proxy -> new TranscodingAsyncWorkQueue<E, byte[]>(new WorkQueueProxy(proxy), serializer()::encode, serializer()::decode).sync());
+        .thenApply(queue -> {
+          Serializer serializer = serializer();
+          return new TranscodingAsyncWorkQueue<E, byte[]>(
+              queue,
+              item -> serializer.encode(item),
+              bytes -> serializer.decode(bytes))
+              .sync();
+        });
   }
 }

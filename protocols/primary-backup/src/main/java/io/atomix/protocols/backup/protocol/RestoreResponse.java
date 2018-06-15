@@ -15,7 +15,7 @@
  */
 package io.atomix.protocols.backup.protocol;
 
-import io.atomix.utils.ArraySizeHashPrinter;
+import io.atomix.utils.misc.ArraySizeHashPrinter;
 
 import static com.google.common.base.MoreObjects.toStringHelper;
 
@@ -61,7 +61,7 @@ public class RestoreResponse extends PrimaryBackupResponse {
         .add("status", status())
         .add("index", index())
         .add("timestamp", timestamp())
-        .add("data", ArraySizeHashPrinter.of(data))
+        .add("data", data != null ? ArraySizeHashPrinter.of(data) : null)
         .toString();
   }
 }

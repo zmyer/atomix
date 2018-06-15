@@ -15,12 +15,15 @@
  */
 package io.atomix.core.transaction.impl;
 
-import java.time.Duration;
-import java.util.concurrent.CompletableFuture;
-
+import io.atomix.core.set.DistributedSetType;
 import io.atomix.core.transaction.AsyncTransactionalMap;
 import io.atomix.core.transaction.AsyncTransactionalSet;
 import io.atomix.core.transaction.TransactionalSet;
+import io.atomix.primitive.PrimitiveType;
+import io.atomix.primitive.protocol.PrimitiveProtocol;
+
+import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Default transactional set.
@@ -35,6 +38,16 @@ public class DefaultTransactionalSet<E> implements AsyncTransactionalSet<E> {
   @Override
   public String name() {
     return transactionalMap.name();
+  }
+
+  @Override
+  public PrimitiveType type() {
+    return DistributedSetType.instance();
+  }
+
+  @Override
+  public PrimitiveProtocol protocol() {
+    return transactionalMap.protocol();
   }
 
   @Override

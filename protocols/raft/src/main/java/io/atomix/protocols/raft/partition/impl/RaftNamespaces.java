@@ -15,7 +15,7 @@
  */
 package io.atomix.protocols.raft.partition.impl;
 
-import io.atomix.cluster.NodeId;
+import io.atomix.cluster.MemberId;
 import io.atomix.primitive.event.PrimitiveEvent;
 import io.atomix.primitive.event.impl.DefaultEventType;
 import io.atomix.primitive.operation.OperationType;
@@ -69,8 +69,8 @@ import io.atomix.protocols.raft.storage.log.entry.MetadataEntry;
 import io.atomix.protocols.raft.storage.log.entry.OpenSessionEntry;
 import io.atomix.protocols.raft.storage.log.entry.QueryEntry;
 import io.atomix.protocols.raft.storage.system.Configuration;
-import io.atomix.utils.serializer.KryoNamespace;
-import io.atomix.utils.serializer.KryoNamespaces;
+import io.atomix.utils.serializer.Namespace;
+import io.atomix.utils.serializer.Namespaces;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -86,9 +86,9 @@ public final class RaftNamespaces {
   /**
    * Raft protocol namespace.
    */
-  public static final KryoNamespace RAFT_PROTOCOL = KryoNamespace.builder()
-      .register(KryoNamespaces.BASIC)
-      .nextId(KryoNamespaces.BEGIN_USER_CUSTOM_ID)
+  public static final Namespace RAFT_PROTOCOL = Namespace.builder()
+      .register(Namespaces.BASIC)
+      .nextId(Namespaces.BEGIN_USER_CUSTOM_ID)
       .register(OpenSessionRequest.class)
       .register(OpenSessionResponse.class)
       .register(CloseSessionRequest.class)
@@ -145,7 +145,8 @@ public final class RaftNamespaces {
       .register(Collections.emptyList().getClass())
       .register(HashSet.class)
       .register(DefaultRaftMember.class)
-      .register(NodeId.class)
+      .register(MemberId.class)
+      .register(MemberId.Type.class)
       .register(SessionId.class)
       .register(RaftMember.Type.class)
       .register(Instant.class)
@@ -155,9 +156,9 @@ public final class RaftNamespaces {
   /**
    * Raft storage namespace.
    */
-  public static final KryoNamespace RAFT_STORAGE = KryoNamespace.builder()
-      .register(KryoNamespaces.BASIC)
-      .nextId(KryoNamespaces.BEGIN_USER_CUSTOM_ID + 100)
+  public static final Namespace RAFT_STORAGE = Namespace.builder()
+      .register(Namespaces.BASIC)
+      .nextId(Namespaces.BEGIN_USER_CUSTOM_ID + 100)
       .register(CloseSessionEntry.class)
       .register(CommandEntry.class)
       .register(ConfigurationEntry.class)
@@ -173,7 +174,8 @@ public final class RaftNamespaces {
       .register(ArrayList.class)
       .register(HashSet.class)
       .register(DefaultRaftMember.class)
-      .register(NodeId.class)
+      .register(MemberId.class)
+      .register(MemberId.Type.class)
       .register(RaftMember.Type.class)
       .register(Instant.class)
       .register(Configuration.class)

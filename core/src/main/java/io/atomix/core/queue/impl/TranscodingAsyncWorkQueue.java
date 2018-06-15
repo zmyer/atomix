@@ -15,6 +15,13 @@
  */
 package io.atomix.core.queue.impl;
 
+import io.atomix.core.queue.AsyncWorkQueue;
+import io.atomix.core.queue.Task;
+import io.atomix.core.queue.WorkQueue;
+import io.atomix.core.queue.WorkQueueStats;
+import io.atomix.primitive.PrimitiveType;
+import io.atomix.primitive.protocol.PrimitiveProtocol;
+
 import java.time.Duration;
 import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
@@ -22,11 +29,6 @@ import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-
-import io.atomix.core.queue.AsyncWorkQueue;
-import io.atomix.core.queue.Task;
-import io.atomix.core.queue.WorkQueue;
-import io.atomix.core.queue.WorkQueueStats;
 
 import static com.google.common.base.MoreObjects.toStringHelper;
 
@@ -48,6 +50,16 @@ public class TranscodingAsyncWorkQueue<V1, V2> implements AsyncWorkQueue<V1> {
   @Override
   public String name() {
     return backingQueue.name();
+  }
+
+  @Override
+  public PrimitiveType type() {
+    return backingQueue.type();
+  }
+
+  @Override
+  public PrimitiveProtocol protocol() {
+    return backingQueue.protocol();
   }
 
   @Override
@@ -83,8 +95,8 @@ public class TranscodingAsyncWorkQueue<V1, V2> implements AsyncWorkQueue<V1> {
   }
 
   @Override
-  public CompletableFuture<Void> destroy() {
-    return backingQueue.destroy();
+  public CompletableFuture<Void> delete() {
+    return backingQueue.delete();
   }
 
   @Override

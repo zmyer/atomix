@@ -16,7 +16,9 @@
 package io.atomix.primitive.partition;
 
 import com.google.common.hash.Hashing;
-import io.atomix.primitive.PrimitiveProtocol;
+import io.atomix.primitive.protocol.PrimitiveProtocol;
+import io.atomix.utils.NamedType;
+import io.atomix.utils.config.Configured;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
@@ -25,7 +27,28 @@ import java.util.List;
 /**
  * Primitive partition group.
  */
-public interface PartitionGroup {
+public interface PartitionGroup extends Configured<PartitionGroupConfig> {
+
+  /**
+   * Partition group type.
+   */
+  interface Type<C extends PartitionGroupConfig<C>> extends NamedType {
+
+    /**
+     * Returns a new partition group configuration.
+     *
+     * @return a new partition group configuration
+     */
+    C newConfig();
+
+    /**
+     * Creates a new partition group instance.
+     *
+     * @param config the partition group configuration
+     * @return the partition group
+     */
+    ManagedPartitionGroup newPartitionGroup(C config);
+  }
 
   /**
    * Returns the partition group name.
@@ -35,11 +58,25 @@ public interface PartitionGroup {
   String name();
 
   /**
+   * Returns the partition group type.
+   *
+   * @return the partition group type
+   */
+  Type type();
+
+  /**
    * Returns the primitive protocol type supported by the partition group.
    *
    * @return the primitive protocol type supported by the partition group
    */
-  PrimitiveProtocol.Type type();
+  PrimitiveProtocol.Type protocol();
+
+  /**
+   * Returns a new primitive protocol.
+   *
+   * @return a new primitive protocol
+   */
+  PrimitiveProtocol newProtocol();
 
   /**
    * Returns a partition by ID.
@@ -78,11 +115,11 @@ public interface PartitionGroup {
   /**
    * Partition group builder.
    */
-  abstract class Builder implements io.atomix.utils.Builder<ManagedPartitionGroup> {
-    protected final String name;
+  abstract class Builder<C extends PartitionGroupConfig<C>> implements io.atomix.utils.Builder<ManagedPartitionGroup> {
+    protected final C config;
 
-    protected Builder(String name) {
-      this.name = name;
+    protected Builder(C config) {
+      this.config = config;
     }
   }
 }

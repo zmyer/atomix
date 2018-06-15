@@ -15,18 +15,8 @@
  */
 package io.atomix.core.map;
 
-import io.atomix.core.PrimitiveTypes;
-import io.atomix.primitive.Consistency;
 import io.atomix.primitive.DistributedPrimitiveBuilder;
-import io.atomix.primitive.Persistence;
-import io.atomix.primitive.PrimitiveProtocol;
-import io.atomix.primitive.Replication;
-import io.atomix.protocols.backup.MultiPrimaryProtocol;
-import io.atomix.protocols.raft.RaftProtocol;
-import io.atomix.protocols.raft.ReadConsistency;
-import io.atomix.protocols.raft.proxy.CommunicationStrategy;
-
-import java.time.Duration;
+import io.atomix.primitive.PrimitiveManagementService;
 
 /**
  * Builder for {@link ConsistentMap} instances.
@@ -35,27 +25,10 @@ import java.time.Duration;
  * @param <V> type for map value
  */
 public abstract class ConsistentMapBuilder<K, V>
-    extends DistributedPrimitiveBuilder<ConsistentMapBuilder<K, V>, ConsistentMap<K, V>> {
+    extends DistributedPrimitiveBuilder<ConsistentMapBuilder<K, V>, ConsistentMapConfig, ConsistentMap<K, V>> {
 
-  private boolean nullValues = false;
-
-  public ConsistentMapBuilder(String name) {
-    super(PrimitiveTypes.map(), name);
-  }
-
-  @Override
-  protected Consistency defaultConsistency() {
-    return Consistency.SEQUENTIAL;
-  }
-
-  @Override
-  protected Persistence defaultPersistence() {
-    return Persistence.EPHEMERAL;
-  }
-
-  @Override
-  protected Replication defaultReplication() {
-    return Replication.SYNCHRONOUS;
+  public ConsistentMapBuilder(String name, ConsistentMapConfig config, PrimitiveManagementService managementService) {
+    super(ConsistentMapType.instance(), name, config, managementService);
   }
 
   /**
@@ -64,73 +37,18 @@ public abstract class ConsistentMapBuilder<K, V>
    * @return this builder
    */
   public ConsistentMapBuilder<K, V> withNullValues() {
-    nullValues = true;
+    config.setNullValues();
     return this;
   }
 
   /**
-   * Returns whether null values are supported by the map.
+   * Sets whether null values are allowed.
    *
-   * @return {@code true} if null values are supported; {@code false} otherwise
+   * @param nullValues whether null values are allowed
+   * @return this builder
    */
-  public boolean nullValues() {
-    return nullValues;
-  }
-
-  @Override
-  public PrimitiveProtocol protocol() {
-    PrimitiveProtocol protocol = super.protocol();
-    if (protocol != null) {
-      return protocol;
-    }
-
-    switch (consistency()) {
-      case LINEARIZABLE:
-        switch (persistence()) {
-          case PERSISTENT:
-            return newRaftProtocol(Consistency.LINEARIZABLE);
-          case EPHEMERAL:
-            return newMultiPrimaryProtocol(Consistency.LINEARIZABLE, replication());
-        }
-      case SEQUENTIAL:
-      case EVENTUAL:
-        switch (persistence()) {
-          case PERSISTENT:
-            return newRaftProtocol(Consistency.SEQUENTIAL);
-          case EPHEMERAL:
-            return newMultiPrimaryProtocol(Consistency.SEQUENTIAL, replication());
-          default:
-            throw new AssertionError();
-        }
-      default:
-        throw new AssertionError();
-    }
-  }
-
-  private PrimitiveProtocol newRaftProtocol(Consistency readConsistency) {
-    return RaftProtocol.builder()
-        .withMinTimeout(Duration.ofSeconds(5))
-        .withMaxTimeout(Duration.ofSeconds(30))
-        .withReadConsistency(readConsistency == Consistency.LINEARIZABLE
-            ? ReadConsistency.LINEARIZABLE_LEASE
-            : ReadConsistency.SEQUENTIAL)
-        .withCommunicationStrategy(readConsistency == Consistency.SEQUENTIAL
-            ? CommunicationStrategy.FOLLOWERS
-            : CommunicationStrategy.LEADER)
-        .withRecoveryStrategy(recovery())
-        .withMaxRetries(maxRetries())
-        .withRetryDelay(retryDelay())
-        .build();
-  }
-
-  private PrimitiveProtocol newMultiPrimaryProtocol(Consistency consistency, Replication replication) {
-    return MultiPrimaryProtocol.builder()
-        .withConsistency(consistency)
-        .withReplication(replication)
-        .withRecovery(recovery())
-        .withBackups(backups())
-        .withMaxRetries(maxRetries())
-        .withRetryDelay(retryDelay())
-        .build();
+  public ConsistentMapBuilder<K, V> withNullValues(boolean nullValues) {
+    config.setNullValues(nullValues);
+    return this;
   }
 }

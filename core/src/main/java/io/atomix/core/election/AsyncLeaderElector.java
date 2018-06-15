@@ -15,10 +15,8 @@
  */
 package io.atomix.core.election;
 
-import io.atomix.core.PrimitiveTypes;
 import io.atomix.primitive.AsyncPrimitive;
 import io.atomix.primitive.DistributedPrimitive;
-import io.atomix.primitive.PrimitiveType;
 
 import java.time.Duration;
 import java.util.Map;
@@ -35,11 +33,6 @@ import java.util.concurrent.CompletableFuture;
  * will be automatically granted access to the resource.
  */
 public interface AsyncLeaderElector<T> extends AsyncPrimitive {
-
-  @Override
-  default PrimitiveType primitiveType() {
-    return PrimitiveTypes.leaderElector();
-  }
 
   /**
    * Attempts to become leader for a topic.
@@ -124,6 +117,26 @@ public interface AsyncLeaderElector<T> extends AsyncPrimitive {
    * @return CompletableFuture that is completed when the operation completes
    */
   CompletableFuture<Void> removeListener(LeadershipEventListener<T> listener);
+
+  /**
+   * Registers a listener to be notified of Leadership changes for all topics.
+   *
+   * @param topic    leadership topic
+   * @param listener listener to notify
+   * @return CompletableFuture that is completed when the operation completes
+   */
+  CompletableFuture<Void> addListener(String topic, LeadershipEventListener<T> listener);
+
+  /**
+   * Unregisters a previously registered change notification listener.
+   * <p>
+   * If the specified listener was not previously registered, this operation will be a noop.
+   *
+   * @param topic    leadership topic
+   * @param listener listener to remove
+   * @return CompletableFuture that is completed when the operation completes
+   */
+  CompletableFuture<Void> removeListener(String topic, LeadershipEventListener<T> listener);
 
   @Override
   default LeaderElector<T> sync() {

@@ -15,10 +15,8 @@
  */
 package io.atomix.core.map;
 
-import io.atomix.core.PrimitiveTypes;
 import io.atomix.primitive.AsyncPrimitive;
 import io.atomix.primitive.DistributedPrimitive;
-import io.atomix.primitive.PrimitiveType;
 
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
@@ -27,11 +25,6 @@ import java.util.concurrent.CompletableFuture;
  * An async atomic counter map dispenses monotonically increasing values associated with key.
  */
 public interface AsyncAtomicCounterMap<K> extends AsyncPrimitive {
-
-  @Override
-  default PrimitiveType primitiveType() {
-    return PrimitiveTypes.counterMap();
-  }
 
   /**
    * Increments by one the value currently associated with key, and returns the new value.

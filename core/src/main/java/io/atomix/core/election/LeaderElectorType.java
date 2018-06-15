@@ -15,19 +15,22 @@
  */
 package io.atomix.core.election;
 
+import io.atomix.core.election.impl.DefaultLeaderElectorService;
 import io.atomix.core.election.impl.LeaderElectorProxyBuilder;
-import io.atomix.core.election.impl.LeaderElectorService;
 import io.atomix.primitive.PrimitiveManagementService;
 import io.atomix.primitive.PrimitiveType;
 import io.atomix.primitive.service.PrimitiveService;
+import io.atomix.primitive.service.ServiceConfig;
+import io.atomix.utils.serializer.Namespace;
 
 import static com.google.common.base.MoreObjects.toStringHelper;
 
 /**
  * Leader elector primitive type.
  */
-public class LeaderElectorType<T> implements PrimitiveType<LeaderElectorBuilder<T>, LeaderElector<T>> {
-  private static final String NAME = "LEADER_ELECTOR";
+public class LeaderElectorType<T> implements PrimitiveType<LeaderElectorBuilder<T>, LeaderElectorConfig, LeaderElector<T>> {
+  private static final String NAME = "leader-elector";
+  private static final LeaderElectorType INSTANCE = new LeaderElectorType();
 
   /**
    * Returns a new leader elector type.
@@ -35,32 +38,44 @@ public class LeaderElectorType<T> implements PrimitiveType<LeaderElectorBuilder<
    * @param <T> the election candidate type
    * @return a new leader elector type
    */
+  @SuppressWarnings("unchecked")
   public static <T> LeaderElectorType<T> instance() {
-    return new LeaderElectorType<>();
-  }
-
-  private LeaderElectorType() {
+    return INSTANCE;
   }
 
   @Override
-  public String id() {
+  public String name() {
     return NAME;
   }
 
   @Override
-  public PrimitiveService newService() {
-    return new LeaderElectorService();
+  public Namespace namespace() {
+    return Namespace.builder()
+        .register(PrimitiveType.super.namespace())
+        .register(Leadership.class)
+        .register(Leader.class)
+        .build();
   }
 
   @Override
-  public LeaderElectorBuilder<T> newPrimitiveBuilder(String name, PrimitiveManagementService managementService) {
-    return new LeaderElectorProxyBuilder<>(name, managementService);
+  public PrimitiveService newService(ServiceConfig config) {
+    return new DefaultLeaderElectorService();
+  }
+
+  @Override
+  public LeaderElectorConfig newConfig() {
+    return new LeaderElectorConfig();
+  }
+
+  @Override
+  public LeaderElectorBuilder<T> newBuilder(String name, LeaderElectorConfig config, PrimitiveManagementService managementService) {
+    return new LeaderElectorProxyBuilder<>(name, config, managementService);
   }
 
   @Override
   public String toString() {
     return toStringHelper(this)
-        .add("id", id())
+        .add("name", name())
         .toString();
   }
 }

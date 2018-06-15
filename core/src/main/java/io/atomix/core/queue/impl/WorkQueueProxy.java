@@ -16,21 +16,16 @@
 package io.atomix.core.queue.impl;
 
 import com.google.common.collect.ImmutableList;
-
 import io.atomix.core.queue.AsyncWorkQueue;
 import io.atomix.core.queue.Task;
 import io.atomix.core.queue.WorkQueue;
 import io.atomix.core.queue.WorkQueueStats;
-import io.atomix.core.queue.impl.WorkQueueOperations.Add;
-import io.atomix.core.queue.impl.WorkQueueOperations.Complete;
-import io.atomix.core.queue.impl.WorkQueueOperations.Take;
-import io.atomix.primitive.impl.AbstractAsyncPrimitive;
-import io.atomix.primitive.proxy.PrimitiveProxy;
-import io.atomix.utils.AbstractAccumulator;
-import io.atomix.utils.Accumulator;
-import io.atomix.utils.serializer.KryoNamespace;
-import io.atomix.utils.serializer.KryoNamespaces;
-import io.atomix.utils.serializer.Serializer;
+import io.atomix.primitive.AbstractAsyncPrimitive;
+import io.atomix.primitive.PrimitiveRegistry;
+import io.atomix.primitive.PrimitiveState;
+import io.atomix.primitive.proxy.ProxyClient;
+import io.atomix.utils.concurrent.AbstractAccumulator;
+import io.atomix.utils.concurrent.Accumulator;
 import org.slf4j.Logger;
 
 import java.time.Duration;
@@ -45,14 +40,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
-import static io.atomix.core.queue.impl.WorkQueueEvents.TASK_AVAILABLE;
-import static io.atomix.core.queue.impl.WorkQueueOperations.ADD;
-import static io.atomix.core.queue.impl.WorkQueueOperations.CLEAR;
-import static io.atomix.core.queue.impl.WorkQueueOperations.COMPLETE;
-import static io.atomix.core.queue.impl.WorkQueueOperations.REGISTER;
-import static io.atomix.core.queue.impl.WorkQueueOperations.STATS;
-import static io.atomix.core.queue.impl.WorkQueueOperations.TAKE;
-import static io.atomix.core.queue.impl.WorkQueueOperations.UNREGISTER;
 import static io.atomix.utils.concurrent.Threads.namedThreads;
 import static java.util.concurrent.Executors.newSingleThreadExecutor;
 import static org.slf4j.LoggerFactory.getLogger;
@@ -60,12 +47,9 @@ import static org.slf4j.LoggerFactory.getLogger;
 /**
  * Distributed resource providing the {@link WorkQueue} primitive.
  */
-public class WorkQueueProxy extends AbstractAsyncPrimitive implements AsyncWorkQueue<byte[]> {
-  private static final Serializer SERIALIZER = Serializer.using(KryoNamespace.builder()
-      .register(KryoNamespaces.BASIC)
-      .register(WorkQueueOperations.NAMESPACE)
-      .register(WorkQueueEvents.NAMESPACE)
-      .build());
+public class WorkQueueProxy
+    extends AbstractAsyncPrimitive<AsyncWorkQueue<byte[]>, WorkQueueService>
+    implements AsyncWorkQueue<byte[]>, WorkQueueClient {
 
   private final Logger log = getLogger(getClass());
   private final ExecutorService executor;
@@ -73,22 +57,21 @@ public class WorkQueueProxy extends AbstractAsyncPrimitive implements AsyncWorkQ
   private final Timer timer = new Timer("atomix-work-queue-completer");
   private final AtomicBoolean isRegistered = new AtomicBoolean(false);
 
-  public WorkQueueProxy(PrimitiveProxy proxy) {
-    super(proxy);
+  public WorkQueueProxy(ProxyClient<WorkQueueService> proxy, PrimitiveRegistry registry) {
+    super(proxy, registry);
     executor = newSingleThreadExecutor(namedThreads("atomix-work-queue-" + proxy.name() + "-%d", log));
-    proxy.addStateChangeListener(state -> {
-      if (state == PrimitiveProxy.State.CONNECTED && isRegistered.get()) {
-        proxy.invoke(REGISTER);
-      }
-    });
-    proxy.addEventListener(TASK_AVAILABLE, this::resumeWork);
   }
 
   @Override
-  public CompletableFuture<Void> destroy() {
+  public void taskAvailable() {
+    resumeWork();
+  }
+
+  @Override
+  public CompletableFuture<Void> delete() {
     executor.shutdown();
     timer.cancel();
-    return proxy.invoke(CLEAR);
+    return getProxyClient().acceptBy(name(), service -> service.clear());
   }
 
   @Override
@@ -96,7 +79,7 @@ public class WorkQueueProxy extends AbstractAsyncPrimitive implements AsyncWorkQ
     if (items.isEmpty()) {
       return CompletableFuture.completedFuture(null);
     }
-    return proxy.invoke(ADD, SERIALIZER::encode, new Add(items));
+    return getProxyClient().acceptBy(name(), service -> service.add(items));
   }
 
   @Override
@@ -104,7 +87,7 @@ public class WorkQueueProxy extends AbstractAsyncPrimitive implements AsyncWorkQ
     if (maxTasks <= 0) {
       return CompletableFuture.completedFuture(ImmutableList.of());
     }
-    return proxy.invoke(TAKE, SERIALIZER::encode, new Take(maxTasks), SERIALIZER::decode);
+    return getProxyClient().applyBy(name(), service -> service.take(maxTasks));
   }
 
   @Override
@@ -112,7 +95,7 @@ public class WorkQueueProxy extends AbstractAsyncPrimitive implements AsyncWorkQ
     if (taskIds.isEmpty()) {
       return CompletableFuture.completedFuture(null);
     }
-    return proxy.invoke(COMPLETE, SERIALIZER::encode, new Complete(taskIds));
+    return getProxyClient().acceptBy(name(), service -> service.complete(taskIds));
   }
 
   @Override
@@ -136,7 +119,7 @@ public class WorkQueueProxy extends AbstractAsyncPrimitive implements AsyncWorkQ
 
   @Override
   public CompletableFuture<WorkQueueStats> stats() {
-    return proxy.invoke(STATS, SERIALIZER::decode);
+    return getProxyClient().applyBy(name(), service -> service.stats());
   }
 
   private void resumeWork() {
@@ -149,11 +132,22 @@ public class WorkQueueProxy extends AbstractAsyncPrimitive implements AsyncWorkQ
   }
 
   private CompletableFuture<Void> register() {
-    return proxy.invoke(REGISTER).thenRun(() -> isRegistered.set(true));
+    return getProxyClient().acceptBy(name(), service -> service.register()).thenRun(() -> isRegistered.set(true));
   }
 
   private CompletableFuture<Void> unregister() {
-    return proxy.invoke(UNREGISTER).thenRun(() -> isRegistered.set(false));
+    return getProxyClient().acceptBy(name(), service -> service.unregister()).thenRun(() -> isRegistered.set(false));
+  }
+
+  @Override
+  public CompletableFuture<AsyncWorkQueue<byte[]>> connect() {
+    return super.connect()
+        .thenRun(() -> getProxyClient().getPartition(name()).addStateChangeListener(state -> {
+          if (state == PrimitiveState.CONNECTED && isRegistered.get()) {
+            getProxyClient().acceptBy(name(), service -> service.register());
+          }
+        }))
+        .thenApply(v -> this);
   }
 
   @Override

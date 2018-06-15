@@ -15,8 +15,6 @@
  */
 package io.atomix.core.election;
 
-import io.atomix.core.PrimitiveTypes;
-import io.atomix.primitive.PrimitiveType;
 import io.atomix.primitive.SyncPrimitive;
 
 import java.util.Map;
@@ -26,11 +24,6 @@ import java.util.Map;
  * the only difference that all its methods block until the corresponding operation completes.
  */
 public interface LeaderElector<T> extends SyncPrimitive {
-
-  @Override
-  default PrimitiveType primitiveType() {
-    return PrimitiveTypes.leaderElector();
-  }
 
   /**
    * Attempts to become leader for a topic.
@@ -110,6 +103,24 @@ public interface LeaderElector<T> extends SyncPrimitive {
    * @param listener listener to remove
    */
   void removeListener(LeadershipEventListener<T> listener);
+
+  /**
+   * Registers a listener to be notified of Leadership changes for all topics.
+   *
+   * @param topic    leadership topic
+   * @param listener listener to notify
+   */
+  void addListener(String topic, LeadershipEventListener<T> listener);
+
+  /**
+   * Unregisters a previously registered change notification listener.
+   * <p>
+   * If the specified listener was not previously registered, this operation will be a noop.
+   *
+   * @param topic    leadership topic
+   * @param listener listener to remove
+   */
+  void removeListener(String topic, LeadershipEventListener<T> listener);
 
   @Override
   AsyncLeaderElector<T> async();

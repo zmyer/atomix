@@ -16,9 +16,7 @@
 
 package io.atomix.core.map;
 
-import io.atomix.core.PrimitiveTypes;
 import io.atomix.primitive.DistributedPrimitive;
-import io.atomix.primitive.PrimitiveType;
 import io.atomix.utils.time.Versioned;
 
 import java.time.Duration;
@@ -31,11 +29,6 @@ import java.util.concurrent.CompletableFuture;
  * API for a distributed tree map implementation.
  */
 public interface AsyncConsistentTreeMap<V> extends AsyncConsistentMap<String, V> {
-
-  @Override
-  default PrimitiveType primitiveType() {
-    return PrimitiveTypes.treeMap();
-  }
 
   /**
    * Return the lowest key in the map.
@@ -98,20 +91,6 @@ public interface AsyncConsistentTreeMap<V> extends AsyncConsistentMap<String, V>
    * @return the entry or null if none exist
    */
   CompletableFuture<Map.Entry<String, Versioned<V>>> lastEntry();
-
-  /**
-   * Return and remove the entry associated with the lowest key.
-   *
-   * @return the entry or null if none exist
-   */
-  CompletableFuture<Map.Entry<String, Versioned<V>>> pollFirstEntry();
-
-  /**
-   * Return and remove the entry associated with the highest key.
-   *
-   * @return the entry or null if none exist
-   */
-  CompletableFuture<Map.Entry<String, Versioned<V>>> pollLastEntry();
 
   /**
    * Return the entry associated with the greatest key less than key.

@@ -25,6 +25,7 @@ import io.atomix.primitive.service.ServiceExecutor;
 import io.atomix.utils.concurrent.Scheduled;
 import io.atomix.utils.logging.ContextualLoggerFactory;
 import io.atomix.utils.logging.LoggerContext;
+import io.atomix.utils.serializer.Serializer;
 import io.atomix.utils.time.WallClockTimestamp;
 import org.slf4j.Logger;
 
@@ -36,7 +37,9 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
@@ -46,6 +49,8 @@ import static com.google.common.base.Preconditions.checkState;
  * Default operation executor.
  */
 public class DefaultServiceExecutor implements ServiceExecutor {
+  private final Serializer serializer;
+  private final ServiceContext context;
   private final Logger log;
   private final Queue<Runnable> tasks = new LinkedList<>();
   private final List<ScheduledTask> scheduledTasks = new ArrayList<>();
@@ -54,7 +59,9 @@ public class DefaultServiceExecutor implements ServiceExecutor {
   private OperationType operationType;
   private long timestamp;
 
-  public DefaultServiceExecutor(ServiceContext context) {
+  public DefaultServiceExecutor(ServiceContext context, Serializer serializer) {
+    this.serializer = checkNotNull(serializer);
+    this.context = checkNotNull(context);
     this.log = ContextualLoggerFactory.getLogger(getClass(), LoggerContext.builder(PrimitiveService.class)
         .addValue(context.serviceId())
         .add("type", context.serviceType())
@@ -62,9 +69,32 @@ public class DefaultServiceExecutor implements ServiceExecutor {
         .build());
   }
 
+  /**
+   * Encodes the given object using the configured {@link #serializer}.
+   *
+   * @param object the object to encode
+   * @param <T>    the object type
+   * @return the encoded bytes
+   */
+  protected <T> byte[] encode(T object) {
+    return object != null ? serializer.encode(object) : null;
+  }
+
+  /**
+   * Decodes the given object using the configured {@link #serializer}.
+   *
+   * @param bytes the bytes to decode
+   * @param <T>   the object type
+   * @return the decoded object
+   */
+  protected <T> T decode(byte[] bytes) {
+    return bytes != null ? serializer.decode(bytes) : null;
+  }
+
   @Override
   public void tick(WallClockTimestamp timestamp) {
     long unixTimestamp = timestamp.unixTimestamp();
+    this.operationType = OperationType.COMMAND;
     if (!scheduledTasks.isEmpty()) {
       // Iterate through scheduled tasks until we reach a task that has not met its scheduled time.
       // The tasks list is sorted by time on insertion.
@@ -107,6 +137,30 @@ public class DefaultServiceExecutor implements ServiceExecutor {
     checkNotNull(callback, "callback cannot be null");
     operations.put(operationId.id(), callback);
     log.debug("Registered operation callback {}", operationId);
+  }
+
+  @Override
+  public <R> void register(OperationId operationId, Supplier<R> callback) {
+    checkNotNull(operationId, "operationId cannot be null");
+    checkNotNull(callback, "callback cannot be null");
+    handle(operationId, commit -> encode(callback.get()));
+  }
+
+  @Override
+  public <T> void register(OperationId operationId, Consumer<Commit<T>> callback) {
+    checkNotNull(operationId, "operationId cannot be null");
+    checkNotNull(callback, "callback cannot be null");
+    handle(operationId, commit -> {
+      callback.accept(commit.map(this::decode));
+      return null;
+    });
+  }
+
+  @Override
+  public <T, R> void register(OperationId operationId, Function<Commit<T>, R> callback) {
+    checkNotNull(operationId, "operationId cannot be null");
+    checkNotNull(callback, "callback cannot be null");
+    handle(operationId, commit -> encode(callback.apply(commit.map(this::decode))));
   }
 
   @Override
@@ -249,7 +303,11 @@ public class DefaultServiceExecutor implements ServiceExecutor {
      * Executes the task.
      */
     private synchronized void execute() {
-      callback.run();
+      try {
+        callback.run();
+      } catch (Exception e) {
+        log.error("An exception occurred in a scheduled task", e);
+      }
     }
 
     @Override

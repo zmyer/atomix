@@ -15,14 +15,22 @@
  */
 package io.atomix.primitive;
 
+import com.google.common.base.Joiner;
+import io.atomix.primitive.config.PrimitiveConfig;
+import io.atomix.primitive.partition.PartitionGroup;
+import io.atomix.primitive.protocol.PrimitiveProtocol;
+import io.atomix.primitive.protocol.PrimitiveProtocolConfig;
 import io.atomix.utils.Builder;
-import io.atomix.utils.serializer.KryoNamespaces;
+import io.atomix.utils.config.ConfigurationException;
+import io.atomix.utils.serializer.Namespace;
+import io.atomix.utils.serializer.Namespaces;
 import io.atomix.utils.serializer.Serializer;
+import io.atomix.utils.serializer.NamespaceConfig;
 
-import java.time.Duration;
+import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
-import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
@@ -31,24 +39,19 @@ import static com.google.common.base.Preconditions.checkNotNull;
  * @param <B> builder type
  * @param <P> primitive type
  */
-public abstract class DistributedPrimitiveBuilder<B extends DistributedPrimitiveBuilder<B, P>, P extends DistributedPrimitive> implements Builder<P> {
-  private final PrimitiveType type;
-  private final String name;
-  private Serializer serializer;
-  private boolean readOnly = false;
-  private boolean relaxedReadConsistency = false;
-  private PrimitiveProtocol protocol;
-  private Persistence persistence = defaultPersistence();
-  private Consistency consistency = defaultConsistency();
-  private Replication replication = defaultReplication();
-  private Recovery recovery = defaultRecovery();
-  private int numBackups = 2;
-  private int maxRetries;
-  private Duration retryDelay = Duration.ofMillis(100);
+public abstract class DistributedPrimitiveBuilder<B extends DistributedPrimitiveBuilder<B, C, P>, C extends PrimitiveConfig, P extends DistributedPrimitive> implements Builder<P> {
+  protected final PrimitiveType type;
+  protected final String name;
+  protected final C config;
+  protected Serializer serializer;
+  protected PrimitiveProtocol protocol;
+  protected final PrimitiveManagementService managementService;
 
-  public DistributedPrimitiveBuilder(PrimitiveType type, String name) {
+  public DistributedPrimitiveBuilder(PrimitiveType type, String name, C config, PrimitiveManagementService managementService) {
     this.type = checkNotNull(type, "type cannot be null");
     this.name = checkNotNull(name, "name cannot be null");
+    this.config = checkNotNull(config, "config cannot be null");
+    this.managementService = checkNotNull(managementService, "managementService cannot be null");
   }
 
   /**
@@ -64,28 +67,6 @@ public abstract class DistributedPrimitiveBuilder<B extends DistributedPrimitive
   }
 
   /**
-   * Disables state changing operations on the returned distributed primitive.
-   *
-   * @return this builder
-   */
-  @SuppressWarnings("unchecked")
-  public B withUpdatesDisabled() {
-    this.readOnly = true;
-    return (B) this;
-  }
-
-  /**
-   * Turns on relaxed consistency for read operations.
-   *
-   * @return this builder
-   */
-  @SuppressWarnings("unchecked")
-  public B withRelaxedReadConsistency() {
-    this.relaxedReadConsistency = true;
-    return (B) this;
-  }
-
-  /**
    * Sets the primitive protocol.
    *
    * @param protocol the primitive protocol
@@ -93,129 +74,66 @@ public abstract class DistributedPrimitiveBuilder<B extends DistributedPrimitive
    */
   @SuppressWarnings("unchecked")
   public B withProtocol(PrimitiveProtocol protocol) {
-    this.protocol = checkNotNull(protocol, "protocol cannot be null");
+    this.protocol = protocol;
     return (B) this;
   }
 
   /**
-   * Sets the primitive consistency model.
+   * Enables caching for the primitive.
    *
-   * @param consistency the primitive consistency model
    * @return the primitive builder
-   * @throws NullPointerException if the consistency model is null
    */
   @SuppressWarnings("unchecked")
-  public B withConsistency(Consistency consistency) {
-    this.consistency = checkNotNull(consistency, "consistency cannot be null");
+  public B withCacheEnabled() {
+    config.setCacheEnabled();
     return (B) this;
   }
 
   /**
-   * Sets the primitive persistence level.
+   * Sets whether caching is enabled.
    *
-   * @param persistence the primitive persistence level
+   * @param cacheEnabled whether caching is enabled
    * @return the primitive builder
-   * @throws NullPointerException if the persistence level is null
    */
   @SuppressWarnings("unchecked")
-  public B withPersistence(Persistence persistence) {
-    this.persistence = checkNotNull(persistence, "persistence cannot be null");
+  public B withCacheEnabled(boolean cacheEnabled) {
+    config.setCacheEnabled(cacheEnabled);
     return (B) this;
   }
 
   /**
-   * Sets the primitive replication strategy.
+   * Sets the cache size.
    *
-   * @param replication the primitive replication strategy
+   * @param cacheSize the cache size
    * @return the primitive builder
-   * @throws NullPointerException if the replication strategy is null
    */
   @SuppressWarnings("unchecked")
-  public B withReplication(Replication replication) {
-    this.replication = checkNotNull(replication, "replication cannot be null");
+  public B withCacheSize(int cacheSize) {
+    config.setCacheSize(cacheSize);
     return (B) this;
   }
 
   /**
-   * Sets the primitive recovery strategy.
+   * Sets the primitive to read-only.
    *
-   * @param recovery the primitive recovery strategy
    * @return the primitive builder
-   * @throws NullPointerException if the recovery strategy is null
    */
   @SuppressWarnings("unchecked")
-  public B withRecovery(Recovery recovery) {
-    this.recovery = checkNotNull(recovery, "recovery cannot be null");
+  public B withReadOnly() {
+    config.setReadOnly();
     return (B) this;
   }
 
   /**
-   * Sets the number of backups.
+   * Sets whether the primitive is read-only.
    *
-   * @param numBackups the number of backups
+   * @param readOnly whether the primitive is read-only
    * @return the primitive builder
-   * @throws IllegalArgumentException if the number of backups is not positive or {@code -1}
    */
   @SuppressWarnings("unchecked")
-  public B withBackups(int numBackups) {
-    checkArgument(numBackups >= 0, "numBackups must be positive");
-    this.numBackups = numBackups;
+  public B withReadOnly(boolean readOnly) {
+    config.setReadOnly(readOnly);
     return (B) this;
-  }
-
-  /**
-   * Sets the maximum number of operation retries.
-   *
-   * @param maxRetries the maximum number of allowed operation retries
-   * @return this builder
-   */
-  @SuppressWarnings("unchecked")
-  public B withMaxRetries(int maxRetries) {
-    checkArgument(maxRetries >= 0, "maxRetries must be positive");
-    this.maxRetries = maxRetries;
-    return (B) this;
-  }
-
-  /**
-   * Sets the retry delay.
-   *
-   * @param retryDelay the retry delay
-   * @return this builder
-   */
-  @SuppressWarnings("unchecked")
-  public B withRetryDelay(Duration retryDelay) {
-    this.retryDelay = checkNotNull(retryDelay, "retryDelay cannot be null");
-    return (B) this;
-  }
-
-  /**
-   * Returns if updates are disabled.
-   *
-   * @return {@code true} if yes; {@code false} otherwise
-   */
-  public boolean readOnly() {
-    return readOnly;
-  }
-
-  /**
-   * Returns if consistency is relaxed for read operations.
-   *
-   * @return {@code true} if yes; {@code false} otherwise
-   */
-  public boolean relaxedReadConsistency() {
-    return relaxedReadConsistency;
-  }
-
-  /**
-   * Returns the serializer.
-   *
-   * @return serializer
-   */
-  public Serializer serializer() {
-    if (serializer == null) {
-      serializer = Serializer.using(KryoNamespaces.BASIC);
-    }
-    return serializer;
   }
 
   /**
@@ -242,101 +160,46 @@ public abstract class DistributedPrimitiveBuilder<B extends DistributedPrimitive
    * @return the primitive protocol
    */
   public PrimitiveProtocol protocol() {
+    PrimitiveProtocol protocol = this.protocol;
+    if (protocol == null) {
+      PrimitiveProtocolConfig<?> protocolConfig = config.getProtocolConfig();
+      if (protocolConfig == null) {
+        Collection<PartitionGroup> partitionGroups = managementService.getPartitionService().getPartitionGroups();
+        if (partitionGroups.size() == 1) {
+          protocol = partitionGroups.iterator().next().newProtocol();
+        } else {
+          String groups = Joiner.on(", ").join(partitionGroups.stream()
+              .map(group -> group.name())
+              .collect(Collectors.toList()));
+          throw new ConfigurationException(String.format("Primitive protocol is ambiguous: %d partition groups found (%s)", partitionGroups.size(), groups));
+        }
+      } else {
+        protocol = protocolConfig.getType().newProtocol(protocolConfig);
+      }
+    }
     return protocol;
   }
 
   /**
-   * Returns the primitive consistency model.
+   * Returns the serializer.
    *
-   * @return the primitive consistency model
+   * @return serializer
    */
-  public Consistency consistency() {
-    return consistency;
+  public Serializer serializer() {
+    Serializer serializer = this.serializer;
+    if (serializer == null) {
+      NamespaceConfig config = this.config.getNamespaceConfig();
+      if (config == null) {
+        serializer = Serializer.using(Namespaces.BASIC);
+      } else {
+        serializer = Serializer.using(Namespace.builder()
+            .register(Namespaces.BASIC)
+            .register(new Namespace(config))
+            .build());
+      }
+    }
+    return serializer;
   }
-
-  /**
-   * Returns the default consistency model.
-   *
-   * @return the default consistency model
-   */
-  protected abstract Consistency defaultConsistency();
-
-  /**
-   * Returns the primitive persistence level.
-   *
-   * @return the primitive persistence level
-   */
-  public Persistence persistence() {
-    return persistence;
-  }
-
-  /**
-   * Returns the default persistence level.
-   *
-   * @return the default persistence level
-   */
-  protected abstract Persistence defaultPersistence();
-
-  /**
-   * Returns the replication strategy.
-   *
-   * @return the replication strategy
-   */
-  public Replication replication() {
-    return replication;
-  }
-
-  /**
-   * Returns the recovery strategy.
-   *
-   * @return the recovery strategy
-   */
-  public Recovery recovery() {
-    return recovery;
-  }
-
-  /**
-   * Returns the default recovery strategy.
-   *
-   * @return the default recovery strategy
-   */
-  protected Recovery defaultRecovery() {
-    return Recovery.RECOVER;
-  }
-
-  /**
-   * Returns the number of backups for the primitive.
-   *
-   * @return the number of backups for the primitive
-   */
-  public int backups() {
-    return numBackups;
-  }
-
-  /**
-   * Returns the maximum number of allowed retries.
-   *
-   * @return the maximum number of allowed retries
-   */
-  public int maxRetries() {
-    return maxRetries;
-  }
-
-  /**
-   * Returns the retry delay.
-   *
-   * @return the retry delay
-   */
-  public Duration retryDelay() {
-    return retryDelay;
-  }
-
-  /**
-   * Returns the default replication strategy.
-   *
-   * @return the default replication strategy
-   */
-  protected abstract Replication defaultReplication();
 
   /**
    * Constructs an instance of the distributed primitive.

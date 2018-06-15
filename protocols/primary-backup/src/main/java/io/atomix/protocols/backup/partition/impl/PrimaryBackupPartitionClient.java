@@ -15,32 +15,31 @@
  */
 package io.atomix.protocols.backup.partition.impl;
 
-import io.atomix.primitive.PrimitiveClient;
 import io.atomix.primitive.PrimitiveType;
+import io.atomix.primitive.partition.PartitionClient;
 import io.atomix.primitive.partition.PartitionManagementService;
-import io.atomix.primitive.proxy.PrimitiveProxy;
-import io.atomix.protocols.backup.MultiPrimaryProtocol;
+import io.atomix.primitive.service.ServiceConfig;
 import io.atomix.protocols.backup.PrimaryBackupClient;
 import io.atomix.protocols.backup.partition.PrimaryBackupPartition;
 import io.atomix.protocols.backup.serializer.impl.PrimaryBackupNamespaces;
+import io.atomix.protocols.backup.session.PrimaryBackupSessionClient;
 import io.atomix.utils.Managed;
 import io.atomix.utils.concurrent.ThreadContextFactory;
 import io.atomix.utils.serializer.Serializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
  * Primary-backup partition client.
  */
-public class PrimaryBackupPartitionClient implements PrimitiveClient<MultiPrimaryProtocol>, Managed<PrimaryBackupPartitionClient> {
+public class PrimaryBackupPartitionClient implements PartitionClient, Managed<PrimaryBackupPartitionClient> {
   private final Logger log = LoggerFactory.getLogger(getClass());
   private final PrimaryBackupPartition partition;
   private final PartitionManagementService managementService;
   private final ThreadContextFactory threadFactory;
-  private PrimaryBackupClient client;
+  private volatile PrimaryBackupClient client;
 
   public PrimaryBackupPartitionClient(
       PrimaryBackupPartition partition,
@@ -52,20 +51,15 @@ public class PrimaryBackupPartitionClient implements PrimitiveClient<MultiPrimar
   }
 
   @Override
-  public PrimitiveProxy newProxy(String primitiveName, PrimitiveType primitiveType, MultiPrimaryProtocol primitiveProtocol) {
-    return client.newProxy(primitiveName, primitiveType, primitiveProtocol);
-  }
-
-  @Override
-  public CompletableFuture<Set<String>> getPrimitives(PrimitiveType primitiveType) {
-    return client.getPrimitives(primitiveType);
+  public PrimaryBackupSessionClient.Builder sessionBuilder(String primitiveName, PrimitiveType primitiveType, ServiceConfig serviceConfig) {
+    return client.sessionBuilder(primitiveName, primitiveType, serviceConfig);
   }
 
   @Override
   public CompletableFuture<PrimaryBackupPartitionClient> start() {
     synchronized (PrimaryBackupPartitionClient.this) {
       client = newClient();
-      log.info("Successfully started client for {}", partition.id());
+      log.debug("Successfully started client for {}", partition.id());
     }
     return CompletableFuture.completedFuture(this);
   }
@@ -73,11 +67,12 @@ public class PrimaryBackupPartitionClient implements PrimitiveClient<MultiPrimar
   private PrimaryBackupClient newClient() {
     return PrimaryBackupClient.builder()
         .withClientName(partition.name())
-        .withClusterService(managementService.getClusterService())
+        .withPartitionId(partition.id())
+        .withMembershipService(managementService.getMembershipService())
         .withProtocol(new PrimaryBackupClientCommunicator(
             partition.name(),
             Serializer.using(PrimaryBackupNamespaces.PROTOCOL),
-            managementService.getCommunicationService()))
+            managementService.getMessagingService()))
         .withPrimaryElection(managementService.getElectionService().getElectionFor(partition.id()))
         .withSessionIdProvider(managementService.getSessionIdService())
         .withThreadContextFactory(threadFactory)

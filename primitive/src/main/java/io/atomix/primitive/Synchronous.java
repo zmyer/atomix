@@ -15,6 +15,7 @@
  */
 package io.atomix.primitive;
 
+import io.atomix.primitive.protocol.PrimitiveProtocol;
 import io.atomix.utils.AtomixRuntimeException;
 
 import java.util.concurrent.ExecutionException;
@@ -41,14 +42,19 @@ public abstract class Synchronous<T extends AsyncPrimitive> implements SyncPrimi
   }
 
   @Override
-  public PrimitiveType primitiveType() {
-    return primitive.primitiveType();
+  public PrimitiveType type() {
+    return primitive.type();
   }
 
   @Override
-  public void destroy() {
+  public PrimitiveProtocol protocol() {
+    return primitive.protocol();
+  }
+
+  @Override
+  public void delete() {
     try {
-      primitive.destroy().get(DEFAULT_OPERATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
+      primitive.delete().get(DEFAULT_OPERATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
     } catch (InterruptedException | ExecutionException | TimeoutException e) {
       throw new AtomixRuntimeException(e);
     }

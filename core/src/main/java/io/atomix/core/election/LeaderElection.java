@@ -15,8 +15,6 @@
  */
 package io.atomix.core.election;
 
-import io.atomix.core.PrimitiveTypes;
-import io.atomix.primitive.PrimitiveType;
 import io.atomix.primitive.SyncPrimitive;
 
 /**
@@ -25,18 +23,13 @@ import io.atomix.primitive.SyncPrimitive;
  */
 public interface LeaderElection<T> extends SyncPrimitive {
 
-  @Override
-  default PrimitiveType primitiveType() {
-    return PrimitiveTypes.leaderElection();
-  }
-
   /**
    * Attempts to become leader for a topic.
    *
    * @param identifier candidate identifier
    * @return current Leadership state of the topic
    */
-  Leadership run(T identifier);
+  Leadership<T> run(T identifier);
 
   /**
    * Withdraws from leadership race for a topic.
@@ -79,7 +72,7 @@ public interface LeaderElection<T> extends SyncPrimitive {
    *
    * @return current Leadership state of the topic
    */
-  Leadership getLeadership();
+  Leadership<T> getLeadership();
 
   /**
    * Registers a listener to be notified of Leadership changes for all topics.

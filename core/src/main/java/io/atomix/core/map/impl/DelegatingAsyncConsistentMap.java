@@ -17,13 +17,13 @@
 package io.atomix.core.map.impl;
 
 import com.google.common.base.MoreObjects;
-
 import io.atomix.core.map.AsyncConsistentMap;
 import io.atomix.core.map.ConsistentMap;
 import io.atomix.core.map.MapEventListener;
 import io.atomix.core.transaction.TransactionId;
 import io.atomix.core.transaction.TransactionLog;
-import io.atomix.primitive.impl.DelegatingDistributedPrimitive;
+import io.atomix.primitive.DelegatingAsyncPrimitive;
+import io.atomix.primitive.PrimitiveState;
 import io.atomix.utils.time.Versioned;
 
 import java.time.Duration;
@@ -45,7 +45,7 @@ import java.util.function.Predicate;
  * @param <V> value type
  */
 public class DelegatingAsyncConsistentMap<K, V>
-    extends DelegatingDistributedPrimitive implements AsyncConsistentMap<K, V> {
+    extends DelegatingAsyncPrimitive implements AsyncConsistentMap<K, V> {
 
   private final AsyncConsistentMap<K, V> delegateMap;
 
@@ -182,18 +182,13 @@ public class DelegatingAsyncConsistentMap<K, V>
   }
 
   @Override
-  public void addStatusChangeListener(Consumer<Status> listener) {
-    delegateMap.addStatusChangeListener(listener);
+  public void addStateChangeListener(Consumer<PrimitiveState> listener) {
+    delegateMap.addStateChangeListener(listener);
   }
 
   @Override
-  public void removeStatusChangeListener(Consumer<Status> listener) {
-    delegateMap.removeStatusChangeListener(listener);
-  }
-
-  @Override
-  public Collection<Consumer<Status>> statusChangeListeners() {
-    return delegateMap.statusChangeListeners();
+  public void removeStateChangeListener(Consumer<PrimitiveState> listener) {
+    delegateMap.removeStateChangeListener(listener);
   }
 
   @Override

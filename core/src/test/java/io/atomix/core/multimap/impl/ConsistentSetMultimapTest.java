@@ -20,16 +20,16 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multiset;
 import com.google.common.collect.TreeMultiset;
-
 import io.atomix.core.AbstractPrimitiveTest;
 import io.atomix.core.multimap.AsyncConsistentMultimap;
-
 import org.junit.Test;
 
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -39,7 +39,7 @@ import static org.junit.Assert.assertTrue;
 /**
  * Tests the {@link ConsistentSetMultimapProxy}.
  */
-public class ConsistentSetMultimapTest extends AbstractPrimitiveTest {
+public abstract class ConsistentSetMultimapTest extends AbstractPrimitiveTest {
   private final String one = "hello";
   private final String two = "goodbye";
   private final String three = "foo";
@@ -52,9 +52,9 @@ public class ConsistentSetMultimapTest extends AbstractPrimitiveTest {
    */
   @Test
   public void testSize() throws Throwable {
-    AsyncConsistentMultimap<String, String> map = createResource("testOneMap");
+    AsyncConsistentMultimap<String, String> map = createMultimap("testOneMap");
     //Simplest operation case
-    map.isEmpty().thenAccept(result -> assertTrue(result));
+    map.isEmpty().thenAccept(result -> assertTrue(result)).join();
     map.put(one, one).
         thenAccept(result -> assertTrue(result)).join();
     map.isEmpty().thenAccept(result -> assertFalse(result));
@@ -82,7 +82,7 @@ public class ConsistentSetMultimapTest extends AbstractPrimitiveTest {
         thenAccept(result -> assertTrue(result)).join();
     map.size().thenAccept(result -> assertEquals(3, (int) result))
         .join();
-    //Check behavior under remove of non-existant key
+    //Check behavior under remove of non-existent key
     map.remove(one, one).
         thenAccept(result -> assertFalse(result)).join();
     map.size().thenAccept(result -> assertEquals(3, (int) result))
@@ -93,7 +93,7 @@ public class ConsistentSetMultimapTest extends AbstractPrimitiveTest {
         .join();
     map.isEmpty().thenAccept(result -> assertTrue(result));
 
-    map.destroy().join();
+    map.delete().join();
   }
 
   /**
@@ -101,7 +101,7 @@ public class ConsistentSetMultimapTest extends AbstractPrimitiveTest {
    */
   @Test
   public void containsTest() throws Throwable {
-    AsyncConsistentMultimap<String, String> map = createResource("testTwoMap");
+    AsyncConsistentMultimap<String, String> map = createMultimap("testTwoMap");
 
     //Populate the maps
     all.forEach(key -> {
@@ -109,12 +109,6 @@ public class ConsistentSetMultimapTest extends AbstractPrimitiveTest {
           .thenAccept(result -> assertTrue(result)).join();
     });
     map.size().thenAccept(result -> assertEquals(16, (int) result)).join();
-
-    //Test key contains positive results
-    all.forEach(key -> {
-      map.containsKey(key)
-          .thenAccept(result -> assertTrue(result)).join();
-    });
 
     //Test value contains positive results
     all.forEach(value -> {
@@ -145,15 +139,17 @@ public class ConsistentSetMultimapTest extends AbstractPrimitiveTest {
 
     //Check that contains key works properly for removed keys
     map.containsKey(removedKey[0])
-        .thenAccept(result -> assertFalse(result));
+        .thenAccept(result -> assertFalse(result))
+        .join();
 
     //Check that contains value works correctly for removed values
     all.forEach(value -> {
       map.containsValue(value)
-          .thenAccept(result -> assertFalse(result)).join();
+          .thenAccept(result -> assertFalse(result))
+          .join();
     });
 
-    map.destroy().join();
+    map.delete().join();
   }
 
   /**
@@ -163,7 +159,7 @@ public class ConsistentSetMultimapTest extends AbstractPrimitiveTest {
    */
   @Test
   public void addAndRemoveTest() throws Exception {
-    AsyncConsistentMultimap<String, String> map = createResource("testThreeMap");
+    AsyncConsistentMultimap<String, String> map = createMultimap("testThreeMap");
 
     //Test single put
     all.forEach(key -> {
@@ -280,7 +276,26 @@ public class ConsistentSetMultimapTest extends AbstractPrimitiveTest {
           .join();
     });
 
-    map.destroy().join();
+    map.delete().join();
+  }
+
+  @Test
+  public void testBlocking() throws Exception {
+    AsyncConsistentMultimap<String, String> map = createMultimap("testMultimapBlocking");
+    map.put("foo", "Hello world!").thenRun(() -> {
+      assertEquals(1, map.get("foo").join().value().size());
+    }).join();
+
+    CountDownLatch latch = new CountDownLatch(1);
+    map.addListener(event -> {
+      assertEquals("Hello world!", event.newValue());
+      assertEquals("Hello world!", map.get("bar").join().value().iterator().next());
+      map.put("bar", "Hello world again!").join();
+      assertEquals(2, map.get("bar").join().value().size());
+      latch.countDown();
+    }).join();
+    map.put("bar", "Hello world!").join();
+    latch.await(5, TimeUnit.SECONDS);
   }
 
   /**
@@ -291,7 +306,7 @@ public class ConsistentSetMultimapTest extends AbstractPrimitiveTest {
    */
   @Test
   public void testAccessors() throws Exception {
-    AsyncConsistentMultimap<String, String> map = createResource("testFourMap");
+    AsyncConsistentMultimap<String, String> map = createMultimap("testFourMap");
 
     //Populate for full map behavior tests
     all.forEach(key -> {
@@ -368,12 +383,12 @@ public class ConsistentSetMultimapTest extends AbstractPrimitiveTest {
     map.entries()
         .thenAccept(result -> assertTrue(result.isEmpty())).join();
 
-    map.destroy().join();
+    map.delete().join();
   }
 
-  private AsyncConsistentMultimap<String, String> createResource(String mapName) {
+  private AsyncConsistentMultimap<String, String> createMultimap(String mapName) {
     try {
-      return atomix().<String, String>consistentMultimapBuilder(mapName).build().async();
+      return atomix().<String, String>consistentMultimapBuilder(mapName, protocol()).withCacheEnabled().build().async();
     } catch (Throwable e) {
       throw new RuntimeException(e.toString());
     }
@@ -411,7 +426,7 @@ public class ConsistentSetMultimapTest extends AbstractPrimitiveTest {
    * Entry comparator, uses both key and value to determine equality,
    * for comparison falls back to the default string comparator.
    */
-  private class EntryComparator implements Comparator<Map.Entry<String, String>> {
+  private static class EntryComparator implements Comparator<Map.Entry<String, String>> {
 
     @Override
     public int compare(Map.Entry<String, String> o1, Map.Entry<String, String> o2) {

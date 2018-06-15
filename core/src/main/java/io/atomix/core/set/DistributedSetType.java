@@ -15,20 +15,23 @@
  */
 package io.atomix.core.set;
 
+import io.atomix.core.map.impl.DefaultConsistentMapService;
+import io.atomix.core.set.impl.DelegatingDistributedSetBuilder;
+import io.atomix.core.set.impl.DistributedSetResource;
 import io.atomix.primitive.PrimitiveManagementService;
 import io.atomix.primitive.PrimitiveType;
+import io.atomix.primitive.resource.PrimitiveResource;
 import io.atomix.primitive.service.PrimitiveService;
-import io.atomix.core.map.ConsistentMapType;
-import io.atomix.core.map.impl.ConsistentMapService;
-import io.atomix.core.set.impl.DelegatingDistributedSetBuilder;
+import io.atomix.primitive.service.ServiceConfig;
 
 import static com.google.common.base.MoreObjects.toStringHelper;
 
 /**
  * Distributed set primitive type.
  */
-public class DistributedSetType<E> implements PrimitiveType<DistributedSetBuilder<E>, DistributedSet<E>> {
-  private static final String NAME = "SET";
+public class DistributedSetType<E> implements PrimitiveType<DistributedSetBuilder<E>, DistributedSetConfig, DistributedSet<E>> {
+  private static final String NAME = "set";
+  private static final DistributedSetType INSTANCE = new DistributedSetType();
 
   /**
    * Returns a new distributed set type.
@@ -36,32 +39,41 @@ public class DistributedSetType<E> implements PrimitiveType<DistributedSetBuilde
    * @param <E> the set element type
    * @return a new distributed set type
    */
+  @SuppressWarnings("unchecked")
   public static <E> DistributedSetType<E> instance() {
-    return new DistributedSetType<>();
-  }
-
-  private DistributedSetType() {
+    return INSTANCE;
   }
 
   @Override
-  public String id() {
+  public String name() {
     return NAME;
   }
 
   @Override
-  public PrimitiveService newService() {
-    return new ConsistentMapService();
+  public PrimitiveService newService(ServiceConfig config) {
+    return new DefaultConsistentMapService();
   }
 
   @Override
-  public DistributedSetBuilder<E> newPrimitiveBuilder(String name, PrimitiveManagementService managementService) {
-    return new DelegatingDistributedSetBuilder<>(ConsistentMapType.<E, Boolean>instance().newPrimitiveBuilder(name, managementService));
+  @SuppressWarnings("unchecked")
+  public PrimitiveResource newResource(DistributedSet<E> primitive) {
+    return new DistributedSetResource((AsyncDistributedSet<String>) primitive.async());
+  }
+
+  @Override
+  public DistributedSetConfig newConfig() {
+    return new DistributedSetConfig();
+  }
+
+  @Override
+  public DistributedSetBuilder<E> newBuilder(String name, DistributedSetConfig config, PrimitiveManagementService managementService) {
+    return new DelegatingDistributedSetBuilder<>(name, config, managementService);
   }
 
   @Override
   public String toString() {
     return toStringHelper(this)
-        .add("id", id())
+        .add("name", name())
         .toString();
   }
 }

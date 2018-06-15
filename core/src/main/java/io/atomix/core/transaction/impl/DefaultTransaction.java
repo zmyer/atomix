@@ -16,17 +16,22 @@
 package io.atomix.core.transaction.impl;
 
 import com.google.common.collect.Sets;
-
 import io.atomix.core.transaction.AsyncTransaction;
 import io.atomix.core.transaction.CommitStatus;
 import io.atomix.core.transaction.Isolation;
+import io.atomix.core.transaction.ParticipantInfo;
 import io.atomix.core.transaction.Transaction;
 import io.atomix.core.transaction.TransactionId;
 import io.atomix.core.transaction.TransactionParticipant;
 import io.atomix.core.transaction.TransactionService;
+import io.atomix.core.transaction.TransactionType;
 import io.atomix.core.transaction.TransactionalMapBuilder;
+import io.atomix.core.transaction.TransactionalMapConfig;
 import io.atomix.core.transaction.TransactionalSetBuilder;
+import io.atomix.core.transaction.TransactionalSetConfig;
 import io.atomix.primitive.PrimitiveManagementService;
+import io.atomix.primitive.PrimitiveType;
+import io.atomix.primitive.protocol.PrimitiveProtocol;
 import io.atomix.utils.concurrent.Futures;
 
 import java.time.Duration;
@@ -58,6 +63,16 @@ public class DefaultTransaction implements AsyncTransaction {
   @Override
   public String name() {
     return null;
+  }
+
+  @Override
+  public PrimitiveType type() {
+    return TransactionType.instance();
+  }
+
+  @Override
+  public PrimitiveProtocol protocol() {
+    throw new UnsupportedOperationException();
   }
 
   @Override
@@ -96,7 +111,14 @@ public class DefaultTransaction implements AsyncTransaction {
     Set<TransactionParticipant<?>> participants = this.participants.stream()
         .filter(p -> !p.log().records().isEmpty())
         .collect(Collectors.toSet());
-    CompletableFuture<CommitStatus> status = transactionService.preparing(transactionId)
+    Set<ParticipantInfo> participantInfo = participants.stream()
+        .map(participant -> new ParticipantInfo(
+            participant.name(),
+            participant.type().name(),
+            participant.protocol().type().name(),
+            participant.protocol().group()))
+        .collect(Collectors.toSet());
+    CompletableFuture<CommitStatus> status = transactionService.preparing(transactionId, participantInfo)
         .thenCompose(v -> prepare(participants))
         .thenCompose(result -> result
             ? transactionService.committing(transactionId)
@@ -133,19 +155,32 @@ public class DefaultTransaction implements AsyncTransaction {
     if (transactionId == null) {
       return CompletableFuture.completedFuture(null);
     }
-    return transactionService.complete(transactionId);
+
+    CompletableFuture<Void> future = new CompletableFuture<>();
+    transactionService.complete(transactionId).whenComplete((completeResult, completeError) ->
+        Futures.allOf(participants.stream().map(TransactionParticipant::close).collect(Collectors.toList()))
+            .whenComplete((closeResult, closeError) -> {
+              if (completeError != null) {
+                future.completeExceptionally(completeError);
+              } else if (closeError != null) {
+                future.completeExceptionally(closeError);
+              } else {
+                future.complete(null);
+              }
+            }));
+    return future;
   }
 
   @Override
   public <K, V> TransactionalMapBuilder<K, V> mapBuilder(String name) {
     checkState(isOpen(), "transaction not open");
-    return new DefaultTransactionalMapBuilder<>(name, managementService, this);
+    return new DefaultTransactionalMapBuilder<>(name, new TransactionalMapConfig(), managementService, this);
   }
 
   @Override
   public <E> TransactionalSetBuilder<E> setBuilder(String name) {
     checkState(isOpen(), "transaction not open");
-    return new DefaultTransactionalSetBuilder<>(name, managementService, this);
+    return new DefaultTransactionalSetBuilder<>(name, new TransactionalSetConfig(), managementService, this);
   }
 
   @Override

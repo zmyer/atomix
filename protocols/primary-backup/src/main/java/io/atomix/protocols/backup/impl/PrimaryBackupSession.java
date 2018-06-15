@@ -15,37 +15,27 @@
  */
 package io.atomix.protocols.backup.impl;
 
-import com.google.common.collect.Sets;
-import io.atomix.cluster.NodeId;
-import io.atomix.primitive.PrimitiveType;
+import io.atomix.cluster.MemberId;
 import io.atomix.primitive.event.PrimitiveEvent;
-import io.atomix.primitive.session.Session;
-import io.atomix.primitive.session.SessionEvent;
-import io.atomix.primitive.session.SessionEvent.Type;
-import io.atomix.primitive.session.SessionEventListener;
 import io.atomix.primitive.session.SessionId;
+import io.atomix.primitive.session.impl.AbstractSession;
 import io.atomix.protocols.backup.PrimaryBackupServer.Role;
 import io.atomix.protocols.backup.service.impl.PrimaryBackupServiceContext;
 import io.atomix.utils.logging.ContextualLoggerFactory;
 import io.atomix.utils.logging.LoggerContext;
+import io.atomix.utils.serializer.Serializer;
 import org.slf4j.Logger;
-
-import java.util.Set;
 
 /**
  * Primary-backup session.
  */
-public class PrimaryBackupSession implements Session {
+public class PrimaryBackupSession extends AbstractSession {
   private final Logger log;
-  private final SessionId sessionId;
-  private final NodeId nodeId;
   private final PrimaryBackupServiceContext context;
-  private final Set<SessionEventListener> eventListeners = Sets.newIdentityHashSet();
   private State state = State.OPEN;
 
-  public PrimaryBackupSession(SessionId sessionId, NodeId nodeId, PrimaryBackupServiceContext context) {
-    this.sessionId = sessionId;
-    this.nodeId = nodeId;
+  public PrimaryBackupSession(SessionId sessionId, MemberId memberId, Serializer serializer, PrimaryBackupServiceContext context) {
+    super(sessionId, context.serviceName(), context.serviceType(), memberId, serializer);
     this.context = context;
     this.log = ContextualLoggerFactory.getLogger(getClass(), LoggerContext.builder(getClass())
         .addValue(context.serverName())
@@ -54,57 +44,25 @@ public class PrimaryBackupSession implements Session {
   }
 
   @Override
-  public SessionId sessionId() {
-    return sessionId;
-  }
-
-  @Override
-  public String serviceName() {
-    return context.serviceName();
-  }
-
-  @Override
-  public PrimitiveType serviceType() {
-    return context.serviceType();
-  }
-
-  @Override
-  public NodeId nodeId() {
-    return nodeId;
-  }
-
-  @Override
   public State getState() {
     return state;
-  }
-
-  @Override
-  public void addListener(SessionEventListener listener) {
-    eventListeners.add(listener);
-  }
-
-  @Override
-  public void removeListener(SessionEventListener listener) {
-    eventListeners.remove(listener);
   }
 
   @Override
   public void publish(PrimitiveEvent event) {
     if (context.getRole() == Role.PRIMARY) {
       context.threadContext().execute(() -> {
-        log.trace("Sending {} to {}", event, nodeId);
-        context.protocol().event(nodeId, sessionId, event);
+        log.trace("Sending {} to {}", event, memberId());
+        context.protocol().event(memberId(), sessionId(), event);
       });
     }
   }
 
   public void expire() {
     state = State.EXPIRED;
-    eventListeners.forEach(l -> l.onEvent(new SessionEvent(Type.EXPIRE, this)));
   }
 
   public void close() {
     state = State.CLOSED;
-    eventListeners.forEach(l -> l.onEvent(new SessionEvent(Type.CLOSE, this)));
   }
 }

@@ -17,12 +17,13 @@ package io.atomix.core.value.impl;
 
 import io.atomix.core.value.AtomicValue;
 import io.atomix.core.value.AtomicValueBuilder;
+import io.atomix.core.value.AtomicValueConfig;
 import io.atomix.primitive.PrimitiveManagementService;
-import io.atomix.primitive.PrimitiveProtocol;
+import io.atomix.primitive.proxy.ProxyClient;
+import io.atomix.primitive.service.ServiceConfig;
+import io.atomix.utils.serializer.Serializer;
 
 import java.util.concurrent.CompletableFuture;
-
-import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
  * Default implementation of AtomicValueBuilder.
@@ -30,29 +31,27 @@ import static com.google.common.base.Preconditions.checkNotNull;
  * @param <V> value type
  */
 public class AtomicValueProxyBuilder<V> extends AtomicValueBuilder<V> {
-  private final PrimitiveManagementService managementService;
-
-  public AtomicValueProxyBuilder(String name, PrimitiveManagementService managementService) {
-    super(name);
-    this.managementService = checkNotNull(managementService);
+  public AtomicValueProxyBuilder(String name, AtomicValueConfig config, PrimitiveManagementService managementService) {
+    super(name, config, managementService);
   }
 
   @Override
   @SuppressWarnings("unchecked")
   public CompletableFuture<AtomicValue<V>> buildAsync() {
-    PrimitiveProtocol protocol = protocol();
-    return managementService.getPartitionService()
-        .getPartitionGroup(protocol)
-        .getPartition(name())
-        .getPrimitiveClient()
-        .newProxy(name(), primitiveType(), protocol)
+    ProxyClient<AtomicValueService> proxy = protocol().newProxy(
+        name(),
+        primitiveType(),
+        AtomicValueService.class,
+        new ServiceConfig(),
+        managementService.getPartitionService());
+    return new AtomicValueProxy(proxy, managementService.getPrimitiveRegistry())
         .connect()
-        .thenApply(proxy -> {
-          AtomicValueProxy value = new AtomicValueProxy(proxy);
+        .thenApply(elector -> {
+          Serializer serializer = serializer();
           return new TranscodingAsyncAtomicValue<V, byte[]>(
-              value,
-              serializer()::encode,
-              serializer()::decode)
+              elector,
+              key -> serializer.encode(key),
+              bytes -> serializer.decode(bytes))
               .sync();
         });
   }

@@ -16,18 +16,22 @@
 package io.atomix.core.counter;
 
 import io.atomix.core.counter.impl.AtomicCounterProxyBuilder;
-import io.atomix.core.counter.impl.AtomicCounterService;
+import io.atomix.core.counter.impl.AtomicCounterResource;
+import io.atomix.core.counter.impl.DefaultAtomicCounterService;
 import io.atomix.primitive.PrimitiveManagementService;
 import io.atomix.primitive.PrimitiveType;
+import io.atomix.primitive.resource.PrimitiveResource;
 import io.atomix.primitive.service.PrimitiveService;
+import io.atomix.primitive.service.ServiceConfig;
 
 import static com.google.common.base.MoreObjects.toStringHelper;
 
 /**
  * Atomic counter primitive type.
  */
-public class AtomicCounterType implements PrimitiveType<AtomicCounterBuilder, AtomicCounter> {
-  private static final String NAME = "COUNTER";
+public class AtomicCounterType implements PrimitiveType<AtomicCounterBuilder, AtomicCounterConfig, AtomicCounter> {
+  private static final String NAME = "counter";
+  private static final AtomicCounterType INSTANCE = new AtomicCounterType();
 
   /**
    * Returns a new atomic counter type.
@@ -35,31 +39,38 @@ public class AtomicCounterType implements PrimitiveType<AtomicCounterBuilder, At
    * @return a new atomic counter type
    */
   public static AtomicCounterType instance() {
-    return new AtomicCounterType();
-  }
-
-  private AtomicCounterType() {
+    return INSTANCE;
   }
 
   @Override
-  public String id() {
+  public String name() {
     return NAME;
   }
 
   @Override
-  public PrimitiveService newService() {
-    return new AtomicCounterService();
+  public PrimitiveService newService(ServiceConfig config) {
+    return new DefaultAtomicCounterService();
   }
 
   @Override
-  public AtomicCounterBuilder newPrimitiveBuilder(String name, PrimitiveManagementService managementService) {
-    return new AtomicCounterProxyBuilder(name, managementService);
+  public PrimitiveResource newResource(AtomicCounter primitive) {
+    return new AtomicCounterResource(primitive.async());
+  }
+
+  @Override
+  public AtomicCounterConfig newConfig() {
+    return new AtomicCounterConfig();
+  }
+
+  @Override
+  public AtomicCounterBuilder newBuilder(String name, AtomicCounterConfig config, PrimitiveManagementService managementService) {
+    return new AtomicCounterProxyBuilder(name, config, managementService);
   }
 
   @Override
   public String toString() {
     return toStringHelper(this)
-        .add("id", id())
+        .add("name", name())
         .toString();
   }
 }

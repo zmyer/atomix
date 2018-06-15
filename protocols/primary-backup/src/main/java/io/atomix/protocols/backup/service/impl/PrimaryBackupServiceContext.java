@@ -16,17 +16,22 @@
 
 package io.atomix.protocols.backup.service.impl;
 
-import io.atomix.cluster.ClusterEvent;
-import io.atomix.cluster.ClusterEventListener;
-import io.atomix.cluster.ClusterService;
-import io.atomix.cluster.NodeId;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Maps;
+import io.atomix.cluster.ClusterMembershipEvent;
+import io.atomix.cluster.ClusterMembershipEventListener;
+import io.atomix.cluster.ClusterMembershipService;
+import io.atomix.cluster.MemberId;
 import io.atomix.primitive.PrimitiveId;
 import io.atomix.primitive.PrimitiveType;
 import io.atomix.primitive.operation.OperationType;
+import io.atomix.primitive.partition.GroupMember;
+import io.atomix.primitive.partition.MemberGroupService;
 import io.atomix.primitive.partition.PrimaryElection;
 import io.atomix.primitive.partition.PrimaryElectionEventListener;
 import io.atomix.primitive.partition.PrimaryTerm;
 import io.atomix.primitive.service.PrimitiveService;
+import io.atomix.primitive.service.ServiceConfig;
 import io.atomix.primitive.service.ServiceContext;
 import io.atomix.primitive.session.Session;
 import io.atomix.primitive.session.SessionId;
@@ -50,14 +55,19 @@ import io.atomix.utils.concurrent.ComposableFuture;
 import io.atomix.utils.concurrent.ThreadContext;
 import io.atomix.utils.logging.ContextualLoggerFactory;
 import io.atomix.utils.logging.LoggerContext;
+import io.atomix.utils.serializer.Serializer;
 import io.atomix.utils.time.LogicalClock;
 import io.atomix.utils.time.LogicalTimestamp;
 import io.atomix.utils.time.WallClock;
 import io.atomix.utils.time.WallClockTimestamp;
 import org.slf4j.Logger;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
@@ -66,19 +76,21 @@ import static com.google.common.base.Preconditions.checkNotNull;
  */
 public class PrimaryBackupServiceContext implements ServiceContext {
   private final Logger log;
-  private final NodeId localNodeId;
+  private final MemberId localMemberId;
   private final String serverName;
   private final PrimitiveId primitiveId;
   private final PrimitiveType primitiveType;
+  private final ServiceConfig serviceConfig;
   private final PrimitiveDescriptor descriptor;
   private final PrimitiveService service;
-  private final PrimaryBackupServiceSessions sessions = new PrimaryBackupServiceSessions();
+  private final Map<Long, PrimaryBackupSession> sessions = Maps.newConcurrentMap();
   private final ThreadContext threadContext;
-  private final ClusterService clusterService;
+  private final ClusterMembershipService clusterMembershipService;
+  private final MemberGroupService memberGroupService;
   private final PrimaryBackupServerProtocol protocol;
   private final PrimaryElection primaryElection;
-  private NodeId primary;
-  private List<NodeId> backups;
+  private MemberId primary;
+  private List<MemberId> backups;
   private long currentTerm;
   private long currentIndex;
   private Session currentSession;
@@ -99,26 +111,30 @@ public class PrimaryBackupServiceContext implements ServiceContext {
     }
   };
   private PrimaryBackupRole role;
-  private final ClusterEventListener clusterEventListener = this::handleClusterEvent;
+  private final ClusterMembershipEventListener membershipEventListener = this::handleClusterEvent;
   private final PrimaryElectionEventListener primaryElectionListener = event -> changeRole(event.term());
 
+  @SuppressWarnings("unchecked")
   public PrimaryBackupServiceContext(
       String serverName,
       PrimitiveId primitiveId,
       PrimitiveType primitiveType,
       PrimitiveDescriptor descriptor,
       ThreadContext threadContext,
-      ClusterService clusterService,
+      ClusterMembershipService clusterMembershipService,
+      MemberGroupService memberGroupService,
       PrimaryBackupServerProtocol protocol,
       PrimaryElection primaryElection) {
-    this.localNodeId = clusterService.getLocalNode().id();
+    this.localMemberId = clusterMembershipService.getLocalMember().id();
     this.serverName = checkNotNull(serverName);
     this.primitiveId = checkNotNull(primitiveId);
     this.primitiveType = checkNotNull(primitiveType);
+    this.serviceConfig = Serializer.using(primitiveType.namespace()).decode(descriptor.config());
     this.descriptor = checkNotNull(descriptor);
-    this.service = primitiveType.newService();
+    this.service = primitiveType.newService(serviceConfig);
     this.threadContext = checkNotNull(threadContext);
-    this.clusterService = checkNotNull(clusterService);
+    this.clusterMembershipService = checkNotNull(clusterMembershipService);
+    this.memberGroupService = checkNotNull(memberGroupService);
     this.protocol = checkNotNull(protocol);
     this.primaryElection = checkNotNull(primaryElection);
     this.log = ContextualLoggerFactory.getLogger(getClass(), LoggerContext.builder(PrimitiveService.class)
@@ -126,7 +142,7 @@ public class PrimaryBackupServiceContext implements ServiceContext {
         .add("type", descriptor.type())
         .add("name", descriptor.name())
         .build());
-    clusterService.addListener(clusterEventListener);
+    clusterMembershipService.addListener(membershipEventListener);
     primaryElection.addListener(primaryElectionListener);
   }
 
@@ -138,10 +154,7 @@ public class PrimaryBackupServiceContext implements ServiceContext {
   public CompletableFuture<Void> open() {
     return primaryElection.getTerm()
         .thenAccept(this::changeRole)
-        .thenRun(() -> {
-          sessions.addListener(service);
-          service.init(this);
-        });
+        .thenRun(() -> service.init(this));
   }
 
   /**
@@ -168,12 +181,12 @@ public class PrimaryBackupServiceContext implements ServiceContext {
   }
 
   /**
-   * Returns the local node ID.
+   * Returns the local member ID.
    *
-   * @return the local node ID
+   * @return the local member ID
    */
-  public NodeId nodeId() {
-    return localNodeId;
+  public MemberId memberId() {
+    return localMemberId;
   }
 
   /**
@@ -193,6 +206,12 @@ public class PrimaryBackupServiceContext implements ServiceContext {
   @Override
   public PrimitiveType serviceType() {
     return primitiveType;
+  }
+
+  @Override
+  @SuppressWarnings("unchecked")
+  public <C extends ServiceConfig> C serviceConfig() {
+    return (C) serviceConfig;
   }
 
   @Override
@@ -241,7 +260,7 @@ public class PrimaryBackupServiceContext implements ServiceContext {
    * @param term    the term to which to reset the current term
    * @param primary the primary for the given term
    */
-  public void resetTerm(long term, NodeId primary) {
+  public void resetTerm(long term, MemberId primary) {
     this.currentTerm = term;
     this.primary = primary;
   }
@@ -259,7 +278,7 @@ public class PrimaryBackupServiceContext implements ServiceContext {
   /**
    * Increments the current index and returns true if the given index is the next index.
    *
-   * @param index     the index to which to increment the current index
+   * @param index the index to which to increment the current index
    * @return indicates whether the current index was successfully incremented
    */
   public boolean nextIndex(long index) {
@@ -282,6 +301,8 @@ public class PrimaryBackupServiceContext implements ServiceContext {
     operationIndex = index;
     currentIndex = index;
     currentTimestamp = timestamp;
+    setCommitIndex(index);
+    service.tick(new WallClockTimestamp(currentTimestamp));
   }
 
   /**
@@ -352,17 +373,12 @@ public class PrimaryBackupServiceContext implements ServiceContext {
     return wallClock;
   }
 
-  @Override
-  public PrimaryBackupServiceSessions sessions() {
-    return sessions;
-  }
-
   /**
    * Returns the primary node.
    *
    * @return the primary node
    */
-  public NodeId primary() {
+  public MemberId primary() {
     return primary;
   }
 
@@ -371,7 +387,7 @@ public class PrimaryBackupServiceContext implements ServiceContext {
    *
    * @return the backup nodes
    */
-  public List<NodeId> backups() {
+  public List<MemberId> backups() {
     return backups;
   }
 
@@ -453,7 +469,7 @@ public class PrimaryBackupServiceContext implements ServiceContext {
   public CompletableFuture<CloseResponse> close(CloseRequest request) {
     ComposableFuture<CloseResponse> future = new ComposableFuture<>();
     threadContext.execute(() -> {
-      PrimaryBackupSession session = sessions.getSession(request.session());
+      PrimaryBackupSession session = sessions.get(request.session());
       if (session != null) {
         role.close(session).whenComplete((result, error) -> {
           if (error == null) {
@@ -470,25 +486,36 @@ public class PrimaryBackupServiceContext implements ServiceContext {
   }
 
   /**
-   * Gets or creates a service session.
+   * Returns the collection of sessions.
+   *
+   * @return the collection of sessions
+   */
+  public Collection<PrimaryBackupSession> getSessions() {
+    return ImmutableList.copyOf(sessions.values());
+  }
+
+  /**
+   * Gets a service session.
    *
    * @param sessionId the session to get
    * @return the service session
    */
   public PrimaryBackupSession getSession(long sessionId) {
-    return sessions.getSession(sessionId);
+    return sessions.get(sessionId);
   }
 
   /**
    * Creates a service session.
    *
    * @param sessionId the session to create
-   * @param nodeId    the owning node ID
+   * @param memberId  the owning node ID
    * @return the service session
    */
-  public PrimaryBackupSession createSession(long sessionId, NodeId nodeId) {
-    PrimaryBackupSession session = new PrimaryBackupSession(SessionId.from(sessionId), nodeId, this);
-    sessions.openSession(session);
+  public PrimaryBackupSession createSession(long sessionId, MemberId memberId) {
+    PrimaryBackupSession session = new PrimaryBackupSession(SessionId.from(sessionId), memberId, service.serializer(), this);
+    if (sessions.putIfAbsent(sessionId, session) == null) {
+      service.register(session);
+    }
     return session;
   }
 
@@ -496,24 +523,50 @@ public class PrimaryBackupServiceContext implements ServiceContext {
    * Gets or creates a service session.
    *
    * @param sessionId the session to create
-   * @param nodeId    the owning node ID
+   * @param memberId  the owning node ID
    * @return the service session
    */
-  public PrimaryBackupSession getOrCreateSession(long sessionId, NodeId nodeId) {
-    PrimaryBackupSession session = sessions.getSession(sessionId);
+  public PrimaryBackupSession getOrCreateSession(long sessionId, MemberId memberId) {
+    PrimaryBackupSession session = sessions.get(sessionId);
     if (session == null) {
-      session = createSession(sessionId, nodeId);
+      session = createSession(sessionId, memberId);
     }
     return session;
   }
 
   /**
+   * Expires the session with the given ID.
+   *
+   * @param sessionId the session ID
+   */
+  public void expireSession(long sessionId) {
+    PrimaryBackupSession session = sessions.remove(sessionId);
+    if (session != null) {
+      session.expire();
+      service.expire(session.sessionId());
+    }
+  }
+
+  /**
+   * Closes the session with the given ID.
+   *
+   * @param sessionId the session ID
+   */
+  public void closeSession(long sessionId) {
+    PrimaryBackupSession session = sessions.remove(sessionId);
+    if (session != null) {
+      session.close();
+      service.close(session.sessionId());
+    }
+  }
+
+  /**
    * Handles a cluster event.
    */
-  private void handleClusterEvent(ClusterEvent event) {
-    if (event.type() == ClusterEvent.Type.NODE_DEACTIVATED) {
-      for (Session session : sessions) {
-        if (session.nodeId().equals(event.subject().id())) {
+  private void handleClusterEvent(ClusterMembershipEvent event) {
+    if (event.type() == ClusterMembershipEvent.Type.MEMBER_REMOVED) {
+      for (Session session : sessions.values()) {
+        if (session.memberId().equals(event.subject().id())) {
           role.expire((PrimaryBackupSession) session);
         }
       }
@@ -525,48 +578,40 @@ public class PrimaryBackupServiceContext implements ServiceContext {
    */
   private void changeRole(PrimaryTerm term) {
     if (term.term() > currentTerm) {
-      log.trace("Term changed: {}", term);
+      log.debug("Term changed: {}", term);
       currentTerm = term.term();
-      primary = term.primary();
-      backups = term.backups().subList(0, Math.min(descriptor.backups(), term.backups().size()));
+      primary = term.primary() != null ? term.primary().memberId() : null;
+      backups = term.backups(descriptor.backups())
+          .stream()
+          .map(GroupMember::memberId)
+          .collect(Collectors.toList());
 
-      if (backups.size() < descriptor.backups()) {
-        if (this.role == null) {
-          log.warn("Not enough backups; transitioning to {}", Role.NONE);
-          this.role = new NoneRole(this);
-          log.trace("{} transitioning to {}", clusterService.getLocalNode().id(), Role.NONE);
-        } else if (this.role.role() != Role.NONE) {
-          log.warn("Not enough backups; transitioning to {}", Role.NONE);
-          this.role.close();
-          this.role = new NoneRole(this);
-          log.trace("{} transitioning to {}", clusterService.getLocalNode().id(), Role.NONE);
-        }
-      } else if (primary.equals(clusterService.getLocalNode().id())) {
+      if (Objects.equals(primary, clusterMembershipService.getLocalMember().id())) {
         if (this.role == null) {
           this.role = new PrimaryRole(this);
-          log.trace("{} transitioning to {}", clusterService.getLocalNode().id(), Role.PRIMARY);
+          log.debug("{} transitioning to {}", clusterMembershipService.getLocalMember().id(), Role.PRIMARY);
         } else if (this.role.role() != Role.PRIMARY) {
           this.role.close();
           this.role = new PrimaryRole(this);
-          log.trace("{} transitioning to {}", clusterService.getLocalNode().id(), Role.PRIMARY);
+          log.debug("{} transitioning to {}", clusterMembershipService.getLocalMember().id(), Role.PRIMARY);
         }
-      } else if (backups.contains(clusterService.getLocalNode().id())) {
+      } else if (backups.contains(clusterMembershipService.getLocalMember().id())) {
         if (this.role == null) {
           this.role = new BackupRole(this);
-          log.trace("{} transitioning to {}", clusterService.getLocalNode().id(), Role.BACKUP);
+          log.debug("{} transitioning to {}", clusterMembershipService.getLocalMember().id(), Role.BACKUP);
         } else if (this.role.role() != Role.BACKUP) {
           this.role.close();
           this.role = new BackupRole(this);
-          log.trace("{} transitioning to {}", clusterService.getLocalNode().id(), Role.BACKUP);
+          log.debug("{} transitioning to {}", clusterMembershipService.getLocalMember().id(), Role.BACKUP);
         }
       } else {
         if (this.role == null) {
           this.role = new NoneRole(this);
-          log.trace("{} transitioning to {}", clusterService.getLocalNode().id(), Role.NONE);
+          log.debug("{} transitioning to {}", clusterMembershipService.getLocalMember().id(), Role.NONE);
         } else if (this.role.role() != Role.NONE) {
           this.role.close();
           this.role = new NoneRole(this);
-          log.trace("{} transitioning to {}", clusterService.getLocalNode().id(), Role.NONE);
+          log.debug("{} transitioning to {}", clusterMembershipService.getLocalMember().id(), Role.NONE);
         }
       }
     }
@@ -576,8 +621,16 @@ public class PrimaryBackupServiceContext implements ServiceContext {
    * Closes the service.
    */
   public CompletableFuture<Void> close() {
-    clusterService.removeListener(clusterEventListener);
-    primaryElection.removeListener(primaryElectionListener);
-    return CompletableFuture.completedFuture(null);
+    CompletableFuture<Void> future = new CompletableFuture<>();
+    threadContext.execute(() -> {
+      try {
+        clusterMembershipService.removeListener(membershipEventListener);
+        primaryElection.removeListener(primaryElectionListener);
+        role.close();
+      } finally {
+        future.complete(null);
+      }
+    });
+    return future.thenRunAsync(() -> threadContext.close());
   }
 }

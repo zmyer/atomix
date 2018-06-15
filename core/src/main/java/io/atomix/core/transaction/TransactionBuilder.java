@@ -15,36 +15,15 @@
  */
 package io.atomix.core.transaction;
 
-import io.atomix.primitive.Consistency;
 import io.atomix.primitive.DistributedPrimitiveBuilder;
-import io.atomix.primitive.Persistence;
-import io.atomix.primitive.Replication;
-
-import static com.google.common.base.Preconditions.checkNotNull;
+import io.atomix.primitive.PrimitiveManagementService;
 
 /**
  * Transaction builder.
  */
-public abstract class TransactionBuilder extends DistributedPrimitiveBuilder<TransactionBuilder, Transaction> {
-  private Isolation isolation = Isolation.READ_COMMITTED;
-
-  protected TransactionBuilder(String name) {
-    super(TransactionType.instance(), name);
-  }
-
-  @Override
-  protected Consistency defaultConsistency() {
-    return Consistency.LINEARIZABLE;
-  }
-
-  @Override
-  protected Persistence defaultPersistence() {
-    return Persistence.PERSISTENT;
-  }
-
-  @Override
-  protected Replication defaultReplication() {
-    return Replication.SYNCHRONOUS;
+public abstract class TransactionBuilder extends DistributedPrimitiveBuilder<TransactionBuilder, TransactionConfig, Transaction> {
+  protected TransactionBuilder(String name, TransactionConfig config, PrimitiveManagementService managementService) {
+    super(TransactionType.instance(), name, config, managementService);
   }
 
   /**
@@ -54,16 +33,7 @@ public abstract class TransactionBuilder extends DistributedPrimitiveBuilder<Tra
    * @return the transaction builder
    */
   public TransactionBuilder withIsolation(Isolation isolation) {
-    this.isolation = checkNotNull(isolation, "isolation cannot be null");
+    config.setIsolation(isolation);
     return this;
-  }
-
-  /**
-   * Returns the transaction isolation level.
-   *
-   * @return the transaction isolation level
-   */
-  public Isolation isolation() {
-    return isolation;
   }
 }

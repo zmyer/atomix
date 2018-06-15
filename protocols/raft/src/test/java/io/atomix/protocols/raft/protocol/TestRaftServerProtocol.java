@@ -16,9 +16,10 @@
 package io.atomix.protocols.raft.protocol;
 
 import com.google.common.collect.Maps;
-import io.atomix.cluster.NodeId;
+import io.atomix.cluster.MemberId;
 import io.atomix.primitive.session.SessionId;
 import io.atomix.utils.concurrent.Futures;
+import io.atomix.utils.concurrent.ThreadContext;
 
 import java.net.ConnectException;
 import java.util.Map;
@@ -48,12 +49,16 @@ public class TestRaftServerProtocol extends TestRaftProtocol implements RaftServ
   private Function<AppendRequest, CompletableFuture<AppendResponse>> appendHandler;
   private final Map<Long, Consumer<ResetRequest>> resetListeners = Maps.newConcurrentMap();
 
-  public TestRaftServerProtocol(NodeId memberId, Map<NodeId, TestRaftServerProtocol> servers, Map<NodeId, TestRaftClientProtocol> clients) {
-    super(servers, clients);
+  public TestRaftServerProtocol(
+      MemberId memberId,
+      Map<MemberId, TestRaftServerProtocol> servers,
+      Map<MemberId, TestRaftClientProtocol> clients,
+      ThreadContext context) {
+    super(servers, clients, context);
     servers.put(memberId, this);
   }
 
-  private CompletableFuture<TestRaftServerProtocol> getServer(NodeId memberId) {
+  private CompletableFuture<TestRaftServerProtocol> getServer(MemberId memberId) {
     TestRaftServerProtocol server = server(memberId);
     if (server != null) {
       return Futures.completedFuture(server);
@@ -62,7 +67,7 @@ public class TestRaftServerProtocol extends TestRaftProtocol implements RaftServ
     }
   }
 
-  private CompletableFuture<TestRaftClientProtocol> getClient(NodeId memberId) {
+  private CompletableFuture<TestRaftClientProtocol> getClient(MemberId memberId) {
     TestRaftClientProtocol client = client(memberId);
     if (client != null) {
       return Futures.completedFuture(client);
@@ -72,88 +77,88 @@ public class TestRaftServerProtocol extends TestRaftProtocol implements RaftServ
   }
 
   @Override
-  public CompletableFuture<OpenSessionResponse> openSession(NodeId memberId, OpenSessionRequest request) {
-    return getServer(memberId).thenCompose(listener -> listener.openSession(request));
+  public CompletableFuture<OpenSessionResponse> openSession(MemberId memberId, OpenSessionRequest request) {
+    return scheduleTimeout(getServer(memberId).thenCompose(listener -> listener.openSession(request)));
   }
 
   @Override
-  public CompletableFuture<CloseSessionResponse> closeSession(NodeId memberId, CloseSessionRequest request) {
-    return getServer(memberId).thenCompose(listener -> listener.closeSession(request));
+  public CompletableFuture<CloseSessionResponse> closeSession(MemberId memberId, CloseSessionRequest request) {
+    return scheduleTimeout(getServer(memberId).thenCompose(listener -> listener.closeSession(request)));
   }
 
   @Override
-  public CompletableFuture<KeepAliveResponse> keepAlive(NodeId memberId, KeepAliveRequest request) {
-    return getServer(memberId).thenCompose(listener -> listener.keepAlive(request));
+  public CompletableFuture<KeepAliveResponse> keepAlive(MemberId memberId, KeepAliveRequest request) {
+    return scheduleTimeout(getServer(memberId).thenCompose(listener -> listener.keepAlive(request)));
   }
 
   @Override
-  public CompletableFuture<QueryResponse> query(NodeId memberId, QueryRequest request) {
-    return getServer(memberId).thenCompose(listener -> listener.query(request));
+  public CompletableFuture<QueryResponse> query(MemberId memberId, QueryRequest request) {
+    return scheduleTimeout(getServer(memberId).thenCompose(listener -> listener.query(request)));
   }
 
   @Override
-  public CompletableFuture<CommandResponse> command(NodeId memberId, CommandRequest request) {
-    return getServer(memberId).thenCompose(listener -> listener.command(request));
+  public CompletableFuture<CommandResponse> command(MemberId memberId, CommandRequest request) {
+    return scheduleTimeout(getServer(memberId).thenCompose(listener -> listener.command(request)));
   }
 
   @Override
-  public CompletableFuture<MetadataResponse> metadata(NodeId memberId, MetadataRequest request) {
-    return getServer(memberId).thenCompose(listener -> listener.metadata(request));
+  public CompletableFuture<MetadataResponse> metadata(MemberId memberId, MetadataRequest request) {
+    return scheduleTimeout(getServer(memberId).thenCompose(listener -> listener.metadata(request)));
   }
 
   @Override
-  public CompletableFuture<JoinResponse> join(NodeId memberId, JoinRequest request) {
-    return getServer(memberId).thenCompose(listener -> listener.join(request));
+  public CompletableFuture<JoinResponse> join(MemberId memberId, JoinRequest request) {
+    return scheduleTimeout(getServer(memberId).thenCompose(listener -> listener.join(request)));
   }
 
   @Override
-  public CompletableFuture<LeaveResponse> leave(NodeId memberId, LeaveRequest request) {
-    return getServer(memberId).thenCompose(listener -> listener.leave(request));
+  public CompletableFuture<LeaveResponse> leave(MemberId memberId, LeaveRequest request) {
+    return scheduleTimeout(getServer(memberId).thenCompose(listener -> listener.leave(request)));
   }
 
   @Override
-  public CompletableFuture<ConfigureResponse> configure(NodeId memberId, ConfigureRequest request) {
-    return getServer(memberId).thenCompose(listener -> listener.configure(request));
+  public CompletableFuture<ConfigureResponse> configure(MemberId memberId, ConfigureRequest request) {
+    return scheduleTimeout(getServer(memberId).thenCompose(listener -> listener.configure(request)));
   }
 
   @Override
-  public CompletableFuture<ReconfigureResponse> reconfigure(NodeId memberId, ReconfigureRequest request) {
-    return getServer(memberId).thenCompose(listener -> listener.reconfigure(request));
+  public CompletableFuture<ReconfigureResponse> reconfigure(MemberId memberId, ReconfigureRequest request) {
+    return scheduleTimeout(getServer(memberId).thenCompose(listener -> listener.reconfigure(request)));
   }
 
   @Override
-  public CompletableFuture<InstallResponse> install(NodeId memberId, InstallRequest request) {
-    return getServer(memberId).thenCompose(listener -> listener.install(request));
+  public CompletableFuture<InstallResponse> install(MemberId memberId, InstallRequest request) {
+    return scheduleTimeout(getServer(memberId).thenCompose(listener -> listener.install(request)));
   }
 
   @Override
-  public CompletableFuture<TransferResponse> transfer(NodeId memberId, TransferRequest request) {
-    return getServer(memberId).thenCompose(listener -> listener.transfer(request));
+  public CompletableFuture<TransferResponse> transfer(MemberId memberId, TransferRequest request) {
+    return scheduleTimeout(getServer(memberId).thenCompose(listener -> listener.transfer(request)));
   }
 
   @Override
-  public CompletableFuture<PollResponse> poll(NodeId memberId, PollRequest request) {
-    return getServer(memberId).thenCompose(listener -> listener.poll(request));
+  public CompletableFuture<PollResponse> poll(MemberId memberId, PollRequest request) {
+    return scheduleTimeout(getServer(memberId).thenCompose(listener -> listener.poll(request)));
   }
 
   @Override
-  public CompletableFuture<VoteResponse> vote(NodeId memberId, VoteRequest request) {
-    return getServer(memberId).thenCompose(listener -> listener.vote(request));
+  public CompletableFuture<VoteResponse> vote(MemberId memberId, VoteRequest request) {
+    return scheduleTimeout(getServer(memberId).thenCompose(listener -> listener.vote(request)));
   }
 
   @Override
-  public CompletableFuture<AppendResponse> append(NodeId memberId, AppendRequest request) {
-    return getServer(memberId).thenCompose(listener -> listener.append(request));
+  public CompletableFuture<AppendResponse> append(MemberId memberId, AppendRequest request) {
+    return scheduleTimeout(getServer(memberId).thenCompose(listener -> listener.append(request)));
   }
 
   @Override
-  public void publish(NodeId memberId, PublishRequest request) {
+  public void publish(MemberId memberId, PublishRequest request) {
     getClient(memberId).thenAccept(protocol -> protocol.publish(request));
   }
 
   @Override
-  public CompletableFuture<HeartbeatResponse> heartbeat(NodeId memberId, HeartbeatRequest request) {
-    return getClient(memberId).thenCompose(protocol -> protocol.heartbeat(request));
+  public CompletableFuture<HeartbeatResponse> heartbeat(MemberId memberId, HeartbeatRequest request) {
+    return scheduleTimeout(getClient(memberId).thenCompose(protocol -> protocol.heartbeat(request)));
   }
 
   CompletableFuture<OpenSessionResponse> openSession(OpenSessionRequest request) {

@@ -15,8 +15,9 @@
  */
 package io.atomix.cluster.impl;
 
-import io.atomix.cluster.Node;
-import io.atomix.cluster.NodeId;
+import io.atomix.cluster.MemberId;
+
+import java.util.Map;
 
 import static com.google.common.base.MoreObjects.toStringHelper;
 
@@ -24,37 +25,69 @@ import static com.google.common.base.MoreObjects.toStringHelper;
  * Cluster heartbeat message.
  */
 final class ClusterHeartbeat {
-  private final NodeId nodeId;
-  private final Node.Type type;
+  private final MemberId memberId;
+  private final String zone;
+  private final String rack;
+  private final String host;
+  private final Map<String, String> metadata;
 
-  ClusterHeartbeat(NodeId nodeId, Node.Type type) {
-    this.nodeId = nodeId;
-    this.type = type;
+  ClusterHeartbeat(MemberId memberId, String zone, String rack, String host, Map<String, String> metadata) {
+    this.memberId = memberId;
+    this.zone = zone;
+    this.rack = rack;
+    this.host = host;
+    this.metadata = metadata;
   }
 
   /**
-   * Returns the identifier of the node that sent the heartbeat.
+   * Returns the identifier of the member that sent the heartbeat.
    *
-   * @return the identifier of the node that sent the heartbeat
+   * @return the identifier of the member that sent the heartbeat
    */
-  public NodeId nodeId() {
-    return nodeId;
+  public MemberId memberId() {
+    return memberId;
   }
 
   /**
-   * Returns the type of the node that sent the heartbeat.
+   * Returns the zone.
    *
-   * @return the node type
+   * @return the zone
    */
-  public Node.Type nodeType() {
-    return type;
+  public String zone() {
+    return zone;
+  }
+
+  /**
+   * Returns the rack.
+   *
+   * @return the rack
+   */
+  public String rack() {
+    return rack;
+  }
+
+  /**
+   * Returns the host.
+   *
+   * @return the host
+   */
+  public String host() {
+    return host;
+  }
+
+  /**
+   * Returns the member metadata.
+   *
+   * @return the member metadata
+   */
+  public Map<String, String> metadata() {
+    return metadata;
   }
 
   @Override
   public String toString() {
     return toStringHelper(this)
-        .add("nodeId", nodeId)
-        .add("type", type)
+        .add("memberId", memberId)
         .toString();
   }
 }

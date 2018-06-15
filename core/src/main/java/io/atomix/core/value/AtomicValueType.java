@@ -16,18 +16,22 @@
 package io.atomix.core.value;
 
 import io.atomix.core.value.impl.AtomicValueProxyBuilder;
-import io.atomix.core.value.impl.AtomicValueService;
+import io.atomix.core.value.impl.AtomicValueResource;
+import io.atomix.core.value.impl.DefaultAtomicValueService;
 import io.atomix.primitive.PrimitiveManagementService;
 import io.atomix.primitive.PrimitiveType;
+import io.atomix.primitive.resource.PrimitiveResource;
 import io.atomix.primitive.service.PrimitiveService;
+import io.atomix.primitive.service.ServiceConfig;
 
 import static com.google.common.base.MoreObjects.toStringHelper;
 
 /**
  * Atomic value primitive type.
  */
-public class AtomicValueType<V> implements PrimitiveType<AtomicValueBuilder<V>, AtomicValue<V>> {
-  private static final String NAME = "VALUE";
+public class AtomicValueType<V> implements PrimitiveType<AtomicValueBuilder<V>, AtomicValueConfig, AtomicValue<V>> {
+  private static final String NAME = "value";
+  private static final AtomicValueType INSTANCE = new AtomicValueType();
 
   /**
    * Returns a new value type.
@@ -35,32 +39,41 @@ public class AtomicValueType<V> implements PrimitiveType<AtomicValueBuilder<V>, 
    * @param <V> the value value type
    * @return the value type
    */
+  @SuppressWarnings("unchecked")
   public static <V> AtomicValueType<V> instance() {
-    return new AtomicValueType<>();
-  }
-
-  private AtomicValueType() {
+    return INSTANCE;
   }
 
   @Override
-  public String id() {
+  public String name() {
     return NAME;
   }
 
   @Override
-  public PrimitiveService newService() {
-    return new AtomicValueService();
+  public PrimitiveService newService(ServiceConfig config) {
+    return new DefaultAtomicValueService();
   }
 
   @Override
-  public AtomicValueBuilder<V> newPrimitiveBuilder(String name, PrimitiveManagementService managementService) {
-    return new AtomicValueProxyBuilder<>(name, managementService);
+  @SuppressWarnings("unchecked")
+  public PrimitiveResource newResource(AtomicValue<V> primitive) {
+    return new AtomicValueResource((AsyncAtomicValue<String>) primitive.async());
+  }
+
+  @Override
+  public AtomicValueConfig newConfig() {
+    return new AtomicValueConfig();
+  }
+
+  @Override
+  public AtomicValueBuilder<V> newBuilder(String name, AtomicValueConfig config, PrimitiveManagementService managementService) {
+    return new AtomicValueProxyBuilder<>(name, config, managementService);
   }
 
   @Override
   public String toString() {
     return toStringHelper(this)
-        .add("id", id())
+        .add("name", name())
         .toString();
   }
 }

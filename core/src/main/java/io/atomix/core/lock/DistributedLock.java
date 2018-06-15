@@ -15,8 +15,6 @@
  */
 package io.atomix.core.lock;
 
-import io.atomix.core.PrimitiveTypes;
-import io.atomix.primitive.PrimitiveType;
 import io.atomix.primitive.SyncPrimitive;
 import io.atomix.utils.time.Version;
 
@@ -27,11 +25,6 @@ import java.util.Optional;
  * Asynchronous lock primitive.
  */
 public interface DistributedLock extends SyncPrimitive {
-
-  @Override
-  default PrimitiveType primitiveType() {
-    return PrimitiveTypes.lock();
-  }
 
   /**
    * Acquires the lock, blocking until it's available.

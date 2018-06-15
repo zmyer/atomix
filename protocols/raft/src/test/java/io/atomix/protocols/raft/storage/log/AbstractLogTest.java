@@ -15,7 +15,7 @@
  */
 package io.atomix.protocols.raft.storage.log;
 
-import io.atomix.cluster.NodeId;
+import io.atomix.cluster.MemberId;
 import io.atomix.protocols.raft.ReadConsistency;
 import io.atomix.protocols.raft.cluster.RaftMember;
 import io.atomix.protocols.raft.cluster.impl.DefaultRaftMember;
@@ -28,10 +28,10 @@ import io.atomix.protocols.raft.storage.log.entry.MetadataEntry;
 import io.atomix.protocols.raft.storage.log.entry.OpenSessionEntry;
 import io.atomix.protocols.raft.storage.log.entry.QueryEntry;
 import io.atomix.protocols.raft.storage.log.entry.RaftLogEntry;
-import io.atomix.utils.serializer.Serializer;
-import io.atomix.utils.serializer.KryoNamespace;
 import io.atomix.storage.StorageLevel;
 import io.atomix.storage.journal.Indexed;
+import io.atomix.utils.serializer.Namespace;
+import io.atomix.utils.serializer.Serializer;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -56,14 +56,14 @@ import static org.junit.Assert.assertTrue;
 /**
  * Log test.
  *
- * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public abstract class AbstractLogTest {
   protected static final int MAX_ENTRIES_PER_SEGMENT = 10;
   protected static final int MAX_SEGMENT_SIZE = 1024 * 8;
   private static final Path PATH = Paths.get("target/test-logs/");
 
-  private static final Serializer serializer = Serializer.using(KryoNamespace.builder()
+  private static final Serializer serializer = Serializer.using(Namespace.builder()
       .register(CloseSessionEntry.class)
       .register(CommandEntry.class)
       .register(ConfigurationEntry.class)
@@ -76,7 +76,8 @@ public abstract class AbstractLogTest {
       .register(ArrayList.class)
       .register(HashSet.class)
       .register(DefaultRaftMember.class)
-      .register(NodeId.class)
+      .register(MemberId.class)
+      .register(MemberId.Type.class)
       .register(RaftMember.Type.class)
       .register(ReadConsistency.class)
       .register(Instant.class)
@@ -93,6 +94,7 @@ public abstract class AbstractLogTest {
         .withStorageLevel(storageLevel())
         .withMaxEntriesPerSegment(MAX_ENTRIES_PER_SEGMENT)
         .withMaxSegmentSize(MAX_SEGMENT_SIZE)
+        .withIndexDensity(.2)
         .build();
   }
 
@@ -106,7 +108,16 @@ public abstract class AbstractLogTest {
     // Append a couple entries.
     Indexed<RaftLogEntry> indexed;
     assertEquals(writer.getNextIndex(), 1);
-    indexed = writer.append(new OpenSessionEntry(1, System.currentTimeMillis(), "client", "test1", "test", ReadConsistency.LINEARIZABLE, 100, 1000));
+    indexed = writer.append(new OpenSessionEntry(
+        1,
+        System.currentTimeMillis(),
+        "client",
+        "test1",
+        "test",
+        new byte[0],
+        ReadConsistency.LINEARIZABLE,
+        100,
+        1000));
     assertEquals(indexed.index(), 1);
 
     assertEquals(writer.getNextIndex(), 2);

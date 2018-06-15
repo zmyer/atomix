@@ -15,7 +15,7 @@
  */
 package io.atomix.protocols.backup.partition.impl;
 
-import io.atomix.cluster.Node;
+import io.atomix.primitive.partition.MemberGroupProvider;
 import io.atomix.primitive.partition.PartitionManagementService;
 import io.atomix.protocols.backup.PrimaryBackupServer;
 import io.atomix.protocols.backup.partition.PrimaryBackupPartition;
@@ -36,6 +36,7 @@ public class PrimaryBackupPartitionServer implements Managed<PrimaryBackupPartit
   private final Logger log = LoggerFactory.getLogger(getClass());
   private final PrimaryBackupPartition partition;
   private final PartitionManagementService managementService;
+  private final MemberGroupProvider memberGroupProvider;
   private final ThreadContextFactory threadFactory;
   private PrimaryBackupServer server;
   private final AtomicBoolean started = new AtomicBoolean();
@@ -43,26 +44,24 @@ public class PrimaryBackupPartitionServer implements Managed<PrimaryBackupPartit
   public PrimaryBackupPartitionServer(
       PrimaryBackupPartition partition,
       PartitionManagementService managementService,
+      MemberGroupProvider memberGroupProvider,
       ThreadContextFactory threadFactory) {
     this.partition = partition;
     this.managementService = managementService;
+    this.memberGroupProvider = memberGroupProvider;
     this.threadFactory = threadFactory;
   }
 
   @Override
   public CompletableFuture<PrimaryBackupPartitionServer> start() {
-    if (managementService.getClusterService().getLocalNode().type() == Node.Type.DATA) {
-      synchronized (this) {
-        server = buildServer();
-      }
-      return server.start().thenApply(v -> {
-        log.info("Successfully started server for {}", partition.id());
-        started.set(true);
-        return this;
-      });
+    synchronized (this) {
+      server = buildServer();
     }
-    started.set(true);
-    return CompletableFuture.completedFuture(this);
+    return server.start().thenApply(s -> {
+      log.debug("Successfully started server for {}", partition.id());
+      started.set(true);
+      return this;
+    });
   }
 
   @Override
@@ -73,11 +72,12 @@ public class PrimaryBackupPartitionServer implements Managed<PrimaryBackupPartit
   private PrimaryBackupServer buildServer() {
     return PrimaryBackupServer.builder()
         .withServerName(partition.name())
-        .withClusterService(managementService.getClusterService())
+        .withMembershipService(managementService.getMembershipService())
+        .withMemberGroupProvider(memberGroupProvider)
         .withProtocol(new PrimaryBackupServerCommunicator(
             partition.name(),
             Serializer.using(PrimaryBackupNamespaces.PROTOCOL),
-            managementService.getCommunicationService()))
+            managementService.getMessagingService()))
         .withPrimaryElection(managementService.getElectionService().getElectionFor(partition.id()))
         .withPrimitiveTypes(managementService.getPrimitiveTypes())
         .withThreadContextFactory(threadFactory)
@@ -88,7 +88,10 @@ public class PrimaryBackupPartitionServer implements Managed<PrimaryBackupPartit
   public CompletableFuture<Void> stop() {
     PrimaryBackupServer server = this.server;
     if (server != null) {
-      return server.stop().thenRun(() -> started.set(false));
+      return server.stop().exceptionally(throwable -> {
+        log.error("Failed stopping server for {}", partition.id(), throwable);
+        return null;
+      }).thenRun(() -> started.set(false));
     }
     started.set(false);
     return CompletableFuture.completedFuture(null);

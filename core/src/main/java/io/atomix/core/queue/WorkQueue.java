@@ -16,10 +16,6 @@
 package io.atomix.core.queue;
 
 import com.google.common.collect.ImmutableList;
-
-import io.atomix.core.PrimitiveTypes;
-import io.atomix.primitive.AsyncPrimitive;
-import io.atomix.primitive.PrimitiveType;
 import io.atomix.primitive.SyncPrimitive;
 
 import java.util.Arrays;
@@ -44,11 +40,6 @@ import java.util.function.Consumer;
  * @param <E> task payload type.
  */
 public interface WorkQueue<E> extends SyncPrimitive {
-
-  @Override
-  default PrimitiveType primitiveType() {
-    return PrimitiveTypes.workQueue();
-  }
 
   /**
    * Adds a collection of tasks to the work queue.

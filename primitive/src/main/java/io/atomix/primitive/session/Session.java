@@ -15,13 +15,12 @@
  */
 package io.atomix.primitive.session;
 
-import io.atomix.cluster.NodeId;
+import io.atomix.cluster.MemberId;
 import io.atomix.primitive.PrimitiveType;
 import io.atomix.primitive.event.EventType;
 import io.atomix.primitive.event.PrimitiveEvent;
-import io.atomix.storage.buffer.HeapBytes;
 
-import java.util.function.Function;
+import java.util.function.Consumer;
 
 /**
  * Provides an interface to communicating with a client via session events.
@@ -46,7 +45,7 @@ import java.util.function.Function;
  * When the message is published, it will be queued to be sent to the other side of the connection. Raft guarantees
  * that the message will eventually be received by the client unless the session itself times out or is closed.
  */
-public interface Session {
+public interface Session<C> {
 
   /**
    * Returns the session identifier.
@@ -60,21 +59,21 @@ public interface Session {
    *
    * @return The session's service name.
    */
-  String serviceName();
+  String primitiveName();
 
   /**
    * Returns the session's service type.
    *
    * @return The session's service type.
    */
-  PrimitiveType serviceType();
+  PrimitiveType primitiveType();
 
   /**
-   * Returns the node identifier to which the session belongs.
+   * Returns the member identifier to which the session belongs.
    *
-   * @return The node to which the session belongs.
+   * @return The member to which the session belongs.
    */
-  NodeId nodeId();
+  MemberId memberId();
 
   /**
    * Returns the session state.
@@ -84,50 +83,22 @@ public interface Session {
   State getState();
 
   /**
-   * Adds a state change listener to the session.
-   *
-   * @param listener the state change listener to add
-   */
-  void addListener(SessionEventListener listener);
-
-  /**
-   * Removes a state change listener from the session.
-   *
-   * @param listener the state change listener to remove
-   */
-  void removeListener(SessionEventListener listener);
-
-  /**
    * Publishes an empty event to the session.
    *
    * @param eventType the event type
    */
   default void publish(EventType eventType) {
-    publish(eventType, HeapBytes.EMPTY);
+    publish(eventType, null);
   }
 
   /**
    * Publishes an event to the session.
    *
    * @param eventType the event identifier
-   * @param encoder   the event value encoder
    * @param event     the event value
    * @param <T>       the event type
    */
-  default <T> void publish(EventType eventType, Function<T, byte[]> encoder, T event) {
-    publish(eventType, encoder.apply(event));
-  }
-
-  /**
-   * Publishes an event to the session.
-   *
-   * @param eventType the event identifier
-   * @param event     the event to publish
-   * @throws NullPointerException if the event is {@code null}
-   */
-  default void publish(EventType eventType, byte[] event) {
-    publish(new PrimitiveEvent(EventType.simplify(eventType), event));
-  }
+  <T> void publish(EventType eventType, T event);
 
   /**
    * Publishes an event to the session.
@@ -135,6 +106,13 @@ public interface Session {
    * @param event the event to publish
    */
   void publish(PrimitiveEvent event);
+
+  /**
+   * Sends an event to the client via the client proxy.
+   *
+   * @param event the client proxy operation
+   */
+  void accept(Consumer<C> event);
 
   /**
    * Session state enums.

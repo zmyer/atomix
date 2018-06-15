@@ -17,12 +17,10 @@
 package io.atomix.core.map;
 
 import com.google.common.util.concurrent.MoreExecutors;
-import io.atomix.core.PrimitiveTypes;
 import io.atomix.core.map.impl.MapUpdate;
 import io.atomix.core.transaction.Transactional;
 import io.atomix.primitive.AsyncPrimitive;
 import io.atomix.primitive.DistributedPrimitive;
-import io.atomix.primitive.PrimitiveType;
 import io.atomix.utils.time.Versioned;
 
 import java.time.Duration;
@@ -64,12 +62,7 @@ import java.util.function.Predicate;
 public interface AsyncConsistentMap<K, V> extends AsyncPrimitive, Transactional<MapUpdate<K, V>> {
 
   @Override
-  default PrimitiveType primitiveType() {
-    return PrimitiveTypes.map();
-  }
-
-  @Override
-  default CompletableFuture<Void> destroy() {
+  default CompletableFuture<Void> delete() {
     return clear();
   }
 

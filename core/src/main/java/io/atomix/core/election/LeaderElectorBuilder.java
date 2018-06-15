@@ -15,132 +15,43 @@
  */
 package io.atomix.core.election;
 
-import io.atomix.cluster.NodeId;
-import io.atomix.core.PrimitiveTypes;
-import io.atomix.primitive.Consistency;
-import io.atomix.primitive.DistributedPrimitive;
+import io.atomix.cluster.MemberId;
 import io.atomix.primitive.DistributedPrimitiveBuilder;
-import io.atomix.primitive.Persistence;
-import io.atomix.primitive.PrimitiveProtocol;
-import io.atomix.primitive.Replication;
-import io.atomix.protocols.raft.RaftProtocol;
-import io.atomix.protocols.raft.ReadConsistency;
-import io.atomix.protocols.raft.proxy.CommunicationStrategy;
-import io.atomix.utils.serializer.KryoNamespace;
-import io.atomix.utils.serializer.KryoNamespaces;
+import io.atomix.primitive.PrimitiveManagementService;
+import io.atomix.utils.serializer.Namespace;
+import io.atomix.utils.serializer.Namespaces;
 import io.atomix.utils.serializer.Serializer;
-
-import java.time.Duration;
-import java.util.concurrent.TimeUnit;
-
-import static com.google.common.base.Preconditions.checkNotNull;
+import io.atomix.utils.serializer.NamespaceConfig;
 
 /**
  * Builder for constructing new {@link AsyncLeaderElector} instances.
  */
 public abstract class LeaderElectorBuilder<T>
-    extends DistributedPrimitiveBuilder<LeaderElectorBuilder<T>, LeaderElector<T>> {
-
-  private Duration electionTimeout = Duration.ofMillis(DistributedPrimitive.DEFAULT_OPERATION_TIMEOUT_MILLIS);
-  private Serializer serializer;
-
-  public LeaderElectorBuilder(String name) {
-    super(PrimitiveTypes.leaderElector(), name);
-  }
-
-  /**
-   * Sets the election timeout in milliseconds.
-   *
-   * @param electionTimeoutMillis the election timeout in milliseconds
-   * @return leader elector builder
-   */
-  public LeaderElectorBuilder<T> withElectionTimeout(long electionTimeoutMillis) {
-    return withElectionTimeout(Duration.ofMillis(electionTimeoutMillis));
-  }
-
-  /**
-   * Sets the election timeout.
-   *
-   * @param electionTimeout the election timeout
-   * @param timeUnit        the timeout time unit
-   * @return leader elector builder
-   */
-  public LeaderElectorBuilder<T> withElectionTimeout(long electionTimeout, TimeUnit timeUnit) {
-    return withElectionTimeout(Duration.ofMillis(timeUnit.toMillis(electionTimeout)));
-  }
-
-  /**
-   * Sets the election timeout.
-   *
-   * @param electionTimeout the election timeout
-   * @return leader elector builder
-   */
-  public LeaderElectorBuilder<T> withElectionTimeout(Duration electionTimeout) {
-    this.electionTimeout = checkNotNull(electionTimeout);
-    return this;
-  }
-
-  /**
-   * Returns the election timeout.
-   *
-   * @return the election timeout
-   */
-  public Duration electionTimeout() {
-    return electionTimeout;
-  }
-
-  @Override
-  public LeaderElectorBuilder<T> withSerializer(Serializer serializer) {
-    this.serializer = serializer;
-    return this;
+    extends DistributedPrimitiveBuilder<LeaderElectorBuilder<T>, LeaderElectorConfig, LeaderElector<T>> {
+  public LeaderElectorBuilder(String name, LeaderElectorConfig config, PrimitiveManagementService managementService) {
+    super(LeaderElectorType.instance(), name, config, managementService);
   }
 
   @Override
   public Serializer serializer() {
+    Serializer serializer = this.serializer;
     if (serializer == null) {
-      serializer = Serializer.using(KryoNamespace.builder()
-          .register(KryoNamespaces.BASIC)
-          .register(NodeId.class)
-          .build());
+      NamespaceConfig config = this.config.getNamespaceConfig();
+      if (config == null) {
+        serializer = Serializer.using(Namespace.builder()
+            .register(Namespaces.BASIC)
+            .register(MemberId.class)
+            .register(MemberId.Type.class)
+            .build());
+      } else {
+        serializer = Serializer.using(Namespace.builder()
+            .register(Namespaces.BASIC)
+            .register(MemberId.class)
+            .register(MemberId.Type.class)
+            .register(new Namespace(config))
+            .build());
+      }
     }
     return serializer;
-  }
-
-  @Override
-  protected Consistency defaultConsistency() {
-    return Consistency.LINEARIZABLE;
-  }
-
-  @Override
-  protected Persistence defaultPersistence() {
-    return Persistence.PERSISTENT;
-  }
-
-  @Override
-  protected Replication defaultReplication() {
-    return Replication.SYNCHRONOUS;
-  }
-
-  @Override
-  public PrimitiveProtocol protocol() {
-    PrimitiveProtocol protocol = super.protocol();
-    if (protocol != null) {
-      return protocol;
-    }
-    return newRaftProtocol(consistency());
-  }
-
-  private PrimitiveProtocol newRaftProtocol(Consistency readConsistency) {
-    return RaftProtocol.builder()
-        .withMinTimeout(electionTimeout)
-        .withMaxTimeout(Duration.ofSeconds(5))
-        .withReadConsistency(readConsistency == Consistency.LINEARIZABLE
-            ? ReadConsistency.LINEARIZABLE
-            : ReadConsistency.SEQUENTIAL)
-        .withCommunicationStrategy(CommunicationStrategy.LEADER)
-        .withRecoveryStrategy(recovery())
-        .withMaxRetries(maxRetries())
-        .withRetryDelay(retryDelay())
-        .build();
   }
 }

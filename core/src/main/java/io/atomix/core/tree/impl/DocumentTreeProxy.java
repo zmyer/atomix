@@ -16,8 +16,8 @@
 
 package io.atomix.core.tree.impl;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.MoreExecutors;
-
 import io.atomix.core.tree.AsyncDocumentTree;
 import io.atomix.core.tree.DocumentPath;
 import io.atomix.core.tree.DocumentTree;
@@ -25,36 +25,20 @@ import io.atomix.core.tree.DocumentTreeEvent;
 import io.atomix.core.tree.DocumentTreeListener;
 import io.atomix.core.tree.IllegalDocumentModificationException;
 import io.atomix.core.tree.NoSuchDocumentPathException;
-import io.atomix.core.tree.impl.DocumentTreeOperations.Get;
-import io.atomix.core.tree.impl.DocumentTreeOperations.GetChildren;
-import io.atomix.core.tree.impl.DocumentTreeOperations.Listen;
-import io.atomix.core.tree.impl.DocumentTreeOperations.Unlisten;
-import io.atomix.core.tree.impl.DocumentTreeOperations.Update;
-import io.atomix.primitive.impl.AbstractAsyncPrimitive;
-import io.atomix.primitive.proxy.PrimitiveProxy;
-import io.atomix.utils.Match;
+import io.atomix.primitive.AbstractAsyncPrimitive;
+import io.atomix.primitive.PrimitiveRegistry;
+import io.atomix.primitive.PrimitiveState;
+import io.atomix.primitive.proxy.ProxyClient;
 import io.atomix.utils.concurrent.Futures;
-import io.atomix.utils.serializer.KryoNamespace;
-import io.atomix.utils.serializer.KryoNamespaces;
-import io.atomix.utils.serializer.Serializer;
 import io.atomix.utils.time.Versioned;
 
 import java.time.Duration;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
 import static com.google.common.base.Preconditions.checkNotNull;
-import static io.atomix.core.tree.impl.DocumentTreeEvents.CHANGE;
-import static io.atomix.core.tree.impl.DocumentTreeOperations.ADD_LISTENER;
-import static io.atomix.core.tree.impl.DocumentTreeOperations.CLEAR;
-import static io.atomix.core.tree.impl.DocumentTreeOperations.GET;
-import static io.atomix.core.tree.impl.DocumentTreeOperations.GET_CHILDREN;
-import static io.atomix.core.tree.impl.DocumentTreeOperations.REMOVE_LISTENER;
-import static io.atomix.core.tree.impl.DocumentTreeOperations.UPDATE;
 import static io.atomix.core.tree.impl.DocumentTreeResult.Status.ILLEGAL_MODIFICATION;
 import static io.atomix.core.tree.impl.DocumentTreeResult.Status.INVALID_PATH;
 import static io.atomix.core.tree.impl.DocumentTreeResult.Status.OK;
@@ -62,28 +46,13 @@ import static io.atomix.core.tree.impl.DocumentTreeResult.Status.OK;
 /**
  * Distributed resource providing the {@link AsyncDocumentTree} primitive.
  */
-public class DocumentTreeProxy extends AbstractAsyncPrimitive implements AsyncDocumentTree<byte[]> {
-  private static final Serializer SERIALIZER = Serializer.using(KryoNamespace.builder()
-      .register(KryoNamespaces.BASIC)
-      .register(DocumentTreeOperations.NAMESPACE)
-      .register(DocumentTreeEvents.NAMESPACE)
-      .build());
-
+public class DocumentTreeProxy
+    extends AbstractAsyncPrimitive<AsyncDocumentTree<byte[]>, DocumentTreeService>
+    implements AsyncDocumentTree<byte[]>, DocumentTreeClient {
   private final Map<DocumentTreeListener<byte[]>, InternalListener> eventListeners = new HashMap<>();
 
-  public DocumentTreeProxy(PrimitiveProxy proxy) {
-    super(proxy);
-    proxy.addStateChangeListener(state -> {
-      if (state == PrimitiveProxy.State.CONNECTED && isListening()) {
-        proxy.invoke(ADD_LISTENER, SERIALIZER::encode, new Listen());
-      }
-    });
-    proxy.addEventListener(CHANGE, SERIALIZER::decode, this::processTreeUpdates);
-  }
-
-  @Override
-  public CompletableFuture<Void> destroy() {
-    return proxy.invoke(CLEAR);
+  public DocumentTreeProxy(ProxyClient<DocumentTreeService> proxy, PrimitiveRegistry registry) {
+    super(proxy, registry);
   }
 
   @Override
@@ -93,33 +62,18 @@ public class DocumentTreeProxy extends AbstractAsyncPrimitive implements AsyncDo
 
   @Override
   public CompletableFuture<Map<String, Versioned<byte[]>>> getChildren(DocumentPath path) {
-    return proxy.<GetChildren, DocumentTreeResult<Map<String, Versioned<byte[]>>>>invoke(
-        GET_CHILDREN,
-        SERIALIZER::encode,
-        new GetChildren(checkNotNull(path)),
-        SERIALIZER::decode)
-        .thenCompose(result -> {
-          if (result.status() == INVALID_PATH) {
-            return Futures.exceptionalFuture(new NoSuchDocumentPathException());
-          } else if (result.status() == ILLEGAL_MODIFICATION) {
-            return Futures.exceptionalFuture(new IllegalDocumentModificationException());
-          } else {
-            return CompletableFuture.completedFuture(result);
-          }
-        }).thenApply(result -> result.result());
+    return getProxyClient().applyBy(name(), service -> service.getChildren(path))
+        .thenApply(result -> result.status() == OK ? result.result() : ImmutableMap.of());
   }
 
   @Override
   public CompletableFuture<Versioned<byte[]>> get(DocumentPath path) {
-    return proxy.invoke(GET, SERIALIZER::encode, new Get(checkNotNull(path)), SERIALIZER::decode);
+    return getProxyClient().applyBy(name(), service -> service.get(path));
   }
 
   @Override
   public CompletableFuture<Versioned<byte[]>> set(DocumentPath path, byte[] value) {
-    return proxy.<Update, DocumentTreeResult<Versioned<byte[]>>>invoke(UPDATE,
-        SERIALIZER::encode,
-        new Update(checkNotNull(path), Optional.ofNullable(value), Match.any(), Match.any()),
-        SERIALIZER::decode)
+    return getProxyClient().applyBy(name(), service -> service.set(path, value))
         .thenCompose(result -> {
           if (result.status() == INVALID_PATH) {
             return Futures.exceptionalFuture(new NoSuchDocumentPathException());
@@ -133,67 +87,66 @@ public class DocumentTreeProxy extends AbstractAsyncPrimitive implements AsyncDo
 
   @Override
   public CompletableFuture<Boolean> create(DocumentPath path, byte[] value) {
-    return createInternal(path, value)
-        .thenCompose(status -> {
-          if (status == ILLEGAL_MODIFICATION) {
-            return Futures.exceptionalFuture(new IllegalDocumentModificationException());
-          }
-          return CompletableFuture.completedFuture(true);
-        });
-  }
-
-  @Override
-  public CompletableFuture<Boolean> createRecursive(DocumentPath path, byte[] value) {
-    return createInternal(path, value)
-        .thenCompose(status -> {
-          if (status == ILLEGAL_MODIFICATION) {
-            return createRecursive(path.parent(), null)
-                .thenCompose(r -> createInternal(path, value).thenApply(v -> true));
-          }
-          return CompletableFuture.completedFuture(status == OK);
-        });
-  }
-
-  @Override
-  public CompletableFuture<Boolean> replace(DocumentPath path, byte[] newValue, long version) {
-    return proxy.<Update, DocumentTreeResult<byte[]>>invoke(UPDATE,
-        SERIALIZER::encode,
-        new Update(checkNotNull(path),
-            Optional.ofNullable(newValue),
-            Match.any(),
-            Match.ifValue(version)), SERIALIZER::decode)
-        .thenApply(result -> result.updated());
-  }
-
-  @Override
-  public CompletableFuture<Boolean> replace(DocumentPath path, byte[] newValue, byte[] currentValue) {
-    return proxy.<Update, DocumentTreeResult<byte[]>>invoke(UPDATE,
-        SERIALIZER::encode,
-        new Update(checkNotNull(path),
-            Optional.ofNullable(newValue),
-            Match.ifValue(currentValue),
-            Match.any()),
-        SERIALIZER::decode)
+    return getProxyClient().applyBy(name(), service -> service.create(path, value))
         .thenCompose(result -> {
           if (result.status() == INVALID_PATH) {
             return Futures.exceptionalFuture(new NoSuchDocumentPathException());
           } else if (result.status() == ILLEGAL_MODIFICATION) {
             return Futures.exceptionalFuture(new IllegalDocumentModificationException());
           } else {
-            return CompletableFuture.completedFuture(result);
+            return CompletableFuture.completedFuture(result.status() == OK);
           }
-        }).thenApply(result -> result.updated());
+        });
+  }
+
+  @Override
+  public CompletableFuture<Boolean> createRecursive(DocumentPath path, byte[] value) {
+    return getProxyClient().applyBy(name(), service -> service.createRecursive(path, value))
+        .thenCompose(result -> {
+          if (result.status() == INVALID_PATH) {
+            return Futures.exceptionalFuture(new NoSuchDocumentPathException());
+          } else if (result.status() == ILLEGAL_MODIFICATION) {
+            return Futures.exceptionalFuture(new IllegalDocumentModificationException());
+          } else {
+            return CompletableFuture.completedFuture(result.status() == OK);
+          }
+        });
+  }
+
+  @Override
+  public CompletableFuture<Boolean> replace(DocumentPath path, byte[] newValue, long version) {
+    return getProxyClient().applyBy(name(), service -> service.replace(path, newValue, version))
+        .thenCompose(result -> {
+          if (result.status() == INVALID_PATH) {
+            return Futures.exceptionalFuture(new NoSuchDocumentPathException());
+          } else if (result.status() == ILLEGAL_MODIFICATION) {
+            return Futures.exceptionalFuture(new IllegalDocumentModificationException());
+          } else {
+            return CompletableFuture.completedFuture(result.status() == OK);
+          }
+        });
+  }
+
+  @Override
+  public CompletableFuture<Boolean> replace(DocumentPath path, byte[] newValue, byte[] currentValue) {
+    return getProxyClient().applyBy(name(), service -> service.replace(path, newValue, currentValue))
+        .thenCompose(result -> {
+          if (result.status() == INVALID_PATH) {
+            return Futures.exceptionalFuture(new NoSuchDocumentPathException());
+          } else if (result.status() == ILLEGAL_MODIFICATION) {
+            return Futures.exceptionalFuture(new IllegalDocumentModificationException());
+          } else {
+            return CompletableFuture.completedFuture(result.status() == OK);
+          }
+        });
   }
 
   @Override
   public CompletableFuture<Versioned<byte[]>> removeNode(DocumentPath path) {
-    if (path.equals(DocumentPath.from("root"))) {
+    if (path.equals(root())) {
       return Futures.exceptionalFuture(new IllegalDocumentModificationException());
     }
-    return proxy.<Update, DocumentTreeResult<Versioned<byte[]>>>invoke(UPDATE,
-        SERIALIZER::encode,
-        new Update(checkNotNull(path), null, Match.any(), Match.ifNotNull()),
-        SERIALIZER::decode)
+    return getProxyClient().applyBy(name(), service -> service.removeNode(path))
         .thenCompose(result -> {
           if (result.status() == INVALID_PATH) {
             return Futures.exceptionalFuture(new NoSuchDocumentPathException());
@@ -212,7 +165,7 @@ public class DocumentTreeProxy extends AbstractAsyncPrimitive implements AsyncDo
     InternalListener internalListener = new InternalListener(path, listener, MoreExecutors.directExecutor());
     // TODO: Support API that takes an executor
     if (!eventListeners.containsKey(listener)) {
-      return proxy.invoke(ADD_LISTENER, SERIALIZER::encode, new Listen(path))
+      return getProxyClient().acceptBy(name(), service -> service.listen(path))
           .thenRun(() -> eventListeners.put(listener, internalListener));
     }
     return CompletableFuture.completedFuture(null);
@@ -223,10 +176,24 @@ public class DocumentTreeProxy extends AbstractAsyncPrimitive implements AsyncDo
     checkNotNull(listener);
     InternalListener internalListener = eventListeners.remove(listener);
     if (internalListener != null && eventListeners.isEmpty()) {
-      return proxy.invoke(REMOVE_LISTENER, SERIALIZER::encode, new Unlisten(internalListener.path))
-          .thenApply(v -> null);
+      return getProxyClient().acceptBy(name(), service -> service.unlisten(internalListener.path));
     }
     return CompletableFuture.completedFuture(null);
+  }
+
+  @Override
+  public CompletableFuture<AsyncDocumentTree<byte[]>> connect() {
+    return super.connect()
+        .thenRun(() -> getProxyClient().getPartition(name()).addStateChangeListener(state -> {
+          if (state == PrimitiveState.CONNECTED && isListening()) {
+            getProxyClient().acceptBy(name(), service -> service.listen(root()));
+          }
+        })).thenApply(v -> this);
+  }
+
+  @Override
+  public CompletableFuture<Void> delete() {
+    return getProxyClient().acceptBy(name(), service -> service.clear());
   }
 
   @Override
@@ -234,20 +201,13 @@ public class DocumentTreeProxy extends AbstractAsyncPrimitive implements AsyncDo
     return new BlockingDocumentTree<>(this, operationTimeout.toMillis());
   }
 
-  private CompletableFuture<DocumentTreeResult.Status> createInternal(DocumentPath path, byte[] value) {
-    return proxy.<Update, DocumentTreeResult<byte[]>>invoke(UPDATE,
-        SERIALIZER::encode,
-        new Update(checkNotNull(path), Optional.ofNullable(value), Match.any(), Match.ifNull()),
-        SERIALIZER::decode)
-        .thenApply(result -> result.status());
-  }
-
   private boolean isListening() {
     return !eventListeners.isEmpty();
   }
 
-  private void processTreeUpdates(List<DocumentTreeEvent<byte[]>> events) {
-    events.forEach(event -> eventListeners.values().forEach(listener -> listener.event(event)));
+  @Override
+  public void change(DocumentTreeEvent<byte[]> event) {
+    eventListeners.values().forEach(listener -> listener.event(event));
   }
 
   private static class InternalListener implements DocumentTreeListener<byte[]> {

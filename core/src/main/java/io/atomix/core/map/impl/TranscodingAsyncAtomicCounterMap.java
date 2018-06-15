@@ -17,6 +17,8 @@ package io.atomix.core.map.impl;
 
 import io.atomix.core.map.AsyncAtomicCounterMap;
 import io.atomix.core.map.AtomicCounterMap;
+import io.atomix.primitive.PrimitiveType;
+import io.atomix.primitive.protocol.PrimitiveProtocol;
 import io.atomix.utils.concurrent.Futures;
 
 import java.time.Duration;
@@ -41,6 +43,16 @@ public class TranscodingAsyncAtomicCounterMap<K1, K2> implements AsyncAtomicCoun
   @Override
   public String name() {
     return backingMap.name();
+  }
+
+  @Override
+  public PrimitiveType type() {
+    return backingMap.type();
+  }
+
+  @Override
+  public PrimitiveProtocol protocol() {
+    return backingMap.protocol();
   }
 
   @Override

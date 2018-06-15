@@ -17,7 +17,6 @@
 package io.atomix.core.tree.impl;
 
 import com.google.common.base.Throwables;
-
 import io.atomix.core.AbstractPrimitiveTest;
 import io.atomix.core.tree.AsyncDocumentTree;
 import io.atomix.core.tree.DocumentPath;
@@ -25,16 +24,14 @@ import io.atomix.core.tree.DocumentTreeEvent;
 import io.atomix.core.tree.DocumentTreeListener;
 import io.atomix.core.tree.IllegalDocumentModificationException;
 import io.atomix.core.tree.NoSuchDocumentPathException;
-import io.atomix.primitive.Ordering;
 import io.atomix.utils.time.Versioned;
 import org.junit.Ignore;
 import org.junit.Test;
 
-import java.util.Iterator;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -45,16 +42,10 @@ import static org.junit.Assert.fail;
 /**
  * Unit tests for {@link DocumentTreeProxy}.
  */
-public class DocumentTreeTest extends AbstractPrimitiveTest {
+public abstract class DocumentTreeTest extends AbstractPrimitiveTest {
 
   protected AsyncDocumentTree<String> newTree(String name) throws Exception {
-    return newTree(name, null);
-  }
-
-  protected AsyncDocumentTree<String> newTree(String name, Ordering ordering) throws Exception {
-    return atomix().<String>documentTreeBuilder(name)
-        .withOrdering(ordering)
-        .withMaxRetries(5)
+    return atomix().<String>documentTreeBuilder(name, protocol())
         .build()
         .async();
   }
@@ -108,35 +99,6 @@ public class DocumentTreeTest extends AbstractPrimitiveTest {
 
     Versioned<String> abc = tree.get(path("root.a.b.c")).join();
     assertEquals("abc", abc.value());
-  }
-
-  /**
-   * Tests child node order.
-   */
-  @Test
-  @Ignore
-  public void testOrder() throws Throwable {
-    AsyncDocumentTree<String> naturalTree = newTree(UUID.randomUUID().toString(), Ordering.NATURAL);
-    naturalTree.create(path("root.c"), "foo");
-    naturalTree.create(path("root.b"), "bar");
-    naturalTree.create(path("root.a"), "baz");
-
-    Iterator<Map.Entry<String, Versioned<String>>> naturalIterator = naturalTree.getChildren(path("root"))
-        .join().entrySet().iterator();
-    assertEquals("a", naturalIterator.next().getKey());
-    assertEquals("b", naturalIterator.next().getKey());
-    assertEquals("c", naturalIterator.next().getKey());
-
-    AsyncDocumentTree<String> insertionTree = newTree(UUID.randomUUID().toString(), Ordering.INSERTION);
-    insertionTree.create(path("root.c"), "foo");
-    insertionTree.create(path("root.b"), "bar");
-    insertionTree.create(path("root.a"), "baz");
-
-    Iterator<Map.Entry<String, Versioned<String>>> insertionIterator = insertionTree.getChildren(path("root"))
-        .join().entrySet().iterator();
-    assertEquals("c", insertionIterator.next().getKey());
-    assertEquals("b", insertionIterator.next().getKey());
-    assertEquals("a", insertionIterator.next().getKey());
   }
 
   /**
@@ -332,14 +294,14 @@ public class DocumentTreeTest extends AbstractPrimitiveTest {
     tree.create(path("root.a.b"), "ab").join();
     tree.create(path("root.a.c"), "ac").join();
 
-    tree.destroy().join();
+    tree.delete().join();
     assertEquals(0, tree.getChildren(path("root")).join().size());
   }
 
   /**
    * Tests listeners.
    */
-  @Test
+  @Test(timeout = 45000)
   public void testNotifications() throws Exception {
     AsyncDocumentTree<String> tree = newTree(UUID.randomUUID().toString());
     TestEventListener listener = new TestEventListener();
@@ -373,15 +335,16 @@ public class DocumentTreeTest extends AbstractPrimitiveTest {
     assertEquals("xy", event.newValue().get().value());
   }
 
-  @Test
+  @Ignore
+  @Test(timeout = 45000)
   public void testFilteredNotifications() throws Throwable {
     String treeName = UUID.randomUUID().toString();
     AsyncDocumentTree<String> tree1 = newTree(treeName);
     AsyncDocumentTree<String> tree2 = newTree(treeName);
 
-    TestEventListener listener1a = new TestEventListener(3);
-    TestEventListener listener1ab = new TestEventListener(2);
-    TestEventListener listener2abc = new TestEventListener(1);
+    TestEventListener listener1a = new TestEventListener();
+    TestEventListener listener1ab = new TestEventListener();
+    TestEventListener listener2abc = new TestEventListener();
 
     tree1.addListener(path("root.a"), listener1a).join();
     tree1.addListener(path("root.a.b"), listener1ab).join();
@@ -403,23 +366,14 @@ public class DocumentTreeTest extends AbstractPrimitiveTest {
   }
 
   private static class TestEventListener implements DocumentTreeListener<String> {
-
-    private final BlockingQueue<DocumentTreeEvent<String>> queue;
-
-    public TestEventListener() {
-      this(1);
-    }
-
-    public TestEventListener(int maxEvents) {
-      queue = new ArrayBlockingQueue<>(maxEvents);
-    }
+    private final BlockingQueue<DocumentTreeEvent<String>> queue = new LinkedBlockingQueue<>();
 
     @Override
     public void event(DocumentTreeEvent<String> event) {
       try {
         queue.put(event);
       } catch (InterruptedException e) {
-        Throwables.propagate(e);
+        Thread.currentThread().interrupt();
       }
     }
 

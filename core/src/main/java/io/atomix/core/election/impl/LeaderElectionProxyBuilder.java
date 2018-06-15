@@ -17,34 +17,40 @@ package io.atomix.core.election.impl;
 
 import io.atomix.core.election.LeaderElection;
 import io.atomix.core.election.LeaderElectionBuilder;
+import io.atomix.core.election.LeaderElectionConfig;
 import io.atomix.primitive.PrimitiveManagementService;
-import io.atomix.primitive.PrimitiveProtocol;
+import io.atomix.primitive.proxy.ProxyClient;
+import io.atomix.primitive.service.ServiceConfig;
+import io.atomix.utils.serializer.Serializer;
 
 import java.util.concurrent.CompletableFuture;
-
-import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
  * Default implementation of {@code LeaderElectorBuilder}.
  */
 public class LeaderElectionProxyBuilder<T> extends LeaderElectionBuilder<T> {
-  private final PrimitiveManagementService managementService;
-
-  public LeaderElectionProxyBuilder(String name, PrimitiveManagementService managementService) {
-    super(name);
-    this.managementService = checkNotNull(managementService);
+  public LeaderElectionProxyBuilder(String name, LeaderElectionConfig config, PrimitiveManagementService managementService) {
+    super(name, config, managementService);
   }
 
   @Override
   @SuppressWarnings("unchecked")
   public CompletableFuture<LeaderElection<T>> buildAsync() {
-    PrimitiveProtocol protocol = protocol();
-    return managementService.getPartitionService()
-        .getPartitionGroup(protocol)
-        .getPartition(name())
-        .getPrimitiveClient()
-        .newProxy(name(), primitiveType(), protocol)
+    ProxyClient<LeaderElectionService> proxy = protocol().newProxy(
+        name(),
+        primitiveType(),
+        LeaderElectionService.class,
+        new ServiceConfig(),
+        managementService.getPartitionService());
+    return new LeaderElectionProxy(proxy, managementService.getPrimitiveRegistry())
         .connect()
-        .thenApply(proxy -> new TranscodingAsyncLeaderElection<T, byte[]>(new LeaderElectionProxy(proxy), serializer()::encode, serializer()::decode).sync());
+        .thenApply(election -> {
+          Serializer serializer = serializer();
+          return new TranscodingAsyncLeaderElection<T, byte[]>(
+              election,
+              key -> serializer.encode(key),
+              bytes -> serializer.decode(bytes))
+              .sync();
+        });
   }
 }

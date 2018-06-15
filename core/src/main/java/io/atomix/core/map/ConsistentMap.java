@@ -17,9 +17,6 @@
 package io.atomix.core.map;
 
 import com.google.common.util.concurrent.MoreExecutors;
-
-import io.atomix.core.PrimitiveTypes;
-import io.atomix.primitive.PrimitiveType;
 import io.atomix.primitive.SyncPrimitive;
 import io.atomix.utils.time.Versioned;
 
@@ -41,11 +38,6 @@ import java.util.function.Predicate;
  * @param <V> type of value
  */
 public interface ConsistentMap<K, V> extends SyncPrimitive {
-
-  @Override
-  default PrimitiveType primitiveType() {
-    return PrimitiveTypes.map();
-  }
 
   /**
    * Returns the number of entries in the map.

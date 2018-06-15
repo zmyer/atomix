@@ -16,6 +16,7 @@
 package io.atomix.protocols.backup.roles;
 
 import io.atomix.primitive.operation.OperationType;
+import io.atomix.primitive.service.impl.DefaultBackupOutput;
 import io.atomix.primitive.service.impl.DefaultCommit;
 import io.atomix.primitive.session.Session;
 import io.atomix.protocols.backup.PrimaryBackupServer.Role;
@@ -34,6 +35,7 @@ import io.atomix.utils.concurrent.Futures;
 import io.atomix.utils.concurrent.Scheduled;
 
 import java.time.Duration;
+import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -92,7 +94,7 @@ public class PrimaryRole extends PrimaryBackupRole {
         index,
         timestamp,
         session.sessionId().id(),
-        session.nodeId(),
+        session.memberId(),
         request.operation()))
         .thenApply(v -> {
           try {
@@ -122,7 +124,7 @@ public class PrimaryRole extends PrimaryBackupRole {
           index,
           timestamp,
           newSession.sessionId().id(),
-          newSession.nodeId(),
+          newSession.memberId(),
           null))
           .thenApply(v -> {
             context.setIndex(index);
@@ -158,12 +160,23 @@ public class PrimaryRole extends PrimaryBackupRole {
     }
 
     HeapBuffer buffer = HeapBuffer.allocate();
-    context.service().backup(buffer);
-    buffer.flip();
-    byte[] bytes = buffer.readBytes(buffer.remaining());
-    return CompletableFuture.completedFuture(
-        RestoreResponse.ok(context.currentIndex(), context.currentTimestamp(), bytes))
-        .thenApply(this::logResponse);
+    try {
+      Collection<PrimaryBackupSession> sessions = context.getSessions();
+      buffer.writeInt(sessions.size());
+      for (Session session : sessions) {
+        buffer.writeLong(session.sessionId().id());
+        buffer.writeString(session.memberId().id());
+      }
+
+      context.service().backup(new DefaultBackupOutput(buffer, context.service().serializer()));
+      buffer.flip();
+      byte[] bytes = buffer.readBytes(buffer.remaining());
+      return CompletableFuture.completedFuture(
+              RestoreResponse.ok(context.currentIndex(), context.currentTimestamp(), bytes))
+              .thenApply(this::logResponse);
+    } finally {
+      buffer.release();
+    }
   }
 
   @Override
@@ -173,7 +186,7 @@ public class PrimaryRole extends PrimaryBackupRole {
     return replicator.replicate(new ExpireOperation(index, timestamp, session.sessionId().id()))
         .thenRun(() -> {
           context.setTimestamp(timestamp);
-          context.sessions().expireSession(session);
+          context.expireSession(session.sessionId().id());
         });
   }
 
@@ -184,7 +197,7 @@ public class PrimaryRole extends PrimaryBackupRole {
     return replicator.replicate(new CloseOperation(index, timestamp, session.sessionId().id()))
         .thenRun(() -> {
           context.setTimestamp(timestamp);
-          context.sessions().closeSession(session);
+          context.closeSession(session.sessionId().id());
         });
   }
 

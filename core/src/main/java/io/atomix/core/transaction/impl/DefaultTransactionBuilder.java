@@ -17,6 +17,7 @@ package io.atomix.core.transaction.impl;
 
 import io.atomix.core.transaction.Transaction;
 import io.atomix.core.transaction.TransactionBuilder;
+import io.atomix.core.transaction.TransactionConfig;
 import io.atomix.core.transaction.TransactionService;
 import io.atomix.primitive.PrimitiveManagementService;
 
@@ -28,20 +29,19 @@ import static com.google.common.base.Preconditions.checkNotNull;
  * Default transaction builder.
  */
 public class DefaultTransactionBuilder extends TransactionBuilder {
-  private final PrimitiveManagementService managementService;
   private final TransactionService transactionService;
 
   public DefaultTransactionBuilder(
       String name,
+      TransactionConfig config,
       PrimitiveManagementService managementService,
       TransactionService transactionService) {
-    super(name);
-    this.managementService = checkNotNull(managementService);
+    super(name, config, managementService);
     this.transactionService = checkNotNull(transactionService);
   }
 
   @Override
   public CompletableFuture<Transaction> buildAsync() {
-    return CompletableFuture.completedFuture(new DefaultTransaction(transactionService, managementService, isolation()).sync());
+    return CompletableFuture.completedFuture(new DefaultTransaction(transactionService, managementService, config.getIsolation()).sync());
   }
 }

@@ -15,18 +15,17 @@
  */
 package io.atomix.protocols.raft.partition.impl;
 
-import io.atomix.cluster.NodeId;
-import io.atomix.primitive.PrimitiveClient;
+import io.atomix.cluster.MemberId;
 import io.atomix.primitive.PrimitiveType;
-import io.atomix.primitive.proxy.PrimitiveProxy;
+import io.atomix.primitive.partition.PartitionClient;
+import io.atomix.primitive.service.ServiceConfig;
 import io.atomix.protocols.raft.RaftClient;
-import io.atomix.protocols.raft.RaftProtocol;
 import io.atomix.protocols.raft.partition.RaftPartition;
 import io.atomix.protocols.raft.protocol.RaftClientProtocol;
+import io.atomix.protocols.raft.session.RaftSessionClient;
 import io.atomix.utils.Managed;
 import org.slf4j.Logger;
 
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 import static org.slf4j.LoggerFactory.getLogger;
@@ -34,18 +33,18 @@ import static org.slf4j.LoggerFactory.getLogger;
 /**
  * StoragePartition client.
  */
-public class RaftPartitionClient implements PrimitiveClient<RaftProtocol>, Managed<RaftPartitionClient> {
+public class RaftPartitionClient implements PartitionClient, Managed<RaftPartitionClient> {
 
   private final Logger log = getLogger(getClass());
 
   private final RaftPartition partition;
-  private final NodeId localNodeId;
+  private final MemberId localMemberId;
   private final RaftClientProtocol protocol;
   private RaftClient client;
 
-  public RaftPartitionClient(RaftPartition partition, NodeId localNodeId, RaftClientProtocol protocol) {
+  public RaftPartitionClient(RaftPartition partition, MemberId localMemberId, RaftClientProtocol protocol) {
     this.partition = partition;
-    this.localNodeId = localNodeId;
+    this.localMemberId = localMemberId;
     this.protocol = protocol;
   }
 
@@ -63,18 +62,13 @@ public class RaftPartitionClient implements PrimitiveClient<RaftProtocol>, Manag
    *
    * @return the partition leader
    */
-  public NodeId leader() {
+  public MemberId leader() {
     return client != null ? client.leader() : null;
   }
 
   @Override
-  public PrimitiveProxy newProxy(String primitiveName, PrimitiveType primitiveType, RaftProtocol primitiveProtocol) {
-    return client.newProxy(primitiveName, primitiveType, primitiveProtocol);
-  }
-
-  @Override
-  public CompletableFuture<Set<String>> getPrimitives(PrimitiveType primitiveType) {
-    return client.getPrimitives(primitiveType);
+  public RaftSessionClient.Builder sessionBuilder(String primitiveName, PrimitiveType primitiveType, ServiceConfig serviceConfig) {
+    return client.sessionBuilder(primitiveName, primitiveType, serviceConfig);
   }
 
   @Override
@@ -84,9 +78,9 @@ public class RaftPartitionClient implements PrimitiveClient<RaftProtocol>, Manag
     }
     return client.connect(partition.members()).whenComplete((r, e) -> {
       if (e == null) {
-        log.info("Successfully started client for partition {}", partition.id());
+        log.debug("Successfully started client for partition {}", partition.id());
       } else {
-        log.info("Failed to start client for partition {}", partition.id(), e);
+        log.warn("Failed to start client for partition {}", partition.id(), e);
       }
     }).thenApply(v -> null);
   }
@@ -104,7 +98,8 @@ public class RaftPartitionClient implements PrimitiveClient<RaftProtocol>, Manag
   private RaftClient newRaftClient(RaftClientProtocol protocol) {
     return RaftClient.builder()
         .withClientId(partition.name())
-        .withNodeId(localNodeId)
+        .withPartitionId(partition.id())
+        .withMemberId(localMemberId)
         .withProtocol(protocol)
         .build();
   }

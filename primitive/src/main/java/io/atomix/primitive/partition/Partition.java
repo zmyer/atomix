@@ -15,16 +15,14 @@
  */
 package io.atomix.primitive.partition;
 
-import io.atomix.cluster.NodeId;
-import io.atomix.primitive.PrimitiveClient;
-import io.atomix.primitive.PrimitiveProtocol;
+import io.atomix.cluster.MemberId;
 
 import java.util.Collection;
 
 /**
  * Atomix partition.
  */
-public interface Partition<P extends PrimitiveProtocol> {
+public interface Partition {
 
   /**
    * Returns the partition identifier.
@@ -41,24 +39,31 @@ public interface Partition<P extends PrimitiveProtocol> {
   long term();
 
   /**
+   * Returns the collection of all members in the partition.
+   *
+   * @return the collection of all members in the partition
+   */
+  Collection<MemberId> members();
+
+  /**
    * Returns the partition's current primary.
    *
    * @return the partition's current primary
    */
-  NodeId primary();
+  MemberId primary();
 
   /**
    * Returns the partition's backups.
    *
    * @return the partition's backups
    */
-  Collection<NodeId> backups();
+  Collection<MemberId> backups();
 
   /**
-   * Returns the primitive client for the partition.
+   * Returns the partition client.
    *
-   * @return the primitive client for the partition
+   * @return the partition client
    */
-  PrimitiveClient<P> getPrimitiveClient();
+  PartitionClient getClient();
 
 }

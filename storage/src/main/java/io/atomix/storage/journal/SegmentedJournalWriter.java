@@ -15,10 +15,12 @@
  */
 package io.atomix.storage.journal;
 
+import java.nio.BufferOverflowException;
+
 /**
  * Log writer.
  *
- * @author <a href="http://github.com/kuujo>Jordan Halterman</a>
+ * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
 public class SegmentedJournalWriter<E> implements JournalWriter<E> {
   private final SegmentedJournal<E> journal;
@@ -60,22 +62,42 @@ public class SegmentedJournalWriter<E> implements JournalWriter<E> {
 
   @Override
   public <T extends E> Indexed<T> append(T entry) {
-    if (currentWriter.isFull()) {
+    try {
+      if (currentWriter.isFull()) {
+        currentWriter.flush();
+        currentSegment = journal.getNextSegment();
+        currentWriter = currentSegment.writer();
+      }
+      return currentWriter.append(entry);
+    } catch (BufferOverflowException e) {
+      if (currentWriter.firstIndex() == currentWriter.getNextIndex()) {
+        throw e;
+      }
       currentWriter.flush();
       currentSegment = journal.getNextSegment();
       currentWriter = currentSegment.writer();
+      return currentWriter.append(entry);
     }
-    return currentWriter.append(entry);
   }
 
   @Override
   public void append(Indexed<E> entry) {
-    if (currentWriter.isFull()) {
+    try {
+      if (currentWriter.isFull()) {
+        currentWriter.flush();
+        currentSegment = journal.getNextSegment();
+        currentWriter = currentSegment.writer();
+      }
+      currentWriter.append(entry);
+    } catch (BufferOverflowException e) {
+      if (currentWriter.firstIndex() == currentWriter.getNextIndex()) {
+        throw e;
+      }
       currentWriter.flush();
       currentSegment = journal.getNextSegment();
       currentWriter = currentSegment.writer();
+      currentWriter.append(entry);
     }
-    currentWriter.append(entry);
   }
 
   @Override
