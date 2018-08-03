@@ -18,21 +18,22 @@ package io.atomix.primitive;
 /**
  * Primitive consistency model.
  */
+// TODO: 2018/8/1 by zmyer
 public enum Consistency {
 
-  /**
-   * Linearizable consistency model.
-   */
-  LINEARIZABLE,
+    /**
+     * Linearizable consistency model.
+     */
+    LINEARIZABLE,
 
-  /**
-   * Sequential consistency model.
-   */
-  SEQUENTIAL,
+    /**
+     * Sequential consistency model.
+     */
+    SEQUENTIAL,
 
-  /**
-   * Eventual consistency model.
-   */
-  EVENTUAL,
+    /**
+     * Eventual consistency model.
+     */
+    EVENTUAL,
 
 }

@@ -26,52 +26,54 @@ import io.atomix.utils.serializer.Namespaces;
 /**
  * Primitive type.
  */
-public interface PrimitiveType<B extends DistributedPrimitiveBuilder, C extends PrimitiveConfig, P extends DistributedPrimitive> extends NamedType {
+// TODO: 2018/7/30 by zmyer
+public interface PrimitiveType<B extends DistributedPrimitiveBuilder, C extends PrimitiveConfig,
+        P extends DistributedPrimitive> extends NamedType {
 
-  /**
-   * Returns the primitive type namespace.
-   *
-   * @return the primitive type namespace
-   */
-  default Namespace namespace() {
-    return Namespace.builder()
-        .register(Namespaces.BASIC)
-        .register(ServiceConfig.class)
-        .build();
-  }
+    /**
+     * Returns the primitive type namespace.
+     *
+     * @return the primitive type namespace
+     */
+    default Namespace namespace() {
+        return Namespace.builder()
+                .register(Namespaces.BASIC)
+                .register(ServiceConfig.class)
+                .build();
+    }
 
-  /**
-   * Returns a new configuration for the primitive type.
-   *
-   * @return a new primitive configuration
-   */
-  C newConfig();
+    /**
+     * Returns a new configuration for the primitive type.
+     *
+     * @return a new primitive configuration
+     */
+    C newConfig();
 
-  /**
-   * Returns a new primitive builder.
-   *
-   * @param primitiveName     the primitive name
-   * @param config            the primitive configuration
-   * @param managementService the primitive management service
-   * @return a new primitive builder
-   */
-  B newBuilder(String primitiveName, C config, PrimitiveManagementService managementService);
+    /**
+     * Returns a new primitive builder.
+     *
+     * @param primitiveName     the primitive name
+     * @param config            the primitive configuration
+     * @param managementService the primitive management service
+     * @return a new primitive builder
+     */
+    B newBuilder(String primitiveName, C config, PrimitiveManagementService managementService);
 
-  /**
-   * Creates a new service instance from the given configuration.
-   *
-   * @param config the service configuration
-   * @return the service instance
-   */
-  PrimitiveService newService(ServiceConfig config);
+    /**
+     * Creates a new service instance from the given configuration.
+     *
+     * @param config the service configuration
+     * @return the service instance
+     */
+    PrimitiveService newService(ServiceConfig config);
 
-  /**
-   * Creates a new resource for the given primitive.
-   *
-   * @param primitive the primitive instance
-   * @return a new resource for the given primitive instance
-   */
-  default PrimitiveResource newResource(P primitive) {
-    return null;
-  }
+    /**
+     * Creates a new resource for the given primitive.
+     *
+     * @param primitive the primitive instance
+     * @return a new resource for the given primitive instance
+     */
+    default PrimitiveResource newResource(P primitive) {
+        return null;
+    }
 }

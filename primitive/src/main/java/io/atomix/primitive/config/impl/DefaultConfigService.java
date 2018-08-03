@@ -27,23 +27,26 @@ import static com.google.common.base.Preconditions.checkNotNull;
 /**
  * Default configuration service.
  */
+// TODO: 2018/7/30 by zmyer
 public class DefaultConfigService implements ConfigService {
-  private final Map<String, PrimitiveConfig> configs = Maps.newConcurrentMap();
+    private final Map<String, PrimitiveConfig> configs = Maps.newConcurrentMap();
 
-  public DefaultConfigService(Collection<PrimitiveConfig> configs) {
-    configs.forEach(config -> this.configs.put(config.getName(), config));
-  }
+    public DefaultConfigService(Collection<PrimitiveConfig> configs) {
+        configs.forEach(config -> this.configs.put(config.getName(), config));
+    }
 
-  @Override
-  @SuppressWarnings("unchecked")
-  public <C extends PrimitiveConfig<C>> C getConfig(String primitiveName) {
-    return (C) configs.get(primitiveName);
-  }
+    // TODO: 2018/8/1 by zmyer
+    @Override
+    @SuppressWarnings("unchecked")
+    public <C extends PrimitiveConfig<C>> C getConfig(String primitiveName) {
+        return (C) configs.get(primitiveName);
+    }
 
-  @Override
-  public PrimitiveConfig addConfig(PrimitiveConfig config) {
-    checkNotNull(config, "config cannot be null");
-    PrimitiveConfig previous = configs.putIfAbsent(config.getName(), config);
-    return previous != null ? previous : config;
-  }
+    // TODO: 2018/8/1 by zmyer
+    @Override
+    public PrimitiveConfig addConfig(PrimitiveConfig config) {
+        checkNotNull(config, "config cannot be null");
+        PrimitiveConfig previous = configs.putIfAbsent(config.getName(), config);
+        return previous != null ? previous : config;
+    }
 }

@@ -39,75 +39,79 @@ import static com.google.common.base.MoreObjects.toStringHelper;
 /**
  * Consistent map primitive type.
  */
-public class ConsistentMapType<K, V> implements PrimitiveType<ConsistentMapBuilder<K, V>, ConsistentMapConfig, ConsistentMap<K, V>> {
-  private static final String NAME = "consistent-map";
+// TODO: 2018/7/30 by zmyer
+public class ConsistentMapType<K, V>
+        implements PrimitiveType<ConsistentMapBuilder<K, V>, ConsistentMapConfig, ConsistentMap<K, V>> {
+    private static final String NAME = "consistent-map";
 
-  private static final ConsistentMapType INSTANCE = new ConsistentMapType();
+    private static final ConsistentMapType INSTANCE = new ConsistentMapType();
 
-  /**
-   * Returns a new consistent map type.
-   *
-   * @param <K> the key type
-   * @param <V> the value type
-   * @return a new consistent map type
-   */
-  @SuppressWarnings("unchecked")
-  public static <K, V> ConsistentMapType<K, V> instance() {
-    return INSTANCE;
-  }
+    /**
+     * Returns a new consistent map type.
+     *
+     * @param <K> the key type
+     * @param <V> the value type
+     * @return a new consistent map type
+     */
+    // TODO: 2018/8/1 by zmyer
+    @SuppressWarnings("unchecked")
+    public static <K, V> ConsistentMapType<K, V> instance() {
+        return INSTANCE;
+    }
 
-  @Override
-  public String name() {
-    return NAME;
-  }
+    @Override
+    public String name() {
+        return NAME;
+    }
 
-  @Override
-  public Namespace namespace() {
-    return Namespace.builder()
-        .register(PrimitiveType.super.namespace())
-        .register(Namespaces.BASIC)
-        .nextId(Namespaces.BEGIN_USER_CUSTOM_ID)
-        .register(TransactionId.class)
-        .register(TransactionLog.class)
-        .register(MapUpdate.class)
-        .register(MapUpdate.Type.class)
-        .register(PrepareResult.class)
-        .register(CommitResult.class)
-        .register(RollbackResult.class)
-        .register(MapEntryUpdateResult.class)
-        .register(MapEntryUpdateResult.Status.class)
-        .register(Versioned.class)
-        .register(MapEvent.class)
-        .register(MapEvent.Type.class)
-        .register(byte[].class)
-        .build();
-  }
+    @Override
+    public Namespace namespace() {
+        return Namespace.builder()
+                .register(PrimitiveType.super.namespace())
+                .register(Namespaces.BASIC)
+                .nextId(Namespaces.BEGIN_USER_CUSTOM_ID)
+                .register(TransactionId.class)
+                .register(TransactionLog.class)
+                .register(MapUpdate.class)
+                .register(MapUpdate.Type.class)
+                .register(PrepareResult.class)
+                .register(CommitResult.class)
+                .register(RollbackResult.class)
+                .register(MapEntryUpdateResult.class)
+                .register(MapEntryUpdateResult.Status.class)
+                .register(Versioned.class)
+                .register(MapEvent.class)
+                .register(MapEvent.Type.class)
+                .register(byte[].class)
+                .build();
+    }
 
-  @Override
-  public PrimitiveService newService(ServiceConfig config) {
-    return new DefaultConsistentMapService();
-  }
+    @Override
+    public PrimitiveService newService(ServiceConfig config) {
+        return new DefaultConsistentMapService();
+    }
 
-  @Override
-  public ConsistentMapConfig newConfig() {
-    return new ConsistentMapConfig();
-  }
+    @Override
+    public ConsistentMapConfig newConfig() {
+        return new ConsistentMapConfig();
+    }
 
-  @Override
-  @SuppressWarnings("unchecked")
-  public PrimitiveResource newResource(ConsistentMap<K, V> primitive) {
-    return new ConsistentMapResource((AsyncConsistentMap<String, String>) primitive.async());
-  }
+    @Override
+    @SuppressWarnings("unchecked")
+    public PrimitiveResource newResource(ConsistentMap<K, V> primitive) {
+        return new ConsistentMapResource((AsyncConsistentMap<String, String>) primitive.async());
+    }
 
-  @Override
-  public ConsistentMapBuilder<K, V> newBuilder(String name, ConsistentMapConfig config, PrimitiveManagementService managementService) {
-    return new ConsistentMapProxyBuilder<>(name, config, managementService);
-  }
+    @Override
+    public ConsistentMapBuilder<K, V> newBuilder(String name, ConsistentMapConfig config,
+            PrimitiveManagementService managementService) {
+        return new ConsistentMapProxyBuilder<>(name, config, managementService);
+    }
 
-  @Override
-  public String toString() {
-    return toStringHelper(this)
-        .add("name", name())
-        .toString();
-  }
+    @Override
+    public String toString() {
+        return toStringHelper(this)
+                .add("name", name())
+                .toString();
+    }
 }

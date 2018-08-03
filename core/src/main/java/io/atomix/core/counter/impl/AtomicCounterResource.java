@@ -36,54 +36,55 @@ import static com.google.common.base.Preconditions.checkNotNull;
 /**
  * Atomic counter resource.
  */
+// TODO: 2018/8/1 by zmyer
 public class AtomicCounterResource implements PrimitiveResource {
-  private static final Logger LOGGER = LoggerFactory.getLogger(AtomicCounterResource.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(AtomicCounterResource.class);
 
-  private final AsyncAtomicCounter counter;
+    private final AsyncAtomicCounter counter;
 
-  public AtomicCounterResource(AsyncAtomicCounter counter) {
-    this.counter = checkNotNull(counter);
-  }
+    public AtomicCounterResource(AsyncAtomicCounter counter) {
+        this.counter = checkNotNull(counter);
+    }
 
-  @GET
-  @Path("/")
-  @Produces(MediaType.APPLICATION_JSON)
-  public void get(@Suspended AsyncResponse response) {
-    counter.get().whenComplete((result, error) -> {
-      if (error == null) {
-        response.resume(Response.ok(result).build());
-      } else {
-        LOGGER.warn("{}", error);
-        response.resume(Response.serverError().build());
-      }
-    });
-  }
+    @GET
+    @Path("/")
+    @Produces(MediaType.APPLICATION_JSON)
+    public void get(@Suspended AsyncResponse response) {
+        counter.get().whenComplete((result, error) -> {
+            if (error == null) {
+                response.resume(Response.ok(result).build());
+            } else {
+                LOGGER.warn("{}", error);
+                response.resume(Response.serverError().build());
+            }
+        });
+    }
 
-  @PUT
-  @Path("/")
-  @Consumes(MediaType.TEXT_PLAIN)
-  public void set(Long value, @Suspended AsyncResponse response) {
-    counter.set(value).whenComplete((result, error) -> {
-      if (error == null) {
-        response.resume(Response.ok().build());
-      } else {
-        LOGGER.warn("{}", error);
-        response.resume(Response.serverError().build());
-      }
-    });
-  }
+    @PUT
+    @Path("/")
+    @Consumes(MediaType.TEXT_PLAIN)
+    public void set(Long value, @Suspended AsyncResponse response) {
+        counter.set(value).whenComplete((result, error) -> {
+            if (error == null) {
+                response.resume(Response.ok().build());
+            } else {
+                LOGGER.warn("{}", error);
+                response.resume(Response.serverError().build());
+            }
+        });
+    }
 
-  @POST
-  @Path("/inc")
-  @Produces(MediaType.APPLICATION_JSON)
-  public void incrementAndGet(@Suspended AsyncResponse response) {
-    counter.incrementAndGet().whenComplete((result, error) -> {
-      if (error == null) {
-        response.resume(Response.ok(result).build());
-      } else {
-        LOGGER.warn("{}", error);
-        response.resume(Response.serverError().build());
-      }
-    });
-  }
+    @POST
+    @Path("/inc")
+    @Produces(MediaType.APPLICATION_JSON)
+    public void incrementAndGet(@Suspended AsyncResponse response) {
+        counter.incrementAndGet().whenComplete((result, error) -> {
+            if (error == null) {
+                response.resume(Response.ok(result).build());
+            } else {
+                LOGGER.warn("{}", error);
+                response.resume(Response.serverError().build());
+            }
+        });
+    }
 }

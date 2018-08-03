@@ -22,52 +22,53 @@ import static com.google.common.base.MoreObjects.toStringHelper;
 /**
  * Distributed primitive info.
  */
+// TODO: 2018/7/30 by zmyer
 public final class PrimitiveInfo {
-  private final String name;
-  private final PrimitiveType type;
+    private final String name;
+    private final PrimitiveType type;
 
-  public PrimitiveInfo(String name, PrimitiveType type) {
-    this.name = name;
-    this.type = type;
-  }
-
-  /**
-   * Returns the primitive name.
-   *
-   * @return the primitive name
-   */
-  public String name() {
-    return name;
-  }
-
-  /**
-   * Returns the primitive type.
-   *
-   * @return the primitive type
-   */
-  public PrimitiveType type() {
-    return type;
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(name, type);
-  }
-
-  @Override
-  public boolean equals(Object object) {
-    if (object instanceof PrimitiveInfo) {
-      PrimitiveInfo info = (PrimitiveInfo) object;
-      return Objects.equals(name, info.name) && Objects.equals(type, info.type);
+    public PrimitiveInfo(String name, PrimitiveType type) {
+        this.name = name;
+        this.type = type;
     }
-    return false;
-  }
 
-  @Override
-  public String toString() {
-    return toStringHelper(this)
-        .add("name", name)
-        .add("type", type)
-        .toString();
-  }
+    /**
+     * Returns the primitive name.
+     *
+     * @return the primitive name
+     */
+    public String name() {
+        return name;
+    }
+
+    /**
+     * Returns the primitive type.
+     *
+     * @return the primitive type
+     */
+    public PrimitiveType type() {
+        return type;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(name, type);
+    }
+
+    @Override
+    public boolean equals(Object object) {
+        if (object instanceof PrimitiveInfo) {
+            PrimitiveInfo info = (PrimitiveInfo) object;
+            return Objects.equals(name, info.name) && Objects.equals(type, info.type);
+        }
+        return false;
+    }
+
+    @Override
+    public String toString() {
+        return toStringHelper(this)
+                .add("name", name)
+                .add("type", type)
+                .toString();
+    }
 }

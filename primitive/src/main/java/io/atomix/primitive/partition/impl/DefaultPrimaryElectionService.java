@@ -46,74 +46,77 @@ import static io.atomix.primitive.partition.impl.PrimaryElectorEvents.CHANGE;
  * This implementation uses a custom primitive service for primary election. The custom primitive service orders
  * candidates based on the existing distribution of primaries such that primaries are evenly spread across the cluster.
  */
+// TODO: 2018/7/31 by zmyer
 public class DefaultPrimaryElectionService implements ManagedPrimaryElectionService {
-  private static final String PRIMITIVE_NAME = "atomix-primary-elector";
+    private static final String PRIMITIVE_NAME = "atomix-primary-elector";
 
-  private static final Serializer SERIALIZER = Serializer.using(Namespace.builder()
-      .register(PrimaryElectorOperations.NAMESPACE)
-      .register(PrimaryElectorEvents.NAMESPACE)
-      .build());
+    private static final Serializer SERIALIZER = Serializer.using(Namespace.builder()
+            .register(PrimaryElectorOperations.NAMESPACE)
+            .register(PrimaryElectorEvents.NAMESPACE)
+            .build());
 
-  private final PartitionGroup partitions;
-  private final Set<PrimaryElectionEventListener> listeners = Sets.newCopyOnWriteArraySet();
-  private final Consumer<PrimitiveEvent> eventListener = event -> {
-    PrimaryElectionEvent electionEvent = SERIALIZER.decode(event.value());
-    listeners.forEach(l -> l.onEvent(electionEvent));
-  };
-  private final Map<PartitionId, ManagedPrimaryElection> elections = Maps.newConcurrentMap();
-  private final AtomicBoolean started = new AtomicBoolean();
-  private SessionClient proxy;
+    private final PartitionGroup partitions;
+    private final Set<PrimaryElectionEventListener> listeners = Sets.newCopyOnWriteArraySet();
+    private final Consumer<PrimitiveEvent> eventListener = event -> {
+        PrimaryElectionEvent electionEvent = SERIALIZER.decode(event.value());
+        listeners.forEach(l -> l.onEvent(electionEvent));
+    };
+    private final Map<PartitionId, ManagedPrimaryElection> elections = Maps.newConcurrentMap();
+    private final AtomicBoolean started = new AtomicBoolean();
+    private SessionClient proxy;
 
-  public DefaultPrimaryElectionService(PartitionGroup partitionGroup) {
-    this.partitions = checkNotNull(partitionGroup);
-  }
-
-  @Override
-  @SuppressWarnings("unchecked")
-  public PrimaryElection getElectionFor(PartitionId partitionId) {
-    return elections.computeIfAbsent(partitionId, id -> new DefaultPrimaryElection(partitionId, proxy, this));
-  }
-
-  @Override
-  public void addListener(PrimaryElectionEventListener listener) {
-    listeners.add(checkNotNull(listener));
-  }
-
-  @Override
-  public void removeListener(PrimaryElectionEventListener listener) {
-    listeners.remove(checkNotNull(listener));
-  }
-
-  @Override
-  @SuppressWarnings("unchecked")
-  public CompletableFuture<PrimaryElectionService> start() {
-    return partitions.getPartitions().iterator().next().getClient()
-        .sessionBuilder(PRIMITIVE_NAME, PrimaryElectorType.instance(), new ServiceConfig())
-        .build()
-        .connect()
-        .thenAccept(proxy -> {
-          this.proxy = proxy;
-          proxy.addEventListener(CHANGE, eventListener);
-          started.set(true);
-        })
-        .thenApply(v -> this);
-  }
-
-  @Override
-  public boolean isRunning() {
-    return started.get();
-  }
-
-  @Override
-  public CompletableFuture<Void> stop() {
-    SessionClient proxy = this.proxy;
-    if (proxy != null) {
-      return proxy.close()
-          .whenComplete((result, error) -> {
-            started.set(false);
-          });
+    // TODO: 2018/7/31 by zmyer
+    public DefaultPrimaryElectionService(PartitionGroup partitionGroup) {
+        this.partitions = checkNotNull(partitionGroup);
     }
-    started.set(false);
-    return CompletableFuture.completedFuture(null);
-  }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public PrimaryElection getElectionFor(PartitionId partitionId) {
+        return elections.computeIfAbsent(partitionId, id -> new DefaultPrimaryElection(partitionId, proxy, this));
+    }
+
+    @Override
+    public void addListener(PrimaryElectionEventListener listener) {
+        listeners.add(checkNotNull(listener));
+    }
+
+    @Override
+    public void removeListener(PrimaryElectionEventListener listener) {
+        listeners.remove(checkNotNull(listener));
+    }
+
+    // TODO: 2018/7/31 by zmyer
+    @Override
+    @SuppressWarnings("unchecked")
+    public CompletableFuture<PrimaryElectionService> start() {
+        return partitions.getPartitions().iterator().next().getClient()
+                .sessionBuilder(PRIMITIVE_NAME, PrimaryElectorType.instance(), new ServiceConfig())
+                .build()
+                .connect()
+                .thenAccept(proxy -> {
+                    this.proxy = proxy;
+                    proxy.addEventListener(CHANGE, eventListener);
+                    started.set(true);
+                })
+                .thenApply(v -> this);
+    }
+
+    @Override
+    public boolean isRunning() {
+        return started.get();
+    }
+
+    @Override
+    public CompletableFuture<Void> stop() {
+        SessionClient proxy = this.proxy;
+        if (proxy != null) {
+            return proxy.close()
+                    .whenComplete((result, error) -> {
+                        started.set(false);
+                    });
+        }
+        started.set(false);
+        return CompletableFuture.completedFuture(null);
+    }
 }

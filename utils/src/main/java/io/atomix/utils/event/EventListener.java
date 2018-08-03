@@ -18,14 +18,15 @@ package io.atomix.utils.event;
 /**
  * Entity capable of receiving events.
  */
+// TODO: 2018/7/30 by zmyer
 @FunctionalInterface
 public interface EventListener<E extends Event> extends EventFilter<E> {
 
-  /**
-   * Reacts to the specified event.
-   *
-   * @param event event to be processed
-   */
-  void onEvent(E event);
+    /**
+     * Reacts to the specified event.
+     *
+     * @param event event to be processed
+     */
+    void onEvent(E event);
 
 }

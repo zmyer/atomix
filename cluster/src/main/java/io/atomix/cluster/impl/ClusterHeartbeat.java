@@ -24,70 +24,71 @@ import static com.google.common.base.MoreObjects.toStringHelper;
 /**
  * Cluster heartbeat message.
  */
+// TODO: 2018/7/31 by zmyer
 final class ClusterHeartbeat {
-  private final MemberId memberId;
-  private final String zone;
-  private final String rack;
-  private final String host;
-  private final Map<String, String> metadata;
+    private final MemberId memberId;
+    private final String zone;
+    private final String rack;
+    private final String host;
+    private final Map<String, String> metadata;
 
-  ClusterHeartbeat(MemberId memberId, String zone, String rack, String host, Map<String, String> metadata) {
-    this.memberId = memberId;
-    this.zone = zone;
-    this.rack = rack;
-    this.host = host;
-    this.metadata = metadata;
-  }
+    ClusterHeartbeat(MemberId memberId, String zone, String rack, String host, Map<String, String> metadata) {
+        this.memberId = memberId;
+        this.zone = zone;
+        this.rack = rack;
+        this.host = host;
+        this.metadata = metadata;
+    }
 
-  /**
-   * Returns the identifier of the member that sent the heartbeat.
-   *
-   * @return the identifier of the member that sent the heartbeat
-   */
-  public MemberId memberId() {
-    return memberId;
-  }
+    /**
+     * Returns the identifier of the member that sent the heartbeat.
+     *
+     * @return the identifier of the member that sent the heartbeat
+     */
+    public MemberId memberId() {
+        return memberId;
+    }
 
-  /**
-   * Returns the zone.
-   *
-   * @return the zone
-   */
-  public String zone() {
-    return zone;
-  }
+    /**
+     * Returns the zone.
+     *
+     * @return the zone
+     */
+    public String zone() {
+        return zone;
+    }
 
-  /**
-   * Returns the rack.
-   *
-   * @return the rack
-   */
-  public String rack() {
-    return rack;
-  }
+    /**
+     * Returns the rack.
+     *
+     * @return the rack
+     */
+    public String rack() {
+        return rack;
+    }
 
-  /**
-   * Returns the host.
-   *
-   * @return the host
-   */
-  public String host() {
-    return host;
-  }
+    /**
+     * Returns the host.
+     *
+     * @return the host
+     */
+    public String host() {
+        return host;
+    }
 
-  /**
-   * Returns the member metadata.
-   *
-   * @return the member metadata
-   */
-  public Map<String, String> metadata() {
-    return metadata;
-  }
+    /**
+     * Returns the member metadata.
+     *
+     * @return the member metadata
+     */
+    public Map<String, String> metadata() {
+        return metadata;
+    }
 
-  @Override
-  public String toString() {
-    return toStringHelper(this)
-        .add("memberId", memberId)
-        .toString();
-  }
+    @Override
+    public String toString() {
+        return toStringHelper(this)
+                .add("memberId", memberId)
+                .toString();
+    }
 }

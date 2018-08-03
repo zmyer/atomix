@@ -37,108 +37,109 @@ import static com.google.common.base.MoreObjects.toStringHelper;
 /**
  * Primary-backup role.
  */
+// TODO: 2018/8/1 by zmyer
 public abstract class PrimaryBackupRole {
-  protected final Logger log;
-  private final Role role;
-  protected final PrimaryBackupServiceContext context;
+    protected final Logger log;
+    private final Role role;
+    protected final PrimaryBackupServiceContext context;
 
-  protected PrimaryBackupRole(Role role, PrimaryBackupServiceContext context) {
-    this.log = ContextualLoggerFactory.getLogger(getClass(), LoggerContext.builder(getClass())
-        .addValue(context.serverName())
-        .add("role", role)
-        .build());
-    this.role = role;
-    this.context = context;
-  }
+    protected PrimaryBackupRole(Role role, PrimaryBackupServiceContext context) {
+        this.log = ContextualLoggerFactory.getLogger(getClass(), LoggerContext.builder(getClass())
+                .addValue(context.serverName())
+                .add("role", role)
+                .build());
+        this.role = role;
+        this.context = context;
+    }
 
-  /**
-   * Returns the role type.
-   *
-   * @return the role type
-   */
-  public Role role() {
-    return role;
-  }
+    /**
+     * Returns the role type.
+     *
+     * @return the role type
+     */
+    public Role role() {
+        return role;
+    }
 
-  /**
-   * Logs a request.
-   */
-  protected final <R extends PrimaryBackupRequest> R logRequest(R request) {
-    log.trace("Received {}", request);
-    return request;
-  }
+    /**
+     * Logs a request.
+     */
+    protected final <R extends PrimaryBackupRequest> R logRequest(R request) {
+        log.trace("Received {}", request);
+        return request;
+    }
 
-  /**
-   * Logs a response.
-   */
-  protected final <R extends PrimaryBackupResponse> R logResponse(R response) {
-    log.trace("Sending {}", response);
-    return response;
-  }
+    /**
+     * Logs a response.
+     */
+    protected final <R extends PrimaryBackupResponse> R logResponse(R response) {
+        log.trace("Sending {}", response);
+        return response;
+    }
 
-  /**
-   * Handles an execute response.
-   *
-   * @param request the execute request
-   * @return future to be completed with the execute response
-   */
-  public CompletableFuture<ExecuteResponse> execute(ExecuteRequest request) {
-    logRequest(request);
-    return CompletableFuture.completedFuture(logResponse(ExecuteResponse.error()));
-  }
+    /**
+     * Handles an execute response.
+     *
+     * @param request the execute request
+     * @return future to be completed with the execute response
+     */
+    public CompletableFuture<ExecuteResponse> execute(ExecuteRequest request) {
+        logRequest(request);
+        return CompletableFuture.completedFuture(logResponse(ExecuteResponse.error()));
+    }
 
-  /**
-   * Handles a backup request.
-   *
-   * @param request the backup request
-   * @return future to be completed with the backup response
-   */
-  public CompletableFuture<BackupResponse> backup(BackupRequest request) {
-    logRequest(request);
-    return CompletableFuture.completedFuture(logResponse(BackupResponse.error()));
-  }
+    /**
+     * Handles a backup request.
+     *
+     * @param request the backup request
+     * @return future to be completed with the backup response
+     */
+    public CompletableFuture<BackupResponse> backup(BackupRequest request) {
+        logRequest(request);
+        return CompletableFuture.completedFuture(logResponse(BackupResponse.error()));
+    }
 
-  /**
-   * Handles a restore request.
-   *
-   * @param request the restore request
-   * @return future to be completed with the restore response
-   */
-  public CompletableFuture<RestoreResponse> restore(RestoreRequest request) {
-    logRequest(request);
-    return CompletableFuture.completedFuture(logResponse(RestoreResponse.error()));
-  }
+    /**
+     * Handles a restore request.
+     *
+     * @param request the restore request
+     * @return future to be completed with the restore response
+     */
+    public CompletableFuture<RestoreResponse> restore(RestoreRequest request) {
+        logRequest(request);
+        return CompletableFuture.completedFuture(logResponse(RestoreResponse.error()));
+    }
 
-  /**
-   * Expires the given session.
-   *
-   * @param session the session to expire
-   * @return a future to be completed once the session has been expires
-   */
-  public CompletableFuture<Void> expire(PrimaryBackupSession session) {
-    return CompletableFuture.completedFuture(null);
-  }
+    /**
+     * Expires the given session.
+     *
+     * @param session the session to expire
+     * @return a future to be completed once the session has been expires
+     */
+    public CompletableFuture<Void> expire(PrimaryBackupSession session) {
+        return CompletableFuture.completedFuture(null);
+    }
 
-  /**
-   * Closes the given session.
-   *
-   * @param session the session to close
-   * @return a future to be completed once the session has been closed
-   */
-  public CompletableFuture<Void> close(PrimaryBackupSession session) {
-    return CompletableFuture.completedFuture(null);
-  }
+    /**
+     * Closes the given session.
+     *
+     * @param session the session to close
+     * @return a future to be completed once the session has been closed
+     */
+    public CompletableFuture<Void> close(PrimaryBackupSession session) {
+        return CompletableFuture.completedFuture(null);
+    }
 
-  /**
-   * Closes the role.
-   */
-  public void close() {
-  }
+    /**
+     * Closes the role.
+     */
+    public void close() {
+    }
 
-  @Override
-  public String toString() {
-    return toStringHelper(this)
-        .add("role", role)
-        .toString();
-  }
+    @Override
+    public String toString() {
+        return toStringHelper(this)
+                .add("role", role)
+                .toString();
+    }
 }

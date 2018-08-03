@@ -22,21 +22,22 @@ import java.util.List;
  *
  * @param <K> object type.
  */
+// TODO: 2018/8/1 by zmyer
 @FunctionalInterface
 public interface Partitioner<K> {
 
-  /**
-   * Murmur 3 partitioner.
-   */
-  Partitioner<String> MURMUR3 = new Murmur3Partitioner();
+    /**
+     * Murmur 3 partitioner.
+     */
+    Partitioner<String> MURMUR3 = new Murmur3Partitioner();
 
-  /**
-   * Returns the partition ID to which the specified object maps.
-   *
-   * @param key        the key to partition
-   * @param partitions the list of partitions
-   * @return partition identifier
-   */
-  PartitionId partition(K key, List<PartitionId> partitions);
+    /**
+     * Returns the partition ID to which the specified object maps.
+     *
+     * @param key        the key to partition
+     * @param partitions the list of partitions
+     * @return partition identifier
+     */
+    PartitionId partition(K key, List<PartitionId> partitions);
 
 }

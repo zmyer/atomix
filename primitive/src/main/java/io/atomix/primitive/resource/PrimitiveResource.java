@@ -18,5 +18,6 @@ package io.atomix.primitive.resource;
 /**
  * Primitive resource.
  */
+// TODO: 2018/8/1 by zmyer
 public interface PrimitiveResource {
 }

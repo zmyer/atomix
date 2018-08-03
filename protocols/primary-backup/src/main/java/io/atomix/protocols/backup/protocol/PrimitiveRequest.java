@@ -20,21 +20,22 @@ import static com.google.common.base.MoreObjects.toStringHelper;
 /**
  * Primitive service request.
  */
+// TODO: 2018/8/1 by zmyer
 public abstract class PrimitiveRequest extends PrimaryBackupRequest {
-  private final PrimitiveDescriptor primitive;
+    private final PrimitiveDescriptor primitive;
 
-  public PrimitiveRequest(PrimitiveDescriptor primitive) {
-    this.primitive = primitive;
-  }
+    public PrimitiveRequest(PrimitiveDescriptor primitive) {
+        this.primitive = primitive;
+    }
 
-  public PrimitiveDescriptor primitive() {
-    return primitive;
-  }
+    public PrimitiveDescriptor primitive() {
+        return primitive;
+    }
 
-  @Override
-  public String toString() {
-    return toStringHelper(this)
-        .add("primitive", primitive)
-        .toString();
-  }
+    @Override
+    public String toString() {
+        return toStringHelper(this)
+                .add("primitive", primitive)
+                .toString();
+    }
 }

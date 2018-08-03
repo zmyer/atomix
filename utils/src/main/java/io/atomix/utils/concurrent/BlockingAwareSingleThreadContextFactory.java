@@ -27,25 +27,26 @@ import static io.atomix.utils.concurrent.Threads.namedThreads;
 /**
  * Single thread context factory.
  */
+// TODO: 2018/7/31 by zmyer
 public class BlockingAwareSingleThreadContextFactory implements ThreadContextFactory {
-  private final ThreadFactory threadFactory;
-  private final Executor threadPoolExecutor;
+    private final ThreadFactory threadFactory;
+    private final Executor threadPoolExecutor;
 
-  public BlockingAwareSingleThreadContextFactory(String nameFormat, int threadPoolSize, Logger logger) {
-    this(threadPoolSize, namedThreads(nameFormat, logger));
-  }
+    public BlockingAwareSingleThreadContextFactory(String nameFormat, int threadPoolSize, Logger logger) {
+        this(threadPoolSize, namedThreads(nameFormat, logger));
+    }
 
-  public BlockingAwareSingleThreadContextFactory(int threadPoolSize, ThreadFactory threadFactory) {
-    this(threadFactory, Executors.newScheduledThreadPool(threadPoolSize, threadFactory));
-  }
+    public BlockingAwareSingleThreadContextFactory(int threadPoolSize, ThreadFactory threadFactory) {
+        this(threadFactory, Executors.newScheduledThreadPool(threadPoolSize, threadFactory));
+    }
 
-  public BlockingAwareSingleThreadContextFactory(ThreadFactory threadFactory, Executor threadPoolExecutor) {
-    this.threadFactory = checkNotNull(threadFactory);
-    this.threadPoolExecutor = checkNotNull(threadPoolExecutor);
-  }
+    public BlockingAwareSingleThreadContextFactory(ThreadFactory threadFactory, Executor threadPoolExecutor) {
+        this.threadFactory = checkNotNull(threadFactory);
+        this.threadPoolExecutor = checkNotNull(threadPoolExecutor);
+    }
 
-  @Override
-  public ThreadContext createContext() {
-    return new BlockingAwareSingleThreadContext(threadFactory, threadPoolExecutor);
-  }
+    @Override
+    public ThreadContext createContext() {
+        return new BlockingAwareSingleThreadContext(threadFactory, threadPoolExecutor);
+    }
 }

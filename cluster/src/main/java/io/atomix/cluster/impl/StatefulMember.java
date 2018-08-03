@@ -24,30 +24,31 @@ import java.util.Map;
 /**
  * Default cluster node.
  */
+// TODO: 2018/7/31 by zmyer
 public class StatefulMember extends Member {
-  private State state = State.INACTIVE;
+    private State state = State.INACTIVE;
 
-  public StatefulMember(
-      MemberId id,
-      Address address,
-      String zone,
-      String rack,
-      String host,
-      Map<String, String> metadata) {
-    super(id, address, zone, rack, host, metadata);
-  }
+    public StatefulMember(
+            MemberId id,
+            Address address,
+            String zone,
+            String rack,
+            String host,
+            Map<String, String> metadata) {
+        super(id, address, zone, rack, host, metadata);
+    }
 
-  /**
-   * Updates the node state.
-   *
-   * @param state the node state
-   */
-  void setState(State state) {
-    this.state = state;
-  }
+    /**
+     * Updates the node state.
+     *
+     * @param state the node state
+     */
+    void setState(State state) {
+        this.state = state;
+    }
 
-  @Override
-  public State getState() {
-    return state;
-  }
+    @Override
+    public State getState() {
+        return state;
+    }
 }

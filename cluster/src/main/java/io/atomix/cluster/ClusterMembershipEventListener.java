@@ -20,5 +20,6 @@ import io.atomix.utils.event.EventListener;
 /**
  * Entity capable of receiving device cluster-related events.
  */
+// TODO: 2018/7/30 by zmyer
 public interface ClusterMembershipEventListener extends EventListener<ClusterMembershipEvent> {
 }

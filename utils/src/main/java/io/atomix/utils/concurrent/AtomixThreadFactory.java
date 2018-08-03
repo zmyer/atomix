@@ -22,9 +22,10 @@ import java.util.concurrent.ThreadFactory;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
+// TODO: 2018/8/1 by zmyer
 public class AtomixThreadFactory implements ThreadFactory {
-  @Override
-  public Thread newThread(Runnable r) {
-    return new AtomixThread(r);
-  }
+    @Override
+    public Thread newThread(Runnable r) {
+        return new AtomixThread(r);
+    }
 }

@@ -74,563 +74,567 @@ import static com.google.common.base.Preconditions.checkNotNull;
 /**
  * Raft server state machine executor.
  */
+// TODO: 2018/8/1 by zmyer
 public class PrimaryBackupServiceContext implements ServiceContext {
-  private final Logger log;
-  private final MemberId localMemberId;
-  private final String serverName;
-  private final PrimitiveId primitiveId;
-  private final PrimitiveType primitiveType;
-  private final ServiceConfig serviceConfig;
-  private final PrimitiveDescriptor descriptor;
-  private final PrimitiveService service;
-  private final Map<Long, PrimaryBackupSession> sessions = Maps.newConcurrentMap();
-  private final ThreadContext threadContext;
-  private final ClusterMembershipService clusterMembershipService;
-  private final MemberGroupService memberGroupService;
-  private final PrimaryBackupServerProtocol protocol;
-  private final PrimaryElection primaryElection;
-  private MemberId primary;
-  private List<MemberId> backups;
-  private long currentTerm;
-  private long currentIndex;
-  private Session currentSession;
-  private long currentTimestamp;
-  private long operationIndex;
-  private long commitIndex;
-  private OperationType currentOperation = OperationType.COMMAND;
-  private final LogicalClock logicalClock = new LogicalClock() {
+    private final Logger log;
+    private final MemberId localMemberId;
+    private final String serverName;
+    private final PrimitiveId primitiveId;
+    private final PrimitiveType primitiveType;
+    private final ServiceConfig serviceConfig;
+    private final PrimitiveDescriptor descriptor;
+    private final PrimitiveService service;
+    private final Map<Long, PrimaryBackupSession> sessions = Maps.newConcurrentMap();
+    private final ThreadContext threadContext;
+    private final ClusterMembershipService clusterMembershipService;
+    private final MemberGroupService memberGroupService;
+    private final PrimaryBackupServerProtocol protocol;
+    private final PrimaryElection primaryElection;
+    private MemberId primary;
+    private List<MemberId> backups;
+    private long currentTerm;
+    private long currentIndex;
+    private Session currentSession;
+    private long currentTimestamp;
+    private long operationIndex;
+    private long commitIndex;
+    private OperationType currentOperation = OperationType.COMMAND;
+    private final LogicalClock logicalClock = new LogicalClock() {
+        @Override
+        public LogicalTimestamp getTime() {
+            return new LogicalTimestamp(operationIndex);
+        }
+    };
+    private final WallClock wallClock = new WallClock() {
+        @Override
+        public WallClockTimestamp getTime() {
+            return WallClockTimestamp.from(currentTimestamp);
+        }
+    };
+    private PrimaryBackupRole role;
+    private final ClusterMembershipEventListener membershipEventListener = this::handleClusterEvent;
+    private final PrimaryElectionEventListener primaryElectionListener = event -> changeRole(event.term());
+
+    @SuppressWarnings("unchecked")
+    public PrimaryBackupServiceContext(
+            String serverName,
+            PrimitiveId primitiveId,
+            PrimitiveType primitiveType,
+            PrimitiveDescriptor descriptor,
+            ThreadContext threadContext,
+            ClusterMembershipService clusterMembershipService,
+            MemberGroupService memberGroupService,
+            PrimaryBackupServerProtocol protocol,
+            PrimaryElection primaryElection) {
+        this.localMemberId = clusterMembershipService.getLocalMember().id();
+        this.serverName = checkNotNull(serverName);
+        this.primitiveId = checkNotNull(primitiveId);
+        this.primitiveType = checkNotNull(primitiveType);
+        this.serviceConfig = Serializer.using(primitiveType.namespace()).decode(descriptor.config());
+        this.descriptor = checkNotNull(descriptor);
+        this.service = primitiveType.newService(serviceConfig);
+        this.threadContext = checkNotNull(threadContext);
+        this.clusterMembershipService = checkNotNull(clusterMembershipService);
+        this.memberGroupService = checkNotNull(memberGroupService);
+        this.protocol = checkNotNull(protocol);
+        this.primaryElection = checkNotNull(primaryElection);
+        this.log = ContextualLoggerFactory.getLogger(getClass(), LoggerContext.builder(PrimitiveService.class)
+                .addValue(serverName)
+                .add("type", descriptor.type())
+                .add("name", descriptor.name())
+                .build());
+        clusterMembershipService.addListener(membershipEventListener);
+        primaryElection.addListener(primaryElectionListener);
+    }
+
+    /**
+     * Opens the service context.
+     *
+     * @return a future to be completed once the service context has been opened
+     */
+    // TODO: 2018/8/1 by zmyer
+    public CompletableFuture<Void> open() {
+        return primaryElection.getTerm()
+                .thenAccept(this::changeRole)
+                .thenRun(() -> service.init(this));
+    }
+
+    /**
+     * Returns the current service role.
+     *
+     * @return the current service role
+     */
+    public Role getRole() {
+        return role.role();
+    }
+
     @Override
-    public LogicalTimestamp getTime() {
-      return new LogicalTimestamp(operationIndex);
+    public PrimitiveId serviceId() {
+        return primitiveId;
     }
-  };
-  private final WallClock wallClock = new WallClock() {
+
+    /**
+     * Returns the primitive descriptor.
+     *
+     * @return the primitive descriptor
+     */
+    public PrimitiveDescriptor descriptor() {
+        return descriptor;
+    }
+
+    /**
+     * Returns the local member ID.
+     *
+     * @return the local member ID
+     */
+    public MemberId memberId() {
+        return localMemberId;
+    }
+
+    /**
+     * Returns the server name.
+     *
+     * @return the server name
+     */
+    public String serverName() {
+        return serverName;
+    }
+
     @Override
-    public WallClockTimestamp getTime() {
-      return WallClockTimestamp.from(currentTimestamp);
+    public String serviceName() {
+        return descriptor.name();
     }
-  };
-  private PrimaryBackupRole role;
-  private final ClusterMembershipEventListener membershipEventListener = this::handleClusterEvent;
-  private final PrimaryElectionEventListener primaryElectionListener = event -> changeRole(event.term());
 
-  @SuppressWarnings("unchecked")
-  public PrimaryBackupServiceContext(
-      String serverName,
-      PrimitiveId primitiveId,
-      PrimitiveType primitiveType,
-      PrimitiveDescriptor descriptor,
-      ThreadContext threadContext,
-      ClusterMembershipService clusterMembershipService,
-      MemberGroupService memberGroupService,
-      PrimaryBackupServerProtocol protocol,
-      PrimaryElection primaryElection) {
-    this.localMemberId = clusterMembershipService.getLocalMember().id();
-    this.serverName = checkNotNull(serverName);
-    this.primitiveId = checkNotNull(primitiveId);
-    this.primitiveType = checkNotNull(primitiveType);
-    this.serviceConfig = Serializer.using(primitiveType.namespace()).decode(descriptor.config());
-    this.descriptor = checkNotNull(descriptor);
-    this.service = primitiveType.newService(serviceConfig);
-    this.threadContext = checkNotNull(threadContext);
-    this.clusterMembershipService = checkNotNull(clusterMembershipService);
-    this.memberGroupService = checkNotNull(memberGroupService);
-    this.protocol = checkNotNull(protocol);
-    this.primaryElection = checkNotNull(primaryElection);
-    this.log = ContextualLoggerFactory.getLogger(getClass(), LoggerContext.builder(PrimitiveService.class)
-        .addValue(serverName)
-        .add("type", descriptor.type())
-        .add("name", descriptor.name())
-        .build());
-    clusterMembershipService.addListener(membershipEventListener);
-    primaryElection.addListener(primaryElectionListener);
-  }
-
-  /**
-   * Opens the service context.
-   *
-   * @return a future to be completed once the service context has been opened
-   */
-  public CompletableFuture<Void> open() {
-    return primaryElection.getTerm()
-        .thenAccept(this::changeRole)
-        .thenRun(() -> service.init(this));
-  }
-
-  /**
-   * Returns the current service role.
-   *
-   * @return the current service role
-   */
-  public Role getRole() {
-    return role.role();
-  }
-
-  @Override
-  public PrimitiveId serviceId() {
-    return primitiveId;
-  }
-
-  /**
-   * Returns the primitive descriptor.
-   *
-   * @return the primitive descriptor
-   */
-  public PrimitiveDescriptor descriptor() {
-    return descriptor;
-  }
-
-  /**
-   * Returns the local member ID.
-   *
-   * @return the local member ID
-   */
-  public MemberId memberId() {
-    return localMemberId;
-  }
-
-  /**
-   * Returns the server name.
-   *
-   * @return the server name
-   */
-  public String serverName() {
-    return serverName;
-  }
-
-  @Override
-  public String serviceName() {
-    return descriptor.name();
-  }
-
-  @Override
-  public PrimitiveType serviceType() {
-    return primitiveType;
-  }
-
-  @Override
-  @SuppressWarnings("unchecked")
-  public <C extends ServiceConfig> C serviceConfig() {
-    return (C) serviceConfig;
-  }
-
-  @Override
-  public long currentIndex() {
-    return currentIndex;
-  }
-
-  @Override
-  public Session currentSession() {
-    return currentSession;
-  }
-
-  /**
-   * Returns the current wall clock timestamp.
-   *
-   * @return the current wall clock timestamp
-   */
-  public long currentTimestamp() {
-    return currentTimestamp;
-  }
-
-  /**
-   * Sets the current timestamp.
-   *
-   * @param timestamp the updated timestamp
-   * @return the current timestamp
-   */
-  public long setTimestamp(long timestamp) {
-    this.currentTimestamp = timestamp;
-    service.tick(WallClockTimestamp.from(timestamp));
-    return currentTimestamp;
-  }
-
-  /**
-   * Returns the current term.
-   *
-   * @return the current term
-   */
-  public long currentTerm() {
-    return currentTerm;
-  }
-
-  /**
-   * Resets the current term to the given term.
-   *
-   * @param term    the term to which to reset the current term
-   * @param primary the primary for the given term
-   */
-  public void resetTerm(long term, MemberId primary) {
-    this.currentTerm = term;
-    this.primary = primary;
-  }
-
-  /**
-   * Increments and returns the next service index.
-   *
-   * @return the next index
-   */
-  public long nextIndex() {
-    currentOperation = OperationType.COMMAND;
-    return ++operationIndex;
-  }
-
-  /**
-   * Increments the current index and returns true if the given index is the next index.
-   *
-   * @param index the index to which to increment the current index
-   * @return indicates whether the current index was successfully incremented
-   */
-  public boolean nextIndex(long index) {
-    if (operationIndex + 1 == index) {
-      currentOperation = OperationType.COMMAND;
-      operationIndex++;
-      return true;
+    @Override
+    public PrimitiveType serviceType() {
+        return primitiveType;
     }
-    return false;
-  }
 
-  /**
-   * Resets the current index to the given index and timestamp.
-   *
-   * @param index     the index to which to reset the current index
-   * @param timestamp the timestamp to which to reset the current timestamp
-   */
-  public void resetIndex(long index, long timestamp) {
-    currentOperation = OperationType.COMMAND;
-    operationIndex = index;
-    currentIndex = index;
-    currentTimestamp = timestamp;
-    setCommitIndex(index);
-    service.tick(new WallClockTimestamp(currentTimestamp));
-  }
+    @Override
+    @SuppressWarnings("unchecked")
+    public <C extends ServiceConfig> C serviceConfig() {
+        return (C) serviceConfig;
+    }
 
-  /**
-   * Sets the current index.
-   *
-   * @param index the current index.
-   * @return the current index
-   */
-  public long setIndex(long index) {
-    currentOperation = OperationType.COMMAND;
-    currentIndex = index;
-    return currentIndex;
-  }
+    @Override
+    public long currentIndex() {
+        return currentIndex;
+    }
 
-  /**
-   * Returns the current service index and sets the service to read-only mode.
-   *
-   * @return the current index
-   */
-  public long getIndex() {
-    currentOperation = OperationType.QUERY;
-    return currentIndex;
-  }
+    @Override
+    public Session currentSession() {
+        return currentSession;
+    }
 
-  /**
-   * Sets the current session.
-   *
-   * @param session the current session
-   * @return the updated session
-   */
-  public Session setSession(Session session) {
-    this.currentSession = session;
-    return session;
-  }
+    /**
+     * Returns the current wall clock timestamp.
+     *
+     * @return the current wall clock timestamp
+     */
+    public long currentTimestamp() {
+        return currentTimestamp;
+    }
 
-  /**
-   * Sets the commit index.
-   *
-   * @param commitIndex the commit index
-   * @return the updated commit index
-   */
-  public long setCommitIndex(long commitIndex) {
-    this.commitIndex = Math.max(this.commitIndex, commitIndex);
-    return this.commitIndex;
-  }
+    /**
+     * Sets the current timestamp.
+     *
+     * @param timestamp the updated timestamp
+     * @return the current timestamp
+     */
+    public long setTimestamp(long timestamp) {
+        this.currentTimestamp = timestamp;
+        service.tick(WallClockTimestamp.from(timestamp));
+        return currentTimestamp;
+    }
 
-  /**
-   * Returns the current commit index.
-   *
-   * @return the current commit index
-   */
-  public long getCommitIndex() {
-    return commitIndex;
-  }
+    /**
+     * Returns the current term.
+     *
+     * @return the current term
+     */
+    public long currentTerm() {
+        return currentTerm;
+    }
 
-  @Override
-  public OperationType currentOperation() {
-    return currentOperation;
-  }
+    /**
+     * Resets the current term to the given term.
+     *
+     * @param term    the term to which to reset the current term
+     * @param primary the primary for the given term
+     */
+    public void resetTerm(long term, MemberId primary) {
+        this.currentTerm = term;
+        this.primary = primary;
+    }
 
-  @Override
-  public LogicalClock logicalClock() {
-    return logicalClock;
-  }
+    /**
+     * Increments and returns the next service index.
+     *
+     * @return the next index
+     */
+    public long nextIndex() {
+        currentOperation = OperationType.COMMAND;
+        return ++operationIndex;
+    }
 
-  @Override
-  public WallClock wallClock() {
-    return wallClock;
-  }
+    /**
+     * Increments the current index and returns true if the given index is the next index.
+     *
+     * @param index the index to which to increment the current index
+     * @return indicates whether the current index was successfully incremented
+     */
+    public boolean nextIndex(long index) {
+        if (operationIndex + 1 == index) {
+            currentOperation = OperationType.COMMAND;
+            operationIndex++;
+            return true;
+        }
+        return false;
+    }
 
-  /**
-   * Returns the primary node.
-   *
-   * @return the primary node
-   */
-  public MemberId primary() {
-    return primary;
-  }
+    /**
+     * Resets the current index to the given index and timestamp.
+     *
+     * @param index     the index to which to reset the current index
+     * @param timestamp the timestamp to which to reset the current timestamp
+     */
+    public void resetIndex(long index, long timestamp) {
+        currentOperation = OperationType.COMMAND;
+        operationIndex = index;
+        currentIndex = index;
+        currentTimestamp = timestamp;
+        setCommitIndex(index);
+        service.tick(new WallClockTimestamp(currentTimestamp));
+    }
 
-  /**
-   * Returns the backup nodes.
-   *
-   * @return the backup nodes
-   */
-  public List<MemberId> backups() {
-    return backups;
-  }
+    /**
+     * Sets the current index.
+     *
+     * @param index the current index.
+     * @return the current index
+     */
+    public long setIndex(long index) {
+        currentOperation = OperationType.COMMAND;
+        currentIndex = index;
+        return currentIndex;
+    }
 
-  /**
-   * Returns the service thread context.
-   *
-   * @return the service thread context
-   */
-  public ThreadContext threadContext() {
-    return threadContext;
-  }
+    /**
+     * Returns the current service index and sets the service to read-only mode.
+     *
+     * @return the current index
+     */
+    public long getIndex() {
+        currentOperation = OperationType.QUERY;
+        return currentIndex;
+    }
 
-  /**
-   * Returns the server protocol.
-   *
-   * @return the server protocol
-   */
-  public PrimaryBackupServerProtocol protocol() {
-    return protocol;
-  }
+    /**
+     * Sets the current session.
+     *
+     * @param session the current session
+     * @return the updated session
+     */
+    public Session setSession(Session session) {
+        this.currentSession = session;
+        return session;
+    }
 
-  /**
-   * Returns the primitive service instance.
-   *
-   * @return the primitive service instance
-   */
-  public PrimitiveService service() {
-    return service;
-  }
+    /**
+     * Sets the commit index.
+     *
+     * @param commitIndex the commit index
+     * @return the updated commit index
+     */
+    public long setCommitIndex(long commitIndex) {
+        this.commitIndex = Math.max(this.commitIndex, commitIndex);
+        return this.commitIndex;
+    }
 
-  /**
-   * Handles an execute request.
-   *
-   * @param request the execute request
-   * @return future to be completed with an execute response
-   */
-  public CompletableFuture<ExecuteResponse> execute(ExecuteRequest request) {
-    ComposableFuture<ExecuteResponse> future = new ComposableFuture<>();
-    threadContext.execute(() -> {
-      role.execute(request).whenComplete(future);
-    });
-    return future;
-  }
+    /**
+     * Returns the current commit index.
+     *
+     * @return the current commit index
+     */
+    public long getCommitIndex() {
+        return commitIndex;
+    }
 
-  /**
-   * Handles a backup request.
-   *
-   * @param request the backup request
-   * @return future to be completed with a backup response
-   */
-  public CompletableFuture<BackupResponse> backup(BackupRequest request) {
-    ComposableFuture<BackupResponse> future = new ComposableFuture<>();
-    threadContext.execute(() -> {
-      role.backup(request).whenComplete(future);
-    });
-    return future;
-  }
+    @Override
+    public OperationType currentOperation() {
+        return currentOperation;
+    }
 
-  /**
-   * Handles a restore request.
-   *
-   * @param request the restore request
-   * @return future to be completed with a restore response
-   */
-  public CompletableFuture<RestoreResponse> restore(RestoreRequest request) {
-    ComposableFuture<RestoreResponse> future = new ComposableFuture<>();
-    threadContext.execute(() -> {
-      role.restore(request).whenComplete(future);
-    });
-    return future;
-  }
+    @Override
+    public LogicalClock logicalClock() {
+        return logicalClock;
+    }
 
-  /**
-   * Handles a close request.
-   *
-   * @param request the close request
-   * @return future to be completed with a close response
-   */
-  public CompletableFuture<CloseResponse> close(CloseRequest request) {
-    ComposableFuture<CloseResponse> future = new ComposableFuture<>();
-    threadContext.execute(() -> {
-      PrimaryBackupSession session = sessions.get(request.session());
-      if (session != null) {
-        role.close(session).whenComplete((result, error) -> {
-          if (error == null) {
-            future.complete(CloseResponse.ok());
-          } else {
-            future.complete(CloseResponse.error());
-          }
+    @Override
+    public WallClock wallClock() {
+        return wallClock;
+    }
+
+    /**
+     * Returns the primary node.
+     *
+     * @return the primary node
+     */
+    public MemberId primary() {
+        return primary;
+    }
+
+    /**
+     * Returns the backup nodes.
+     *
+     * @return the backup nodes
+     */
+    public List<MemberId> backups() {
+        return backups;
+    }
+
+    /**
+     * Returns the service thread context.
+     *
+     * @return the service thread context
+     */
+    public ThreadContext threadContext() {
+        return threadContext;
+    }
+
+    /**
+     * Returns the server protocol.
+     *
+     * @return the server protocol
+     */
+    public PrimaryBackupServerProtocol protocol() {
+        return protocol;
+    }
+
+    /**
+     * Returns the primitive service instance.
+     *
+     * @return the primitive service instance
+     */
+    public PrimitiveService service() {
+        return service;
+    }
+
+    /**
+     * Handles an execute request.
+     *
+     * @param request the execute request
+     * @return future to be completed with an execute response
+     */
+    public CompletableFuture<ExecuteResponse> execute(ExecuteRequest request) {
+        ComposableFuture<ExecuteResponse> future = new ComposableFuture<>();
+        threadContext.execute(() -> {
+            role.execute(request).whenComplete(future);
         });
-      } else {
-        future.complete(CloseResponse.error());
-      }
-    });
-    return future;
-  }
-
-  /**
-   * Returns the collection of sessions.
-   *
-   * @return the collection of sessions
-   */
-  public Collection<PrimaryBackupSession> getSessions() {
-    return ImmutableList.copyOf(sessions.values());
-  }
-
-  /**
-   * Gets a service session.
-   *
-   * @param sessionId the session to get
-   * @return the service session
-   */
-  public PrimaryBackupSession getSession(long sessionId) {
-    return sessions.get(sessionId);
-  }
-
-  /**
-   * Creates a service session.
-   *
-   * @param sessionId the session to create
-   * @param memberId  the owning node ID
-   * @return the service session
-   */
-  public PrimaryBackupSession createSession(long sessionId, MemberId memberId) {
-    PrimaryBackupSession session = new PrimaryBackupSession(SessionId.from(sessionId), memberId, service.serializer(), this);
-    if (sessions.putIfAbsent(sessionId, session) == null) {
-      service.register(session);
+        return future;
     }
-    return session;
-  }
 
-  /**
-   * Gets or creates a service session.
-   *
-   * @param sessionId the session to create
-   * @param memberId  the owning node ID
-   * @return the service session
-   */
-  public PrimaryBackupSession getOrCreateSession(long sessionId, MemberId memberId) {
-    PrimaryBackupSession session = sessions.get(sessionId);
-    if (session == null) {
-      session = createSession(sessionId, memberId);
+    /**
+     * Handles a backup request.
+     *
+     * @param request the backup request
+     * @return future to be completed with a backup response
+     */
+    public CompletableFuture<BackupResponse> backup(BackupRequest request) {
+        ComposableFuture<BackupResponse> future = new ComposableFuture<>();
+        threadContext.execute(() -> {
+            role.backup(request).whenComplete(future);
+        });
+        return future;
     }
-    return session;
-  }
 
-  /**
-   * Expires the session with the given ID.
-   *
-   * @param sessionId the session ID
-   */
-  public void expireSession(long sessionId) {
-    PrimaryBackupSession session = sessions.remove(sessionId);
-    if (session != null) {
-      session.expire();
-      service.expire(session.sessionId());
+    /**
+     * Handles a restore request.
+     *
+     * @param request the restore request
+     * @return future to be completed with a restore response
+     */
+    public CompletableFuture<RestoreResponse> restore(RestoreRequest request) {
+        ComposableFuture<RestoreResponse> future = new ComposableFuture<>();
+        threadContext.execute(() -> {
+            role.restore(request).whenComplete(future);
+        });
+        return future;
     }
-  }
 
-  /**
-   * Closes the session with the given ID.
-   *
-   * @param sessionId the session ID
-   */
-  public void closeSession(long sessionId) {
-    PrimaryBackupSession session = sessions.remove(sessionId);
-    if (session != null) {
-      session.close();
-      service.close(session.sessionId());
+    /**
+     * Handles a close request.
+     *
+     * @param request the close request
+     * @return future to be completed with a close response
+     */
+    public CompletableFuture<CloseResponse> close(CloseRequest request) {
+        ComposableFuture<CloseResponse> future = new ComposableFuture<>();
+        threadContext.execute(() -> {
+            PrimaryBackupSession session = sessions.get(request.session());
+            if (session != null) {
+                role.close(session).whenComplete((result, error) -> {
+                    if (error == null) {
+                        future.complete(CloseResponse.ok());
+                    } else {
+                        future.complete(CloseResponse.error());
+                    }
+                });
+            } else {
+                future.complete(CloseResponse.error());
+            }
+        });
+        return future;
     }
-  }
 
-  /**
-   * Handles a cluster event.
-   */
-  private void handleClusterEvent(ClusterMembershipEvent event) {
-    if (event.type() == ClusterMembershipEvent.Type.MEMBER_REMOVED) {
-      for (Session session : sessions.values()) {
-        if (session.memberId().equals(event.subject().id())) {
-          role.expire((PrimaryBackupSession) session);
+    /**
+     * Returns the collection of sessions.
+     *
+     * @return the collection of sessions
+     */
+    public Collection<PrimaryBackupSession> getSessions() {
+        return ImmutableList.copyOf(sessions.values());
+    }
+
+    /**
+     * Gets a service session.
+     *
+     * @param sessionId the session to get
+     * @return the service session
+     */
+    public PrimaryBackupSession getSession(long sessionId) {
+        return sessions.get(sessionId);
+    }
+
+    /**
+     * Creates a service session.
+     *
+     * @param sessionId the session to create
+     * @param memberId  the owning node ID
+     * @return the service session
+     */
+    public PrimaryBackupSession createSession(long sessionId, MemberId memberId) {
+        PrimaryBackupSession session = new PrimaryBackupSession(SessionId.from(sessionId), memberId,
+                service.serializer(), this);
+        if (sessions.putIfAbsent(sessionId, session) == null) {
+            service.register(session);
         }
-      }
+        return session;
     }
-  }
 
-  /**
-   * Changes the roles.
-   */
-  private void changeRole(PrimaryTerm term) {
-    if (term.term() > currentTerm) {
-      log.debug("Term changed: {}", term);
-      currentTerm = term.term();
-      primary = term.primary() != null ? term.primary().memberId() : null;
-      backups = term.backups(descriptor.backups())
-          .stream()
-          .map(GroupMember::memberId)
-          .collect(Collectors.toList());
-
-      if (Objects.equals(primary, clusterMembershipService.getLocalMember().id())) {
-        if (this.role == null) {
-          this.role = new PrimaryRole(this);
-          log.debug("{} transitioning to {}", clusterMembershipService.getLocalMember().id(), Role.PRIMARY);
-        } else if (this.role.role() != Role.PRIMARY) {
-          this.role.close();
-          this.role = new PrimaryRole(this);
-          log.debug("{} transitioning to {}", clusterMembershipService.getLocalMember().id(), Role.PRIMARY);
+    /**
+     * Gets or creates a service session.
+     *
+     * @param sessionId the session to create
+     * @param memberId  the owning node ID
+     * @return the service session
+     */
+    public PrimaryBackupSession getOrCreateSession(long sessionId, MemberId memberId) {
+        PrimaryBackupSession session = sessions.get(sessionId);
+        if (session == null) {
+            session = createSession(sessionId, memberId);
         }
-      } else if (backups.contains(clusterMembershipService.getLocalMember().id())) {
-        if (this.role == null) {
-          this.role = new BackupRole(this);
-          log.debug("{} transitioning to {}", clusterMembershipService.getLocalMember().id(), Role.BACKUP);
-        } else if (this.role.role() != Role.BACKUP) {
-          this.role.close();
-          this.role = new BackupRole(this);
-          log.debug("{} transitioning to {}", clusterMembershipService.getLocalMember().id(), Role.BACKUP);
-        }
-      } else {
-        if (this.role == null) {
-          this.role = new NoneRole(this);
-          log.debug("{} transitioning to {}", clusterMembershipService.getLocalMember().id(), Role.NONE);
-        } else if (this.role.role() != Role.NONE) {
-          this.role.close();
-          this.role = new NoneRole(this);
-          log.debug("{} transitioning to {}", clusterMembershipService.getLocalMember().id(), Role.NONE);
-        }
-      }
+        return session;
     }
-  }
 
-  /**
-   * Closes the service.
-   */
-  public CompletableFuture<Void> close() {
-    CompletableFuture<Void> future = new CompletableFuture<>();
-    threadContext.execute(() -> {
-      try {
-        clusterMembershipService.removeListener(membershipEventListener);
-        primaryElection.removeListener(primaryElectionListener);
-        role.close();
-      } finally {
-        future.complete(null);
-      }
-    });
-    return future.thenRunAsync(() -> threadContext.close());
-  }
+    /**
+     * Expires the session with the given ID.
+     *
+     * @param sessionId the session ID
+     */
+    public void expireSession(long sessionId) {
+        PrimaryBackupSession session = sessions.remove(sessionId);
+        if (session != null) {
+            session.expire();
+            service.expire(session.sessionId());
+        }
+    }
+
+    /**
+     * Closes the session with the given ID.
+     *
+     * @param sessionId the session ID
+     */
+    public void closeSession(long sessionId) {
+        PrimaryBackupSession session = sessions.remove(sessionId);
+        if (session != null) {
+            session.close();
+            service.close(session.sessionId());
+        }
+    }
+
+    /**
+     * Handles a cluster event.
+     */
+    private void handleClusterEvent(ClusterMembershipEvent event) {
+        if (event.type() == ClusterMembershipEvent.Type.MEMBER_REMOVED) {
+            for (Session session : sessions.values()) {
+                if (session.memberId().equals(event.subject().id())) {
+                    role.expire((PrimaryBackupSession) session);
+                }
+            }
+        }
+    }
+
+    /**
+     * Changes the roles.
+     */
+    // TODO: 2018/8/1 by zmyer
+    private void changeRole(PrimaryTerm term) {
+        if (term.term() > currentTerm) {
+            log.debug("Term changed: {}", term);
+            currentTerm = term.term();
+            primary = term.primary() != null ? term.primary().memberId() : null;
+            backups = term.backups(descriptor.backups())
+                    .stream()
+                    .map(GroupMember::memberId)
+                    .collect(Collectors.toList());
+
+            if (Objects.equals(primary, clusterMembershipService.getLocalMember().id())) {
+                if (this.role == null) {
+                    this.role = new PrimaryRole(this);
+                    log.debug("{} transitioning to {}", clusterMembershipService.getLocalMember().id(), Role.PRIMARY);
+                } else if (this.role.role() != Role.PRIMARY) {
+                    this.role.close();
+                    this.role = new PrimaryRole(this);
+                    log.debug("{} transitioning to {}", clusterMembershipService.getLocalMember().id(), Role.PRIMARY);
+                }
+            } else if (backups.contains(clusterMembershipService.getLocalMember().id())) {
+                if (this.role == null) {
+                    this.role = new BackupRole(this);
+                    log.debug("{} transitioning to {}", clusterMembershipService.getLocalMember().id(), Role.BACKUP);
+                } else if (this.role.role() != Role.BACKUP) {
+                    this.role.close();
+                    this.role = new BackupRole(this);
+                    log.debug("{} transitioning to {}", clusterMembershipService.getLocalMember().id(), Role.BACKUP);
+                }
+            } else {
+                if (this.role == null) {
+                    this.role = new NoneRole(this);
+                    log.debug("{} transitioning to {}", clusterMembershipService.getLocalMember().id(), Role.NONE);
+                } else if (this.role.role() != Role.NONE) {
+                    this.role.close();
+                    this.role = new NoneRole(this);
+                    log.debug("{} transitioning to {}", clusterMembershipService.getLocalMember().id(), Role.NONE);
+                }
+            }
+        }
+    }
+
+    /**
+     * Closes the service.
+     */
+    public CompletableFuture<Void> close() {
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        threadContext.execute(() -> {
+            try {
+                clusterMembershipService.removeListener(membershipEventListener);
+                primaryElection.removeListener(primaryElectionListener);
+                role.close();
+            } finally {
+                future.complete(null);
+            }
+        });
+        return future.thenRunAsync(() -> threadContext.close());
+    }
 }

@@ -18,21 +18,22 @@ package io.atomix.utils.config;
 /**
  * Named configuration.
  */
+// TODO: 2018/7/30 by zmyer
 public interface NamedConfig<C extends NamedConfig<C>> extends Config {
 
-  /**
-   * Returns the configuration name.
-   *
-   * @return the configuration name
-   */
-  String getName();
+    /**
+     * Returns the configuration name.
+     *
+     * @return the configuration name
+     */
+    String getName();
 
-  /**
-   * Sets the configuration name.
-   *
-   * @param name the configuration name
-   * @return the configuration object
-   */
-  C setName(String name);
+    /**
+     * Sets the configuration name.
+     *
+     * @param name the configuration name
+     * @return the configuration object
+     */
+    C setName(String name);
 
 }

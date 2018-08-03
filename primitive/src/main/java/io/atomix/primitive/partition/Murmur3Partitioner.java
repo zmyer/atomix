@@ -22,10 +22,11 @@ import java.util.List;
 /**
  * Murmur 3 partitioner.
  */
+// TODO: 2018/8/1 by zmyer
 public class Murmur3Partitioner implements Partitioner<String> {
-  @Override
-  public PartitionId partition(String key, List<PartitionId> partitions) {
-    int hash = Math.abs(Hashing.murmur3_32().hashUnencodedChars(key).asInt());
-    return partitions.get(Hashing.consistentHash(hash, partitions.size()));
-  }
+    @Override
+    public PartitionId partition(String key, List<PartitionId> partitions) {
+        int hash = Math.abs(Hashing.murmur3_32().hashUnencodedChars(key).asInt());
+        return partitions.get(Hashing.consistentHash(hash, partitions.size()));
+    }
 }

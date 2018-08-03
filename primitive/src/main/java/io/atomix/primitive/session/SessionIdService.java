@@ -20,13 +20,14 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Globally unique session ID provider.
  */
+// TODO: 2018/7/31 by zmyer
 public interface SessionIdService {
 
-  /**
-   * Returns the next unique session identifier.
-   *
-   * @return the next unique session identifier
-   */
-  CompletableFuture<SessionId> nextSessionId();
+    /**
+     * Returns the next unique session identifier.
+     *
+     * @return the next unique session identifier
+     */
+    CompletableFuture<SessionId> nextSessionId();
 
 }

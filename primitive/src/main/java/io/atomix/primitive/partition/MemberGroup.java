@@ -23,21 +23,22 @@ import io.atomix.cluster.Member;
  * The member group represents a group of nodes that can own a single replica for a single partition. Replication
  * is performed in a manner that avoids assigning multiple replicas to the same member group.
  */
+// TODO: 2018/7/30 by zmyer
 public interface MemberGroup {
 
-  /**
-   * Returns the group identifier.
-   *
-   * @return the group identifier
-   */
-  MemberGroupId id();
+    /**
+     * Returns the group identifier.
+     *
+     * @return the group identifier
+     */
+    MemberGroupId id();
 
-  /**
-   * Returns a boolean indicating whether the given node is a member of the group.
-   *
-   * @param member the node to check
-   * @return indicates whether the given node is a member of the group
-   */
-  boolean isMember(Member member);
+    /**
+     * Returns a boolean indicating whether the given node is a member of the group.
+     *
+     * @param member the node to check
+     * @return indicates whether the given node is a member of the group
+     */
+    boolean isMember(Member member);
 
 }

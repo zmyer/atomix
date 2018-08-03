@@ -20,6 +20,7 @@ import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.Function;
 
+// TODO: 2018/7/30 by zmyer
 abstract class KryoIOPool<T> {
 
     private final Queue<SoftReference<T>> queue = new ConcurrentLinkedQueue<>();

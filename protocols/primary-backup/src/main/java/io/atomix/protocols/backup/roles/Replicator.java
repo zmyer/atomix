@@ -22,18 +22,19 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Backup replicator.
  */
+// TODO: 2018/8/1 by zmyer
 interface Replicator {
 
-  /**
-   * Backs up the given operation.
-   *
-   * @param operation the operation to back up
-   * @return a future to be completed with the operation index
-   */
-  CompletableFuture<Void> replicate(BackupOperation operation);
+    /**
+     * Backs up the given operation.
+     *
+     * @param operation the operation to back up
+     * @return a future to be completed with the operation index
+     */
+    CompletableFuture<Void> replicate(BackupOperation operation);
 
-  /**
-   * Closes the replicator.
-   */
-  void close();
+    /**
+     * Closes the replicator.
+     */
+    void close();
 }

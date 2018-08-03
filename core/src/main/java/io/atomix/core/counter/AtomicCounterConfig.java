@@ -15,15 +15,16 @@
  */
 package io.atomix.core.counter;
 
-import io.atomix.primitive.config.PrimitiveConfig;
 import io.atomix.primitive.PrimitiveType;
+import io.atomix.primitive.config.PrimitiveConfig;
 
 /**
  * Atomic counter configuration.
  */
+// TODO: 2018/8/1 by zmyer
 public class AtomicCounterConfig extends PrimitiveConfig<AtomicCounterConfig> {
-  @Override
-  public PrimitiveType getType() {
-    return AtomicCounterType.instance();
-  }
+    @Override
+    public PrimitiveType getType() {
+        return AtomicCounterType.instance();
+    }
 }

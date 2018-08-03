@@ -33,74 +33,77 @@ import static io.atomix.utils.concurrent.Futures.orderedFuture;
 /**
  * Session client delegate that completes futures on a thread pool.
  */
+// TODO: 2018/7/31 by zmyer
 public class BlockingAwareSessionClient extends DelegatingSessionClient {
-  private final ThreadContext context;
-  private final Map<Consumer<PrimitiveState>, Consumer<PrimitiveState>> stateChangeListeners = Maps.newConcurrentMap();
-  private final Map<Consumer<PrimitiveEvent>, Consumer<PrimitiveEvent>> eventListeners = Maps.newConcurrentMap();
-  private volatile CompletableFuture<SessionClient> connectFuture;
-  private volatile CompletableFuture<Void> closeFuture;
+    private final ThreadContext context;
+    private final Map<Consumer<PrimitiveState>, Consumer<PrimitiveState>> stateChangeListeners =
+            Maps.newConcurrentMap();
+    private final Map<Consumer<PrimitiveEvent>, Consumer<PrimitiveEvent>> eventListeners = Maps.newConcurrentMap();
+    private volatile CompletableFuture<SessionClient> connectFuture;
+    private volatile CompletableFuture<Void> closeFuture;
 
-  public BlockingAwareSessionClient(SessionClient session, ThreadContext context) {
-    super(session);
-    this.context = context;
-  }
-
-  @Override
-  public void addStateChangeListener(Consumer<PrimitiveState> listener) {
-    Consumer<PrimitiveState> wrappedListener = state -> context.execute(() -> listener.accept(state));
-    stateChangeListeners.put(listener, wrappedListener);
-    super.addStateChangeListener(wrappedListener);
-  }
-
-  @Override
-  public void removeStateChangeListener(Consumer<PrimitiveState> listener) {
-    Consumer<PrimitiveState> wrappedListener = stateChangeListeners.remove(listener);
-    if (wrappedListener != null) {
-      super.removeStateChangeListener(wrappedListener);
+    public BlockingAwareSessionClient(SessionClient session, ThreadContext context) {
+        super(session);
+        this.context = context;
     }
-  }
 
-  @Override
-  public CompletableFuture<byte[]> execute(PrimitiveOperation operation) {
-    return asyncFuture(super.execute(operation), context);
-  }
-
-  @Override
-  public void addEventListener(EventType eventType, Consumer<PrimitiveEvent> listener) {
-    Consumer<PrimitiveEvent> wrappedListener = e -> context.execute(() -> listener.accept(e));
-    eventListeners.put(listener, wrappedListener);
-    super.addEventListener(eventType, wrappedListener);
-  }
-
-  @Override
-  public void removeEventListener(EventType eventType, Consumer<PrimitiveEvent> listener) {
-    Consumer<PrimitiveEvent> wrappedListener = eventListeners.remove(listener);
-    if (wrappedListener != null) {
-      super.removeEventListener(eventType, wrappedListener);
+    @Override
+    public void addStateChangeListener(Consumer<PrimitiveState> listener) {
+        final Consumer<PrimitiveState> wrappedListener = state -> context.execute(() -> listener.accept(state));
+        stateChangeListeners.put(listener, wrappedListener);
+        super.addStateChangeListener(wrappedListener);
     }
-  }
 
-  @Override
-  public CompletableFuture<SessionClient> connect() {
-    if (connectFuture == null) {
-      synchronized (this) {
+    @Override
+    public void removeStateChangeListener(Consumer<PrimitiveState> listener) {
+        final Consumer<PrimitiveState> wrappedListener = stateChangeListeners.remove(listener);
+        if (wrappedListener != null) {
+            super.removeStateChangeListener(wrappedListener);
+        }
+    }
+
+    @Override
+    public CompletableFuture<byte[]> execute(PrimitiveOperation operation) {
+        return asyncFuture(super.execute(operation), context);
+    }
+
+    @Override
+    public void addEventListener(EventType eventType, Consumer<PrimitiveEvent> listener) {
+        final Consumer<PrimitiveEvent> wrappedListener = e -> context.execute(() -> listener.accept(e));
+        eventListeners.put(listener, wrappedListener);
+        super.addEventListener(eventType, wrappedListener);
+    }
+
+    @Override
+    public void removeEventListener(EventType eventType, Consumer<PrimitiveEvent> listener) {
+        final Consumer<PrimitiveEvent> wrappedListener = eventListeners.remove(listener);
+        if (wrappedListener != null) {
+            super.removeEventListener(eventType, wrappedListener);
+        }
+    }
+
+    // TODO: 2018/8/1 by zmyer
+    @Override
+    public CompletableFuture<SessionClient> connect() {
         if (connectFuture == null) {
-          connectFuture = orderedFuture(asyncFuture(super.connect(), context));
+            synchronized (this) {
+                if (connectFuture == null) {
+                    connectFuture = orderedFuture(asyncFuture(super.connect(), context));
+                }
+            }
         }
-      }
+        return connectFuture;
     }
-    return connectFuture;
-  }
 
-  @Override
-  public CompletableFuture<Void> close() {
-    if (closeFuture == null) {
-      synchronized (this) {
+    @Override
+    public CompletableFuture<Void> close() {
         if (closeFuture == null) {
-          closeFuture = orderedFuture(asyncFuture(super.close(), context));
+            synchronized (this) {
+                if (closeFuture == null) {
+                    closeFuture = orderedFuture(asyncFuture(super.close(), context));
+                }
+            }
         }
-      }
+        return closeFuture;
     }
-    return closeFuture;
-  }
 }

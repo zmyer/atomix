@@ -24,43 +24,44 @@ import java.util.stream.Collectors;
 /**
  * Consensus profile.
  */
+// TODO: 2018/7/30 by zmyer
 public class ConsensusProfile implements Profile {
-  private static final String NAME = "consensus";
-  private static final String DATA_PATH = ".data";
-  private static final String SYSTEM_GROUP_NAME = "system";
-  private static final String GROUP_NAME = "raft";
-  private static final int PARTITION_SIZE = 3;
-  private static final int NUM_PARTITIONS = 7;
+    private static final String NAME = "consensus";
+    private static final String DATA_PATH = ".data";
+    private static final String SYSTEM_GROUP_NAME = "system";
+    private static final String GROUP_NAME = "raft";
+    private static final int PARTITION_SIZE = 3;
+    private static final int NUM_PARTITIONS = 7;
 
-  @Override
-  public String name() {
-    return NAME;
-  }
+    @Override
+    public String name() {
+        return NAME;
+    }
 
-  @Override
-  public void configure(AtomixConfig config) {
-    config.setManagementGroup(new RaftPartitionGroupConfig()
-        .setName(SYSTEM_GROUP_NAME)
-        .setPartitionSize((int) config.getClusterConfig().getMembers()
-            .stream()
-            .filter(member -> member.getId().type() == MemberId.Type.IDENTIFIED)
-            .count())
-        .setPartitions(1)
-        .setMembers(config.getClusterConfig().getMembers()
-            .stream()
-            .filter(member -> member.getId().type() == MemberId.Type.IDENTIFIED)
-            .map(node -> node.getId().id())
-            .collect(Collectors.toSet()))
-        .setDataDirectory(String.format("%s/%s", DATA_PATH, SYSTEM_GROUP_NAME)));
-    config.addPartitionGroup(new RaftPartitionGroupConfig()
-        .setName(GROUP_NAME)
-        .setPartitionSize(PARTITION_SIZE)
-        .setPartitions(NUM_PARTITIONS)
-        .setMembers(config.getClusterConfig().getMembers()
-            .stream()
-            .filter(member -> member.getId().type() == MemberId.Type.IDENTIFIED)
-            .map(node -> node.getId().id())
-            .collect(Collectors.toSet()))
-        .setDataDirectory(String.format("%s/%s", DATA_PATH, GROUP_NAME)));
-  }
+    @Override
+    public void configure(AtomixConfig config) {
+        config.setManagementGroup(new RaftPartitionGroupConfig()
+                .setName(SYSTEM_GROUP_NAME)
+                .setPartitionSize((int) config.getClusterConfig().getMembers()
+                        .stream()
+                        .filter(member -> member.getId().type() == MemberId.Type.IDENTIFIED)
+                        .count())
+                .setPartitions(1)
+                .setMembers(config.getClusterConfig().getMembers()
+                        .stream()
+                        .filter(member -> member.getId().type() == MemberId.Type.IDENTIFIED)
+                        .map(node -> node.getId().id())
+                        .collect(Collectors.toSet()))
+                .setDataDirectory(String.format("%s/%s", DATA_PATH, SYSTEM_GROUP_NAME)));
+        config.addPartitionGroup(new RaftPartitionGroupConfig()
+                .setName(GROUP_NAME)
+                .setPartitionSize(PARTITION_SIZE)
+                .setPartitions(NUM_PARTITIONS)
+                .setMembers(config.getClusterConfig().getMembers()
+                        .stream()
+                        .filter(member -> member.getId().type() == MemberId.Type.IDENTIFIED)
+                        .map(node -> node.getId().id())
+                        .collect(Collectors.toSet()))
+                .setDataDirectory(String.format("%s/%s", DATA_PATH, GROUP_NAME)));
+    }
 }

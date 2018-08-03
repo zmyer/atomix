@@ -39,56 +39,63 @@ import java.util.function.Consumer;
 /**
  * Raft client protocol that uses a cluster communicator.
  */
+// TODO: 2018/7/31 by zmyer
 public class PrimaryBackupClientCommunicator implements PrimaryBackupClientProtocol {
-  private final PrimaryBackupMessageContext context;
-  private final Serializer serializer;
-  private final ClusterCommunicationService clusterCommunicator;
+    private final PrimaryBackupMessageContext context;
+    private final Serializer serializer;
+    private final ClusterCommunicationService clusterCommunicator;
 
-  public PrimaryBackupClientCommunicator(String prefix, Serializer serializer, ClusterCommunicationService clusterCommunicator) {
-    this.context = new PrimaryBackupMessageContext(prefix);
-    this.serializer = Preconditions.checkNotNull(serializer, "serializer cannot be null");
-    this.clusterCommunicator = Preconditions.checkNotNull(clusterCommunicator, "clusterCommunicator cannot be null");
-  }
+    // TODO: 2018/8/1 by zmyer
+    public PrimaryBackupClientCommunicator(String prefix, Serializer serializer,
+            ClusterCommunicationService clusterCommunicator) {
+        this.context = new PrimaryBackupMessageContext(prefix);
+        this.serializer = Preconditions.checkNotNull(serializer, "serializer cannot be null");
+        this.clusterCommunicator = Preconditions.checkNotNull(clusterCommunicator,
+                "clusterCommunicator cannot be null");
+    }
 
-  private <T, U> CompletableFuture<U> sendAndReceive(String subject, T request, MemberId memberId) {
-    CompletableFuture<U> future = new CompletableFuture<>();
-    clusterCommunicator.<T, U>send(subject, request, serializer::encode, serializer::decode, memberId).whenComplete((result, error) -> {
-      if (error == null) {
-        future.complete(result);
-      } else {
-        Throwable cause = Throwables.getRootCause(error);
-        if (cause instanceof MessagingException.NoRemoteHandler) {
-          future.completeExceptionally(new PrimitiveException.Unavailable());
-        } else {
-          future.completeExceptionally(error);
-        }
-      }
-    });
-    return future;
-  }
+    // TODO: 2018/8/1 by zmyer
+    private <T, U> CompletableFuture<U> sendAndReceive(String subject, T request, MemberId memberId) {
+        final CompletableFuture<U> future = new CompletableFuture<>();
+        clusterCommunicator.<T, U>send(subject, request, serializer::encode, serializer::decode, memberId).whenComplete(
+                (result, error) -> {
+                    if (error == null) {
+                        future.complete(result);
+                    } else {
+                        final Throwable cause = Throwables.getRootCause(error);
+                        if (cause instanceof MessagingException.NoRemoteHandler) {
+                            future.completeExceptionally(new PrimitiveException.Unavailable());
+                        } else {
+                            future.completeExceptionally(error);
+                        }
+                    }
+                });
+        return future;
+    }
 
-  @Override
-  public CompletableFuture<ExecuteResponse> execute(MemberId memberId, ExecuteRequest request) {
-    return sendAndReceive(context.executeSubject, request, memberId);
-  }
+    // TODO: 2018/8/1 by zmyer
+    @Override
+    public CompletableFuture<ExecuteResponse> execute(MemberId memberId, ExecuteRequest request) {
+        return sendAndReceive(context.executeSubject, request, memberId);
+    }
 
-  @Override
-  public CompletableFuture<MetadataResponse> metadata(MemberId memberId, MetadataRequest request) {
-    return sendAndReceive(context.metadataSubject, request, memberId);
-  }
+    @Override
+    public CompletableFuture<MetadataResponse> metadata(MemberId memberId, MetadataRequest request) {
+        return sendAndReceive(context.metadataSubject, request, memberId);
+    }
 
-  @Override
-  public CompletableFuture<CloseResponse> close(MemberId memberId, CloseRequest request) {
-    return sendAndReceive(context.closeSubject, request, memberId);
-  }
+    @Override
+    public CompletableFuture<CloseResponse> close(MemberId memberId, CloseRequest request) {
+        return sendAndReceive(context.closeSubject, request, memberId);
+    }
 
-  @Override
-  public void registerEventListener(SessionId sessionId, Consumer<PrimitiveEvent> listener, Executor executor) {
-    clusterCommunicator.subscribe(context.eventSubject(sessionId.id()), serializer::decode, listener, executor);
-  }
+    @Override
+    public void registerEventListener(SessionId sessionId, Consumer<PrimitiveEvent> listener, Executor executor) {
+        clusterCommunicator.subscribe(context.eventSubject(sessionId.id()), serializer::decode, listener, executor);
+    }
 
-  @Override
-  public void unregisterEventListener(SessionId sessionId) {
-    clusterCommunicator.unsubscribe(context.eventSubject(sessionId.id()));
-  }
+    @Override
+    public void unregisterEventListener(SessionId sessionId) {
+        clusterCommunicator.unsubscribe(context.eventSubject(sessionId.id()));
+    }
 }

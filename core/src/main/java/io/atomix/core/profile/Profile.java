@@ -21,29 +21,30 @@ import io.atomix.utils.NamedType;
 /**
  * Atomix profile.
  */
+// TODO: 2018/7/30 by zmyer
 public interface Profile extends NamedType {
 
-  /**
-   * The consensus profile configures an Atomix instance with a Raft system partition and a multi-Raft data partition group.
-   */
-  Profile CONSENSUS = new ConsensusProfile();
+    /**
+     * The consensus profile configures an Atomix instance with a Raft system partition and a multi-Raft data partition group.
+     */
+    Profile CONSENSUS = new ConsensusProfile();
 
-  /**
-   * The data grid profile configures an Atomix instance with a primary-backup system partition if no system partition
-   * is configured, and a primary-backup data partition group.
-   */
-  Profile DATA_GRID = new DataGridProfile();
+    /**
+     * The data grid profile configures an Atomix instance with a primary-backup system partition if no system partition
+     * is configured, and a primary-backup data partition group.
+     */
+    Profile DATA_GRID = new DataGridProfile();
 
-  /**
-   * The client profile does not change the configuration of a node. It is intended only for code clarity.
-   */
-  Profile CLIENT = new ClientProfile();
+    /**
+     * The client profile does not change the configuration of a node. It is intended only for code clarity.
+     */
+    Profile CLIENT = new ClientProfile();
 
-  /**
-   * Configures the Atomix instance.
-   *
-   * @param config the Atomix configuration
-   */
-  void configure(AtomixConfig config);
+    /**
+     * Configures the Atomix instance.
+     *
+     * @param config the Atomix configuration
+     */
+    void configure(AtomixConfig config);
 
 }

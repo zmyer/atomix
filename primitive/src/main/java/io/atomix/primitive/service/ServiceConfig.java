@@ -20,5 +20,6 @@ import io.atomix.utils.config.Config;
 /**
  * Service configuration class.
  */
+// TODO: 2018/8/1 by zmyer
 public class ServiceConfig implements Config {
 }

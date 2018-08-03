@@ -47,193 +47,202 @@ import static com.google.common.base.Preconditions.checkNotNull;
 /**
  * Primary-backup partition group.
  */
+// TODO: 2018/8/1 by zmyer
 public class PrimaryBackupPartitionGroup implements ManagedPartitionGroup {
-  public static final Type TYPE = new Type();
+    public static final Type TYPE = new Type();
 
-  /**
-   * Returns a new primary-backup partition group builder.
-   *
-   * @param name the partition group name
-   * @return a new partition group builder
-   */
-  public static Builder builder(String name) {
-    return new Builder(new PrimaryBackupPartitionGroupConfig().setName(name));
-  }
+    /**
+     * Returns a new primary-backup partition group builder.
+     *
+     * @param name the partition group name
+     * @return a new partition group builder
+     */
+    public static Builder builder(String name) {
+        return new Builder(new PrimaryBackupPartitionGroupConfig().setName(name));
+    }
 
-  /**
-   * Primary-backup partition group type.
-   */
-  public static class Type implements PartitionGroup.Type<PrimaryBackupPartitionGroupConfig> {
-    private static final String NAME = "primary-backup";
+    /**
+     * Primary-backup partition group type.
+     */
+    public static class Type implements PartitionGroup.Type<PrimaryBackupPartitionGroupConfig> {
+        private static final String NAME = "primary-backup";
+
+        @Override
+        public String name() {
+            return NAME;
+        }
+
+        @Override
+        public PrimaryBackupPartitionGroupConfig newConfig() {
+            return new PrimaryBackupPartitionGroupConfig();
+        }
+
+        @Override
+        public ManagedPartitionGroup newPartitionGroup(PrimaryBackupPartitionGroupConfig config) {
+            return new PrimaryBackupPartitionGroup(config);
+        }
+    }
+
+    // TODO: 2018/8/1 by zmyer
+    private static Collection<PrimaryBackupPartition> buildPartitions(PrimaryBackupPartitionGroupConfig config) {
+        final List<PrimaryBackupPartition> partitions = new ArrayList<>(config.getPartitions());
+        for (int i = 0; i < config.getPartitions(); i++) {
+            partitions.add(new PrimaryBackupPartition(PartitionId.from(config.getName(), i + 1),
+                    config.getMemberGroupProvider()));
+        }
+        return partitions;
+    }
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(PrimaryBackupPartitionGroup.class);
+
+    private final String name;
+    private final PrimaryBackupPartitionGroupConfig config;
+    private final Map<PartitionId, PrimaryBackupPartition> partitions = Maps.newConcurrentMap();
+    private final List<PartitionId> sortedPartitionIds = Lists.newCopyOnWriteArrayList();
+    private ThreadContextFactory threadFactory;
+
+    // TODO: 2018/8/1 by zmyer
+    public PrimaryBackupPartitionGroup(PrimaryBackupPartitionGroupConfig config) {
+        this.config = config;
+        this.name = checkNotNull(config.getName());
+        buildPartitions(config).forEach(p -> {
+            this.partitions.put(p.id(), p);
+            this.sortedPartitionIds.add(p.id());
+        });
+        Collections.sort(sortedPartitionIds);
+    }
 
     @Override
     public String name() {
-      return NAME;
+        return name;
     }
 
     @Override
-    public PrimaryBackupPartitionGroupConfig newConfig() {
-      return new PrimaryBackupPartitionGroupConfig();
+    public PartitionGroup.Type type() {
+        return TYPE;
     }
 
     @Override
-    public ManagedPartitionGroup newPartitionGroup(PrimaryBackupPartitionGroupConfig config) {
-      return new PrimaryBackupPartitionGroup(config);
+    public PrimitiveProtocol.Type protocol() {
+        return MultiPrimaryProtocol.TYPE;
     }
-  }
 
-  private static Collection<PrimaryBackupPartition> buildPartitions(PrimaryBackupPartitionGroupConfig config) {
-    List<PrimaryBackupPartition> partitions = new ArrayList<>(config.getPartitions());
-    for (int i = 0; i < config.getPartitions(); i++) {
-      partitions.add(new PrimaryBackupPartition(PartitionId.from(config.getName(), i + 1), config.getMemberGroupProvider()));
+    @Override
+    public PartitionGroupConfig config() {
+        return config;
     }
-    return partitions;
-  }
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(PrimaryBackupPartitionGroup.class);
+    @Override
+    public PrimitiveProtocol newProtocol() {
+        return MultiPrimaryProtocol.builder(name)
+                .withRecovery(Recovery.RECOVER)
+                .withBackups(2)
+                .withReplication(Replication.SYNCHRONOUS)
+                .build();
+    }
 
-  private final String name;
-  private final PrimaryBackupPartitionGroupConfig config;
-  private final Map<PartitionId, PrimaryBackupPartition> partitions = Maps.newConcurrentMap();
-  private final List<PartitionId> sortedPartitionIds = Lists.newCopyOnWriteArrayList();
-  private ThreadContextFactory threadFactory;
+    @Override
+    public PrimaryBackupPartition getPartition(PartitionId partitionId) {
+        return partitions.get(partitionId);
+    }
 
-  public PrimaryBackupPartitionGroup(PrimaryBackupPartitionGroupConfig config) {
-    this.config = config;
-    this.name = checkNotNull(config.getName());
-    buildPartitions(config).forEach(p -> {
-      this.partitions.put(p.id(), p);
-      this.sortedPartitionIds.add(p.id());
-    });
-    Collections.sort(sortedPartitionIds);
-  }
+    @Override
+    @SuppressWarnings("unchecked")
+    public Collection<Partition> getPartitions() {
+        return (Collection) partitions.values();
+    }
 
-  @Override
-  public String name() {
-    return name;
-  }
+    @Override
+    public List<PartitionId> getPartitionIds() {
+        return sortedPartitionIds;
+    }
 
-  @Override
-  public PartitionGroup.Type type() {
-    return TYPE;
-  }
+    // TODO: 2018/8/1 by zmyer
+    @Override
+    public CompletableFuture<ManagedPartitionGroup> join(PartitionManagementService managementService) {
+        threadFactory = new BlockingAwareThreadPoolContextFactory("atomix-" + name() + "-%d",
+                Runtime.getRuntime().availableProcessors() * 2, LOGGER);
+        final List<CompletableFuture<Partition>> futures = partitions.values().stream()
+                .map(p -> p.join(managementService, threadFactory))
+                .collect(Collectors.toList());
+        return CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()])).thenApply(v -> {
+            LOGGER.info("Started");
+            return this;
+        });
+    }
 
-  @Override
-  public PrimitiveProtocol.Type protocol() {
-    return MultiPrimaryProtocol.TYPE;
-  }
+    // TODO: 2018/8/1 by zmyer
+    @Override
+    public CompletableFuture<ManagedPartitionGroup> connect(PartitionManagementService managementService) {
+        threadFactory = new BlockingAwareThreadPoolContextFactory("atomix-" + name() + "-%d",
+                Runtime.getRuntime().availableProcessors() * 2, LOGGER);
+        final List<CompletableFuture<Partition>> futures = partitions.values().stream()
+                .map(p -> p.connect(managementService, threadFactory))
+                .collect(Collectors.toList());
+        return CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()])).thenApply(v -> {
+            LOGGER.info("Started");
+            return this;
+        });
+    }
 
-  @Override
-  public PartitionGroupConfig config() {
-    return config;
-  }
+    @Override
+    public CompletableFuture<Void> close() {
+        List<CompletableFuture<Void>> futures = partitions.values().stream()
+                .map(PrimaryBackupPartition::close)
+                .collect(Collectors.toList());
+        // Shutdown ThreadContextFactory on FJP common thread
+        return CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()])).whenCompleteAsync(
+                (r, e) -> {
+                    ThreadContextFactory threadFactory = this.threadFactory;
+                    if (threadFactory != null) {
+                        threadFactory.close();
+                    }
+                    LOGGER.info("Stopped");
+                });
+    }
 
-  @Override
-  public PrimitiveProtocol newProtocol() {
-    return MultiPrimaryProtocol.builder(name)
-        .withRecovery(Recovery.RECOVER)
-        .withBackups(2)
-        .withReplication(Replication.SYNCHRONOUS)
-        .build();
-  }
-
-  @Override
-  public PrimaryBackupPartition getPartition(PartitionId partitionId) {
-    return partitions.get(partitionId);
-  }
-
-  @Override
-  @SuppressWarnings("unchecked")
-  public Collection<Partition> getPartitions() {
-    return (Collection) partitions.values();
-  }
-
-  @Override
-  public List<PartitionId> getPartitionIds() {
-    return sortedPartitionIds;
-  }
-
-  @Override
-  public CompletableFuture<ManagedPartitionGroup> join(PartitionManagementService managementService) {
-    threadFactory = new BlockingAwareThreadPoolContextFactory("atomix-" + name() + "-%d", Runtime.getRuntime().availableProcessors() * 2, LOGGER);
-    List<CompletableFuture<Partition>> futures = partitions.values().stream()
-        .map(p -> p.join(managementService, threadFactory))
-        .collect(Collectors.toList());
-    return CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()])).thenApply(v -> {
-      LOGGER.info("Started");
-      return this;
-    });
-  }
-
-  @Override
-  public CompletableFuture<ManagedPartitionGroup> connect(PartitionManagementService managementService) {
-    threadFactory = new BlockingAwareThreadPoolContextFactory("atomix-" + name() + "-%d", Runtime.getRuntime().availableProcessors() * 2, LOGGER);
-    List<CompletableFuture<Partition>> futures = partitions.values().stream()
-        .map(p -> p.connect(managementService, threadFactory))
-        .collect(Collectors.toList());
-    return CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()])).thenApply(v -> {
-      LOGGER.info("Started");
-      return this;
-    });
-  }
-
-  @Override
-  public CompletableFuture<Void> close() {
-    List<CompletableFuture<Void>> futures = partitions.values().stream()
-        .map(PrimaryBackupPartition::close)
-        .collect(Collectors.toList());
-    // Shutdown ThreadContextFactory on FJP common thread
-    return CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()])).whenCompleteAsync((r, e) -> {
-      ThreadContextFactory threadFactory = this.threadFactory;
-      if (threadFactory != null) {
-        threadFactory.close();
-      }
-      LOGGER.info("Stopped");
-    });
-  }
-
-  @Override
-  public String toString() {
-    return toStringHelper(this)
-        .add("name", name)
-        .add("partitions", partitions)
-        .toString();
-  }
-
-  /**
-   * Primary-backup partition group builder.
-   */
-  public static class Builder extends PartitionGroup.Builder<PrimaryBackupPartitionGroupConfig> {
-    protected Builder(PrimaryBackupPartitionGroupConfig config) {
-      super(config);
+    @Override
+    public String toString() {
+        return toStringHelper(this)
+                .add("name", name)
+                .add("partitions", partitions)
+                .toString();
     }
 
     /**
-     * Sets the number of partitions.
-     *
-     * @param numPartitions the number of partitions
-     * @return the partition group builder
-     * @throws IllegalArgumentException if the number of partitions is not positive
+     * Primary-backup partition group builder.
      */
-    public Builder withNumPartitions(int numPartitions) {
-      config.setPartitions(numPartitions);
-      return this;
-    }
+    public static class Builder extends PartitionGroup.Builder<PrimaryBackupPartitionGroupConfig> {
+        protected Builder(PrimaryBackupPartitionGroupConfig config) {
+            super(config);
+        }
 
-    /**
-     * Sets the member group strategy.
-     *
-     * @param memberGroupStrategy the member group strategy
-     * @return the partition group builder
-     */
-    public Builder withMemberGroupStrategy(MemberGroupStrategy memberGroupStrategy) {
-      config.setMemberGroupStrategy(memberGroupStrategy);
-      return this;
-    }
+        /**
+         * Sets the number of partitions.
+         *
+         * @param numPartitions the number of partitions
+         * @return the partition group builder
+         * @throws IllegalArgumentException if the number of partitions is not positive
+         */
+        public Builder withNumPartitions(int numPartitions) {
+            config.setPartitions(numPartitions);
+            return this;
+        }
 
-    @Override
-    public PrimaryBackupPartitionGroup build() {
-      return new PrimaryBackupPartitionGroup(config);
+        /**
+         * Sets the member group strategy.
+         *
+         * @param memberGroupStrategy the member group strategy
+         * @return the partition group builder
+         */
+        public Builder withMemberGroupStrategy(MemberGroupStrategy memberGroupStrategy) {
+            config.setMemberGroupStrategy(memberGroupStrategy);
+            return this;
+        }
+
+        @Override
+        public PrimaryBackupPartitionGroup build() {
+            return new PrimaryBackupPartitionGroup(config);
+        }
     }
-  }
 }

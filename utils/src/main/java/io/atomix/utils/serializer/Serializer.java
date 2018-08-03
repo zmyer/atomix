@@ -19,44 +19,46 @@ package io.atomix.utils.serializer;
 /**
  * Interface for serialization of store artifacts.
  */
+// TODO: 2018/7/30 by zmyer
 public interface Serializer {
 
-  /**
-   * Serialize the specified object.
-   *
-   * @param object object to serialize.
-   * @param <T>    encoded type
-   * @return serialized bytes.
-   */
-  <T> byte[] encode(T object);
+    /**
+     * Serialize the specified object.
+     *
+     * @param object object to serialize.
+     * @param <T>    encoded type
+     * @return serialized bytes.
+     */
+    <T> byte[] encode(T object);
 
-  /**
-   * Deserialize the specified bytes.
-   *
-   * @param bytes byte array to deserialize.
-   * @param <T>   decoded type
-   * @return deserialized object.
-   */
-  <T> T decode(byte[] bytes);
+    /**
+     * Deserialize the specified bytes.
+     *
+     * @param bytes byte array to deserialize.
+     * @param <T>   decoded type
+     * @return deserialized object.
+     */
+    <T> T decode(byte[] bytes);
 
-  /**
-   * Creates a new Serializer instance from a Namespace.
-   *
-   * @param namespace serializer namespace
-   * @return Serializer instance
-   */
-  static Serializer using(Namespace namespace) {
-    return new Serializer() {
-      @Override
-      public <T> byte[] encode(T object) {
-        return namespace.serialize(object);
-      }
+    /**
+     * Creates a new Serializer instance from a Namespace.
+     *
+     * @param namespace serializer namespace
+     * @return Serializer instance
+     */
+    // TODO: 2018/7/30 by zmyer
+    static Serializer using(Namespace namespace) {
+        return new Serializer() {
+            @Override
+            public <T> byte[] encode(T object) {
+                return namespace.serialize(object);
+            }
 
-      @Override
-      public <T> T decode(byte[] bytes) {
-        return namespace.deserialize(bytes);
-      }
-    };
-  }
+            @Override
+            public <T> T decode(byte[] bytes) {
+                return namespace.deserialize(bytes);
+            }
+        };
+    }
 
 }

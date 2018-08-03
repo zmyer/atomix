@@ -25,48 +25,50 @@ import io.atomix.primitive.session.SessionIdService;
 /**
  * Default partition management service.
  */
+// TODO: 2018/8/1 by zmyer
 public class DefaultPartitionManagementService implements PartitionManagementService {
-  private final ClusterMembershipService membershipService;
-  private final ClusterCommunicationService communicationService;
-  private final PrimitiveTypeRegistry primitiveTypes;
-  private final PrimaryElectionService electionService;
-  private final SessionIdService sessionIdService;
+    private final ClusterMembershipService membershipService;
+    private final ClusterCommunicationService communicationService;
+    private final PrimitiveTypeRegistry primitiveTypes;
+    private final PrimaryElectionService electionService;
+    private final SessionIdService sessionIdService;
 
-  public DefaultPartitionManagementService(
-      ClusterMembershipService membershipService,
-      ClusterCommunicationService communicationService,
-      PrimitiveTypeRegistry primitiveTypes,
-      PrimaryElectionService electionService,
-      SessionIdService sessionIdService) {
-    this.membershipService = membershipService;
-    this.communicationService = communicationService;
-    this.primitiveTypes = primitiveTypes;
-    this.electionService = electionService;
-    this.sessionIdService = sessionIdService;
-  }
+    // TODO: 2018/8/1 by zmyer
+    public DefaultPartitionManagementService(
+            ClusterMembershipService membershipService,
+            ClusterCommunicationService communicationService,
+            PrimitiveTypeRegistry primitiveTypes,
+            PrimaryElectionService electionService,
+            SessionIdService sessionIdService) {
+        this.membershipService = membershipService;
+        this.communicationService = communicationService;
+        this.primitiveTypes = primitiveTypes;
+        this.electionService = electionService;
+        this.sessionIdService = sessionIdService;
+    }
 
-  @Override
-  public ClusterMembershipService getMembershipService() {
-    return membershipService;
-  }
+    @Override
+    public ClusterMembershipService getMembershipService() {
+        return membershipService;
+    }
 
-  @Override
-  public ClusterCommunicationService getMessagingService() {
-    return communicationService;
-  }
+    @Override
+    public ClusterCommunicationService getMessagingService() {
+        return communicationService;
+    }
 
-  @Override
-  public PrimitiveTypeRegistry getPrimitiveTypes() {
-    return primitiveTypes;
-  }
+    @Override
+    public PrimitiveTypeRegistry getPrimitiveTypes() {
+        return primitiveTypes;
+    }
 
-  @Override
-  public PrimaryElectionService getElectionService() {
-    return electionService;
-  }
+    @Override
+    public PrimaryElectionService getElectionService() {
+        return electionService;
+    }
 
-  @Override
-  public SessionIdService getSessionIdService() {
-    return sessionIdService;
-  }
+    @Override
+    public SessionIdService getSessionIdService() {
+        return sessionIdService;
+    }
 }

@@ -20,5 +20,6 @@ import io.atomix.utils.Managed;
 /**
  * Managed primary election service.
  */
+// TODO: 2018/7/31 by zmyer
 public interface ManagedPrimaryElectionService extends PrimaryElectionService, Managed<PrimaryElectionService> {
 }

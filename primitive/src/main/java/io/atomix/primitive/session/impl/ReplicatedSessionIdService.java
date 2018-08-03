@@ -33,49 +33,52 @@ import static io.atomix.primitive.session.impl.SessionIdGeneratorOperations.NEXT
 /**
  * Replicated ID generator service.
  */
+// TODO: 2018/7/31 by zmyer
 public class ReplicatedSessionIdService implements ManagedSessionIdService {
-  private static final Serializer SERIALIZER = Serializer.using(Namespace.builder()
-      .register(SessionIdGeneratorOperations.NAMESPACE)
-      .build());
-  private static final String PRIMITIVE_NAME = "session-id";
+    private static final Serializer SERIALIZER = Serializer.using(Namespace.builder()
+            .register(SessionIdGeneratorOperations.NAMESPACE)
+            .build());
+    private static final String PRIMITIVE_NAME = "session-id";
 
-  private final PartitionGroup systemPartitionGroup;
-  private SessionClient proxy;
-  private final AtomicBoolean started = new AtomicBoolean();
+    private final PartitionGroup systemPartitionGroup;
+    private SessionClient proxy;
+    private final AtomicBoolean started = new AtomicBoolean();
 
-  public ReplicatedSessionIdService(PartitionGroup systemPartitionGroup) {
-    this.systemPartitionGroup = systemPartitionGroup;
-  }
+    // TODO: 2018/8/1 by zmyer
+    public ReplicatedSessionIdService(PartitionGroup systemPartitionGroup) {
+        this.systemPartitionGroup = systemPartitionGroup;
+    }
 
-  @Override
-  public CompletableFuture<SessionId> nextSessionId() {
-    return proxy.execute(operation(NEXT))
-        .<Long>thenApply(SERIALIZER::decode)
-        .thenApply(SessionId::from);
-  }
+    @Override
+    public CompletableFuture<SessionId> nextSessionId() {
+        return proxy.execute(operation(NEXT))
+                .<Long>thenApply(SERIALIZER::decode)
+                .thenApply(SessionId::from);
+    }
 
-  @Override
-  public CompletableFuture<SessionIdService> start() {
-    return systemPartitionGroup.getPartitions().iterator().next().getClient()
-        .sessionBuilder(PRIMITIVE_NAME, SessionIdGeneratorType.instance(), new ServiceConfig())
-        .build()
-        .connect()
-        .thenApply(proxy -> {
-          this.proxy = proxy;
-          started.set(true);
-          return this;
-        });
-  }
+    // TODO: 2018/7/31 by zmyer
+    @Override
+    public CompletableFuture<SessionIdService> start() {
+        return systemPartitionGroup.getPartitions().iterator().next().getClient()
+                .sessionBuilder(PRIMITIVE_NAME, SessionIdGeneratorType.instance(), new ServiceConfig())
+                .build()
+                .connect()
+                .thenApply(proxy -> {
+                    this.proxy = proxy;
+                    started.set(true);
+                    return this;
+                });
+    }
 
-  @Override
-  public boolean isRunning() {
-    return started.get();
-  }
+    @Override
+    public boolean isRunning() {
+        return started.get();
+    }
 
-  @Override
-  public CompletableFuture<Void> stop() {
-    return proxy.close()
-        .exceptionally(v -> null)
-        .thenRun(() -> started.set(false));
-  }
+    @Override
+    public CompletableFuture<Void> stop() {
+        return proxy.close()
+                .exceptionally(v -> null)
+                .thenRun(() -> started.set(false));
+    }
 }

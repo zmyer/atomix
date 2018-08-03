@@ -39,83 +39,89 @@ import java.util.function.Function;
 /**
  * Raft server protocol that uses a {@link ClusterCommunicationService}.
  */
+// TODO: 2018/8/1 by zmyer
 public class PrimaryBackupServerCommunicator implements PrimaryBackupServerProtocol {
-  private final PrimaryBackupMessageContext context;
-  private final Serializer serializer;
-  private final ClusterCommunicationService clusterCommunicator;
+    private final PrimaryBackupMessageContext context;
+    private final Serializer serializer;
+    private final ClusterCommunicationService clusterCommunicator;
 
-  public PrimaryBackupServerCommunicator(String prefix, Serializer serializer, ClusterCommunicationService clusterCommunicator) {
-    this.context = new PrimaryBackupMessageContext(prefix);
-    this.serializer = Preconditions.checkNotNull(serializer, "serializer cannot be null");
-    this.clusterCommunicator = Preconditions.checkNotNull(clusterCommunicator, "clusterCommunicator cannot be null");
-  }
+    public PrimaryBackupServerCommunicator(String prefix, Serializer serializer,
+            ClusterCommunicationService clusterCommunicator) {
+        this.context = new PrimaryBackupMessageContext(prefix);
+        this.serializer = Preconditions.checkNotNull(serializer, "serializer cannot be null");
+        this.clusterCommunicator = Preconditions.checkNotNull(clusterCommunicator,
+                "clusterCommunicator cannot be null");
+    }
 
-  private <T, U> CompletableFuture<U> sendAndReceive(String subject, T request, MemberId memberId) {
-    return clusterCommunicator.send(subject, request, serializer::encode, serializer::decode, MemberId.from(memberId.id()));
-  }
+    private <T, U> CompletableFuture<U> sendAndReceive(String subject, T request, MemberId memberId) {
+        return clusterCommunicator.send(subject, request, serializer::encode, serializer::decode,
+                MemberId.from(memberId.id()));
+    }
 
-  @Override
-  public CompletableFuture<BackupResponse> backup(MemberId memberId, BackupRequest request) {
-    return sendAndReceive(context.backupSubject, request, memberId);
-  }
+    @Override
+    public CompletableFuture<BackupResponse> backup(MemberId memberId, BackupRequest request) {
+        return sendAndReceive(context.backupSubject, request, memberId);
+    }
 
-  @Override
-  public CompletableFuture<RestoreResponse> restore(MemberId memberId, RestoreRequest request) {
-    return sendAndReceive(context.restoreSubject, request, memberId);
-  }
+    @Override
+    public CompletableFuture<RestoreResponse> restore(MemberId memberId, RestoreRequest request) {
+        return sendAndReceive(context.restoreSubject, request, memberId);
+    }
 
-  @Override
-  public void event(MemberId memberId, SessionId session, PrimitiveEvent event) {
-    clusterCommunicator.unicast(context.eventSubject(session.id()), event, serializer::encode, memberId);
-  }
+    // TODO: 2018/8/1 by zmyer
+    @Override
+    public void event(MemberId memberId, SessionId session, PrimitiveEvent event) {
+        clusterCommunicator.unicast(context.eventSubject(session.id()), event, serializer::encode, memberId);
+    }
 
-  @Override
-  public void registerExecuteHandler(Function<ExecuteRequest, CompletableFuture<ExecuteResponse>> handler) {
-    clusterCommunicator.subscribe(context.executeSubject, serializer::decode, handler, serializer::encode);
-  }
+    // TODO: 2018/8/1 by zmyer
+    @Override
+    public void registerExecuteHandler(Function<ExecuteRequest, CompletableFuture<ExecuteResponse>> handler) {
+        clusterCommunicator.subscribe(context.executeSubject, serializer::decode, handler, serializer::encode);
+    }
 
-  @Override
-  public void unregisterExecuteHandler() {
-    clusterCommunicator.unsubscribe(context.executeSubject);
-  }
+    @Override
+    public void unregisterExecuteHandler() {
+        clusterCommunicator.unsubscribe(context.executeSubject);
+    }
 
-  @Override
-  public void registerBackupHandler(Function<BackupRequest, CompletableFuture<BackupResponse>> handler) {
-    clusterCommunicator.subscribe(context.backupSubject, serializer::decode, handler, serializer::encode);
-  }
+    @Override
+    public void registerBackupHandler(Function<BackupRequest, CompletableFuture<BackupResponse>> handler) {
+        clusterCommunicator.subscribe(context.backupSubject, serializer::decode, handler, serializer::encode);
+    }
 
-  @Override
-  public void unregisterBackupHandler() {
-    clusterCommunicator.unsubscribe(context.backupSubject);
-  }
+    @Override
+    public void unregisterBackupHandler() {
+        clusterCommunicator.unsubscribe(context.backupSubject);
+    }
 
-  @Override
-  public void registerRestoreHandler(Function<RestoreRequest, CompletableFuture<RestoreResponse>> handler) {
-    clusterCommunicator.subscribe(context.restoreSubject, serializer::decode, handler, serializer::encode);
-  }
+    @Override
+    public void registerRestoreHandler(Function<RestoreRequest, CompletableFuture<RestoreResponse>> handler) {
+        clusterCommunicator.subscribe(context.restoreSubject, serializer::decode, handler, serializer::encode);
+    }
 
-  @Override
-  public void unregisterRestoreHandler() {
-    clusterCommunicator.unsubscribe(context.restoreSubject);
-  }
+    @Override
+    public void unregisterRestoreHandler() {
+        clusterCommunicator.unsubscribe(context.restoreSubject);
+    }
 
-  @Override
-  public void registerCloseHandler(Function<CloseRequest, CompletableFuture<CloseResponse>> handler) {
-    clusterCommunicator.subscribe(context.closeSubject, serializer::decode, handler, serializer::encode);
-  }
+    @Override
+    public void registerCloseHandler(Function<CloseRequest, CompletableFuture<CloseResponse>> handler) {
+        clusterCommunicator.subscribe(context.closeSubject, serializer::decode, handler, serializer::encode);
+    }
 
-  @Override
-  public void unregisterCloseHandler() {
-    clusterCommunicator.unsubscribe(context.closeSubject);
-  }
+    @Override
+    public void unregisterCloseHandler() {
+        clusterCommunicator.unsubscribe(context.closeSubject);
+    }
 
-  @Override
-  public void registerMetadataHandler(Function<MetadataRequest, CompletableFuture<MetadataResponse>> handler) {
-    clusterCommunicator.subscribe(context.metadataSubject, serializer::decode, handler, serializer::encode);
-  }
+    @Override
+    public void registerMetadataHandler(Function<MetadataRequest, CompletableFuture<MetadataResponse>> handler) {
+        clusterCommunicator.subscribe(context.metadataSubject, serializer::decode, handler, serializer::encode);
+    }
 
-  @Override
-  public void unregisterMetadataHandler() {
-    clusterCommunicator.unsubscribe(context.metadataSubject);
-  }
+    @Override
+    public void unregisterMetadataHandler() {
+        clusterCommunicator.unsubscribe(context.metadataSubject);
+    }
 }

@@ -21,51 +21,53 @@ import io.atomix.utils.config.TypedConfig;
 /**
  * Partition group configuration.
  */
-public abstract class PartitionGroupConfig<C extends PartitionGroupConfig<C>> implements TypedConfig<C, PartitionGroup.Type>, NamedConfig<C> {
-  private String name;
-  private int partitions = getDefaultPartitions();
+// TODO: 2018/7/30 by zmyer
+public abstract class PartitionGroupConfig<C extends PartitionGroupConfig<C>>
+        implements TypedConfig<C, PartitionGroup.Type>, NamedConfig<C> {
+    private String name;
+    private int partitions = getDefaultPartitions();
 
-  @Override
-  public String getName() {
-    return name;
-  }
+    @Override
+    public String getName() {
+        return name;
+    }
 
-  @Override
-  @SuppressWarnings("unchecked")
-  public C setName(String name) {
-    this.name = name;
-    return (C) this;
-  }
+    @Override
+    @SuppressWarnings("unchecked")
+    public C setName(String name) {
+        this.name = name;
+        return (C) this;
+    }
 
-  /**
-   * Returns the number of partitions in the group.
-   *
-   * @return the number of partitions in the group.
-   */
-  public int getPartitions() {
-    return partitions;
-  }
+    /**
+     * Returns the number of partitions in the group.
+     *
+     * @return the number of partitions in the group.
+     */
+    public int getPartitions() {
+        return partitions;
+    }
 
-  /**
-   * Sets the number of partitions in the group.
-   *
-   * @param partitions the number of partitions in the group
-   * @return the partition group configuration
-   */
-  @SuppressWarnings("unchecked")
-  public C setPartitions(int partitions) {
-    this.partitions = partitions;
-    return (C) this;
-  }
+    /**
+     * Sets the number of partitions in the group.
+     *
+     * @param partitions the number of partitions in the group
+     * @return the partition group configuration
+     */
+    @SuppressWarnings("unchecked")
+    public C setPartitions(int partitions) {
+        this.partitions = partitions;
+        return (C) this;
+    }
 
-  /**
-   * Returns the default number of partitions.
-   * <p>
-   * Partition group configurations should override this method to provide a default number of partitions.
-   *
-   * @return the default number of partitions
-   */
-  protected int getDefaultPartitions() {
-    return 1;
-  }
+    /**
+     * Returns the default number of partitions.
+     * <p>
+     * Partition group configurations should override this method to provide a default number of partitions.
+     *
+     * @return the default number of partitions
+     */
+    protected int getDefaultPartitions() {
+        return 1;
+    }
 }

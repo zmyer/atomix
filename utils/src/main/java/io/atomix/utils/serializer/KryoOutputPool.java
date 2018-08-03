@@ -15,6 +15,7 @@
  */
 package io.atomix.utils.serializer;
 
+// TODO: 2018/7/30 by zmyer
 class KryoOutputPool extends KryoIOPool<ByteArrayOutput> {
 
     private static final int MAX_BUFFER_SIZE = 768 * 1024;

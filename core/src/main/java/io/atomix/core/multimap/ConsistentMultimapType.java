@@ -33,57 +33,60 @@ import static com.google.common.base.MoreObjects.toStringHelper;
 /**
  * Consistent multimap primitive type.
  */
-public class ConsistentMultimapType<K, V> implements PrimitiveType<ConsistentMultimapBuilder<K, V>, ConsistentMultimapConfig, ConsistentMultimap<K, V>> {
-  private static final String NAME = "consistent-multimap";
-  private static final ConsistentMultimapType INSTANCE = new ConsistentMultimapType();
+// TODO: 2018/8/1 by zmyer
+public class ConsistentMultimapType<K, V>
+        implements PrimitiveType<ConsistentMultimapBuilder<K, V>, ConsistentMultimapConfig, ConsistentMultimap<K, V>> {
+    private static final String NAME = "consistent-multimap";
+    private static final ConsistentMultimapType INSTANCE = new ConsistentMultimapType();
 
-  /**
-   * Returns a new consistent multimap type.
-   *
-   * @param <K> the key type
-   * @param <V> the value type
-   * @return a new consistent multimap type
-   */
-  @SuppressWarnings("unchecked")
-  public static <K, V> ConsistentMultimapType<K, V> instance() {
-    return INSTANCE;
-  }
+    /**
+     * Returns a new consistent multimap type.
+     *
+     * @param <K> the key type
+     * @param <V> the value type
+     * @return a new consistent multimap type
+     */
+    @SuppressWarnings("unchecked")
+    public static <K, V> ConsistentMultimapType<K, V> instance() {
+        return INSTANCE;
+    }
 
-  @Override
-  public String name() {
-    return NAME;
-  }
+    @Override
+    public String name() {
+        return NAME;
+    }
 
-  @Override
-  public Namespace namespace() {
-    return Namespace.builder()
-        .register(PrimitiveType.super.namespace())
-        .nextId(Namespaces.BEGIN_USER_CUSTOM_ID)
-        .register(Versioned.class)
-        .register(ArrayList.class)
-        .register(Maps.immutableEntry("", "").getClass())
-        .build();
-  }
+    @Override
+    public Namespace namespace() {
+        return Namespace.builder()
+                .register(PrimitiveType.super.namespace())
+                .nextId(Namespaces.BEGIN_USER_CUSTOM_ID)
+                .register(Versioned.class)
+                .register(ArrayList.class)
+                .register(Maps.immutableEntry("", "").getClass())
+                .build();
+    }
 
-  @Override
-  public PrimitiveService newService(ServiceConfig config) {
-    return new DefaultConsistentSetMultimapService();
-  }
+    @Override
+    public PrimitiveService newService(ServiceConfig config) {
+        return new DefaultConsistentSetMultimapService();
+    }
 
-  @Override
-  public ConsistentMultimapConfig newConfig() {
-    return new ConsistentMultimapConfig();
-  }
+    @Override
+    public ConsistentMultimapConfig newConfig() {
+        return new ConsistentMultimapConfig();
+    }
 
-  @Override
-  public ConsistentMultimapBuilder<K, V> newBuilder(String name, ConsistentMultimapConfig config, PrimitiveManagementService managementService) {
-    return new ConsistentMultimapProxyBuilder<>(name, config, managementService);
-  }
+    @Override
+    public ConsistentMultimapBuilder<K, V> newBuilder(String name, ConsistentMultimapConfig config,
+            PrimitiveManagementService managementService) {
+        return new ConsistentMultimapProxyBuilder<>(name, config, managementService);
+    }
 
-  @Override
-  public String toString() {
-    return toStringHelper(this)
-        .add("name", name())
-        .toString();
-  }
+    @Override
+    public String toString() {
+        return toStringHelper(this)
+                .add("name", name())
+                .toString();
+    }
 }

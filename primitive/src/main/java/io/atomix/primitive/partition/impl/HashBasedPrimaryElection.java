@@ -55,174 +55,189 @@ import java.util.concurrent.TimeUnit;
 /**
  * Hash-based primary election.
  */
+// TODO: 2018/7/31 by zmyer
 public class HashBasedPrimaryElection
-    extends AbstractListenerManager<PrimaryElectionEvent, PrimaryElectionEventListener>
-    implements PrimaryElection {
-  private static final Logger LOGGER = LoggerFactory.getLogger(HashBasedPrimaryElection.class);
-  private static final long BROADCAST_INTERVAL = 5000;
+        extends AbstractListenerManager<PrimaryElectionEvent, PrimaryElectionEventListener>
+        implements PrimaryElection {
+    private static final Logger LOGGER = LoggerFactory.getLogger(HashBasedPrimaryElection.class);
+    private static final long BROADCAST_INTERVAL = 5000;
 
-  private static final Serializer SERIALIZER = Serializer.using(Namespace.builder()
-      .register(Namespaces.BASIC)
-      .register(MemberId.class)
-      .register(MemberId.Type.class)
-      .build());
+    private static final Serializer SERIALIZER = Serializer.using(Namespace.builder()
+            .register(Namespaces.BASIC)
+            .register(MemberId.class)
+            .register(MemberId.Type.class)
+            .build());
 
-  private final PartitionId partitionId;
-  private final ClusterMembershipService clusterMembershipService;
-  private final PartitionGroupMembershipService groupMembershipService;
-  private final ClusterCommunicationService communicationService;
-  private final ClusterMembershipEventListener clusterMembershipEventListener = this::handleClusterMembershipEvent;
-  private final Map<MemberId, Integer> counters = Maps.newConcurrentMap();
-  private final String subject;
-  private final ScheduledFuture<?> broadcastFuture;
-  private volatile PrimaryTerm currentTerm;
+    private final PartitionId partitionId;
+    private final ClusterMembershipService clusterMembershipService;
+    private final PartitionGroupMembershipService groupMembershipService;
+    private final ClusterCommunicationService communicationService;
+    private final ClusterMembershipEventListener clusterMembershipEventListener = this::handleClusterMembershipEvent;
+    private final Map<MemberId, Integer> counters = Maps.newConcurrentMap();
+    private final String subject;
+    private final ScheduledFuture<?> broadcastFuture;
+    private volatile PrimaryTerm currentTerm;
 
-  private final PartitionGroupMembershipEventListener groupMembershipEventListener = new PartitionGroupMembershipEventListener() {
+    // TODO: 2018/8/1 by zmyer
+    private final PartitionGroupMembershipEventListener groupMembershipEventListener =
+            new PartitionGroupMembershipEventListener() {
+                @Override
+                public void onEvent(final PartitionGroupMembershipEvent event) {
+                    recomputeTerm(event.membership());
+                }
+
+                @Override
+                public boolean isRelevant(final PartitionGroupMembershipEvent event) {
+                    return event.membership().group().equals(partitionId.group());
+                }
+            };
+
+    // TODO: 2018/7/31 by zmyer
+    public HashBasedPrimaryElection(
+            PartitionId partitionId,
+            ClusterMembershipService clusterMembershipService,
+            PartitionGroupMembershipService groupMembershipService,
+            ClusterCommunicationService communicationService,
+            ScheduledExecutorService executor) {
+        this.partitionId = partitionId;
+        this.clusterMembershipService = clusterMembershipService;
+        this.groupMembershipService = groupMembershipService;
+        this.communicationService = communicationService;
+        this.subject = String.format("primary-election-counter-%s-%d", partitionId.group(), partitionId.id());
+        recomputeTerm(groupMembershipService.getMembership(partitionId.group()));
+        groupMembershipService.addListener(groupMembershipEventListener);
+        clusterMembershipService.addListener(clusterMembershipEventListener);
+        communicationService.subscribe(subject, SERIALIZER::decode, this::updateCounters, executor);
+        broadcastFuture = executor.scheduleAtFixedRate(this::broadcastCounters, BROADCAST_INTERVAL, BROADCAST_INTERVAL,
+                TimeUnit.MILLISECONDS);
+    }
+
+    // TODO: 2018/8/1 by zmyer
     @Override
-    public void onEvent(PartitionGroupMembershipEvent event) {
-      recomputeTerm(event.membership());
+    public CompletableFuture<PrimaryTerm> enter(GroupMember member) {
+        return CompletableFuture.completedFuture(currentTerm);
     }
 
+    // TODO: 2018/8/1 by zmyer
     @Override
-    public boolean isRelevant(PartitionGroupMembershipEvent event) {
-      return event.membership().group().equals(partitionId.group());
+    public CompletableFuture<PrimaryTerm> getTerm() {
+        return CompletableFuture.completedFuture(currentTerm);
     }
-  };
 
-  public HashBasedPrimaryElection(
-      PartitionId partitionId,
-      ClusterMembershipService clusterMembershipService,
-      PartitionGroupMembershipService groupMembershipService,
-      ClusterCommunicationService communicationService,
-      ScheduledExecutorService executor) {
-    this.partitionId = partitionId;
-    this.clusterMembershipService = clusterMembershipService;
-    this.groupMembershipService = groupMembershipService;
-    this.communicationService = communicationService;
-    this.subject = String.format("primary-election-counter-%s-%d", partitionId.group(), partitionId.id());
-    recomputeTerm(groupMembershipService.getMembership(partitionId.group()));
-    groupMembershipService.addListener(groupMembershipEventListener);
-    clusterMembershipService.addListener(clusterMembershipEventListener);
-    communicationService.subscribe(subject, SERIALIZER::decode, this::updateCounters, executor);
-    broadcastFuture = executor.scheduleAtFixedRate(this::broadcastCounters, BROADCAST_INTERVAL, BROADCAST_INTERVAL, TimeUnit.MILLISECONDS);
-  }
-
-  @Override
-  public CompletableFuture<PrimaryTerm> enter(GroupMember member) {
-    return CompletableFuture.completedFuture(currentTerm);
-  }
-
-  @Override
-  public CompletableFuture<PrimaryTerm> getTerm() {
-    return CompletableFuture.completedFuture(currentTerm);
-  }
-
-  /**
-   * Handles a cluster membership event.
-   */
-  private void handleClusterMembershipEvent(ClusterMembershipEvent event) {
-    if (event.type() == ClusterMembershipEvent.Type.MEMBER_ADDED || event.type() == ClusterMembershipEvent.Type.MEMBER_REMOVED) {
-      recomputeTerm(groupMembershipService.getMembership(partitionId.group()));
-    }
-  }
-
-  /**
-   * Returns the current term.
-   *
-   * @return the current term
-   */
-  private long currentTerm() {
-    return counters.values().stream().mapToInt(v -> v).sum();
-  }
-
-  /**
-   * Increments and returns the current term.
-   *
-   * @return the current term
-   */
-  private long incrementTerm() {
-    counters.compute(clusterMembershipService.getLocalMember().id(), (id, value) -> value != null ? value + 1 : 1);
-    broadcastCounters();
-    return currentTerm();
-  }
-
-  private void updateCounters(Map<MemberId, Integer> counters) {
-    for (Map.Entry<MemberId, Integer> entry : counters.entrySet()) {
-      this.counters.compute(entry.getKey(), (key, value) -> {
-        if (value == null || value < entry.getValue()) {
-          return entry.getValue();
+    /**
+     * Handles a cluster membership event.
+     */
+    private void handleClusterMembershipEvent(final ClusterMembershipEvent event) {
+        if (event.type() == ClusterMembershipEvent.Type.MEMBER_ADDED ||
+                event.type() == ClusterMembershipEvent.Type.MEMBER_REMOVED) {
+            recomputeTerm(groupMembershipService.getMembership(partitionId.group()));
         }
-        return value;
-      });
-    }
-    updateTerm(currentTerm());
-  }
-
-  private void broadcastCounters() {
-    communicationService.broadcast(subject, counters, SERIALIZER::encode);
-  }
-
-  private void updateTerm(long term) {
-    if (term > currentTerm.term()) {
-      recomputeTerm(groupMembershipService.getMembership(partitionId.group()));
-    }
-  }
-
-  /**
-   * Recomputes the current term.
-   */
-  private synchronized void recomputeTerm(PartitionGroupMembership membership) {
-    if (membership == null) {
-      return;
     }
 
-    // Create a list of candidates based on the availability of members in the group.
-    List<GroupMember> candidates = new ArrayList<>();
-    for (MemberId memberId : membership.members()) {
-      Member member = clusterMembershipService.getMember(memberId);
-      if (member != null && member.getState() == Member.State.ACTIVE) {
-        candidates.add(new GroupMember(memberId, MemberGroupId.from(memberId.id())));
-      }
+    /**
+     * Returns the current term.
+     *
+     * @return the current term
+     */
+    // TODO: 2018/7/31 by zmyer
+    private long currentTerm() {
+        return counters.values().stream().mapToInt(v -> v).sum();
     }
 
-    // Sort the candidates by a hash of their member ID.
-    candidates.sort((a, b) -> {
-      int aoffset = Hashing.murmur3_32().hashString(a.memberId().id(), StandardCharsets.UTF_8).asInt() % partitionId.id();
-      int boffset = Hashing.murmur3_32().hashString(b.memberId().id(), StandardCharsets.UTF_8).asInt() % partitionId.id();
-      return aoffset - boffset;
-    });
-
-    // Store the current term in a local variable avoid repeated volatile reads.
-    PrimaryTerm currentTerm = this.currentTerm;
-
-    // Compute the primary from the sorted candidates list.
-    GroupMember primary = candidates.isEmpty() ? null : candidates.get(0);
-
-    // Remove the primary from the candidates list.
-    candidates = candidates.isEmpty() ? Collections.emptyList() : candidates.subList(1, candidates.size());
-
-    // If the primary has changed, increment the term. Otherwise, use the current term from the replicated counter.
-    long term = currentTerm != null
-        && Objects.equals(currentTerm.primary(), primary)
-        && Objects.equals(currentTerm.candidates(), candidates)
-        ? currentTerm() : incrementTerm();
-
-    // Create the new primary term. If the term has changed update the term and trigger an event.
-    PrimaryTerm newTerm = new PrimaryTerm(term, primary, candidates);
-    if (!Objects.equals(currentTerm, newTerm)) {
-      this.currentTerm = newTerm;
-      LOGGER.debug("{} - Recomputed term for partition {}: {}", clusterMembershipService.getLocalMember().id(), partitionId, newTerm);
-      post(new PrimaryElectionEvent(PrimaryElectionEvent.Type.CHANGED, partitionId, newTerm));
-      broadcastCounters();
+    /**
+     * Increments and returns the current term.
+     *
+     * @return the current term
+     */
+    // TODO: 2018/7/31 by zmyer
+    private long incrementTerm() {
+        counters.compute(clusterMembershipService.getLocalMember().id(), (id, value) -> value != null ? value + 1 : 1);
+        broadcastCounters();
+        return currentTerm();
     }
-  }
 
-  /**
-   * Closes the election.
-   */
-  void close() {
-    broadcastFuture.cancel(false);
-    groupMembershipService.removeListener(groupMembershipEventListener);
-    clusterMembershipService.removeListener(clusterMembershipEventListener);
-  }
+    private void updateCounters(Map<MemberId, Integer> counters) {
+        for (Map.Entry<MemberId, Integer> entry : counters.entrySet()) {
+            this.counters.compute(entry.getKey(), (key, value) -> {
+                if (value == null || value < entry.getValue()) {
+                    return entry.getValue();
+                }
+                return value;
+            });
+        }
+        updateTerm(currentTerm());
+    }
+
+    // TODO: 2018/7/31 by zmyer
+    private void broadcastCounters() {
+        communicationService.broadcast(subject, counters, SERIALIZER::encode);
+    }
+
+    private void updateTerm(long term) {
+        if (term > currentTerm.term()) {
+            recomputeTerm(groupMembershipService.getMembership(partitionId.group()));
+        }
+    }
+
+    /**
+     * Recomputes the current term.
+     */
+    // TODO: 2018/7/31 by zmyer
+    private synchronized void recomputeTerm(PartitionGroupMembership membership) {
+        if (membership == null) {
+            return;
+        }
+
+        // Create a list of candidates based on the availability of members in the group.
+        List<GroupMember> candidates = new ArrayList<>();
+        for (final MemberId memberId : membership.members()) {
+            final Member member = clusterMembershipService.getMember(memberId);
+            if (member != null && member.getState() == Member.State.ACTIVE) {
+                candidates.add(new GroupMember(memberId, MemberGroupId.from(memberId.id())));
+            }
+        }
+
+        // Sort the candidates by a hash of their member ID.
+        candidates.sort((a, b) -> {
+            int aoffset = Hashing.murmur3_32().hashString(a.memberId().id(), StandardCharsets.UTF_8).asInt() %
+                    partitionId.id();
+            int boffset = Hashing.murmur3_32().hashString(b.memberId().id(), StandardCharsets.UTF_8).asInt() %
+                    partitionId.id();
+            return aoffset - boffset;
+        });
+
+        // Store the current term in a local variable avoid repeated volatile reads.
+        final PrimaryTerm currentTerm = this.currentTerm;
+
+        // Compute the primary from the sorted candidates list.
+        final GroupMember primary = candidates.isEmpty() ? null : candidates.get(0);
+
+        // Remove the primary from the candidates list.
+        candidates = candidates.isEmpty() ? Collections.emptyList() : candidates.subList(1, candidates.size());
+
+        // If the primary has changed, increment the term. Otherwise, use the current term from the replicated counter.
+        final long term = currentTerm != null
+                && Objects.equals(currentTerm.primary(), primary)
+                && Objects.equals(currentTerm.candidates(), candidates)
+                ? currentTerm() : incrementTerm();
+
+        // Create the new primary term. If the term has changed update the term and trigger an event.
+        final PrimaryTerm newTerm = new PrimaryTerm(term, primary, candidates);
+        if (!Objects.equals(currentTerm, newTerm)) {
+            this.currentTerm = newTerm;
+            LOGGER.debug("{} - Recomputed term for partition {}: {}", clusterMembershipService.getLocalMember().id(),
+                    partitionId, newTerm);
+            post(new PrimaryElectionEvent(PrimaryElectionEvent.Type.CHANGED, partitionId, newTerm));
+            broadcastCounters();
+        }
+    }
+
+    /**
+     * Closes the election.
+     */
+    void close() {
+        broadcastFuture.cancel(false);
+        groupMembershipService.removeListener(groupMembershipEventListener);
+        clusterMembershipService.removeListener(clusterMembershipEventListener);
+    }
 }

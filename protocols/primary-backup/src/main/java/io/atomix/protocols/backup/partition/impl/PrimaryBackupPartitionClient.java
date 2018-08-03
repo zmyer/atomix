@@ -34,58 +34,64 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Primary-backup partition client.
  */
+// TODO: 2018/7/31 by zmyer
 public class PrimaryBackupPartitionClient implements PartitionClient, Managed<PrimaryBackupPartitionClient> {
-  private final Logger log = LoggerFactory.getLogger(getClass());
-  private final PrimaryBackupPartition partition;
-  private final PartitionManagementService managementService;
-  private final ThreadContextFactory threadFactory;
-  private volatile PrimaryBackupClient client;
+    private final Logger log = LoggerFactory.getLogger(getClass());
+    private final PrimaryBackupPartition partition;
+    private final PartitionManagementService managementService;
+    private final ThreadContextFactory threadFactory;
+    private volatile PrimaryBackupClient client;
 
-  public PrimaryBackupPartitionClient(
-      PrimaryBackupPartition partition,
-      PartitionManagementService managementService,
-      ThreadContextFactory threadFactory) {
-    this.partition = partition;
-    this.managementService = managementService;
-    this.threadFactory = threadFactory;
-  }
-
-  @Override
-  public PrimaryBackupSessionClient.Builder sessionBuilder(String primitiveName, PrimitiveType primitiveType, ServiceConfig serviceConfig) {
-    return client.sessionBuilder(primitiveName, primitiveType, serviceConfig);
-  }
-
-  @Override
-  public CompletableFuture<PrimaryBackupPartitionClient> start() {
-    synchronized (PrimaryBackupPartitionClient.this) {
-      client = newClient();
-      log.debug("Successfully started client for {}", partition.id());
+    // TODO: 2018/8/1 by zmyer
+    public PrimaryBackupPartitionClient(
+            PrimaryBackupPartition partition,
+            PartitionManagementService managementService,
+            ThreadContextFactory threadFactory) {
+        this.partition = partition;
+        this.managementService = managementService;
+        this.threadFactory = threadFactory;
     }
-    return CompletableFuture.completedFuture(this);
-  }
 
-  private PrimaryBackupClient newClient() {
-    return PrimaryBackupClient.builder()
-        .withClientName(partition.name())
-        .withPartitionId(partition.id())
-        .withMembershipService(managementService.getMembershipService())
-        .withProtocol(new PrimaryBackupClientCommunicator(
-            partition.name(),
-            Serializer.using(PrimaryBackupNamespaces.PROTOCOL),
-            managementService.getMessagingService()))
-        .withPrimaryElection(managementService.getElectionService().getElectionFor(partition.id()))
-        .withSessionIdProvider(managementService.getSessionIdService())
-        .withThreadContextFactory(threadFactory)
-        .build();
-  }
+    // TODO: 2018/7/31 by zmyer
+    @Override
+    public PrimaryBackupSessionClient.Builder sessionBuilder(String primitiveName, PrimitiveType primitiveType,
+            ServiceConfig serviceConfig) {
+        return client.sessionBuilder(primitiveName, primitiveType, serviceConfig);
+    }
 
-  @Override
-  public boolean isRunning() {
-    return client != null;
-  }
+    // TODO: 2018/8/1 by zmyer
+    @Override
+    public CompletableFuture<PrimaryBackupPartitionClient> start() {
+        synchronized (PrimaryBackupPartitionClient.this) {
+            client = newClient();
+            log.debug("Successfully started client for {}", partition.id());
+        }
+        return CompletableFuture.completedFuture(this);
+    }
 
-  @Override
-  public CompletableFuture<Void> stop() {
-    return client != null ? client.close() : CompletableFuture.completedFuture(null);
-  }
+    // TODO: 2018/8/1 by zmyer
+    private PrimaryBackupClient newClient() {
+        return PrimaryBackupClient.builder()
+                .withClientName(partition.name())
+                .withPartitionId(partition.id())
+                .withMembershipService(managementService.getMembershipService())
+                .withProtocol(new PrimaryBackupClientCommunicator(
+                        partition.name(),
+                        Serializer.using(PrimaryBackupNamespaces.PROTOCOL),
+                        managementService.getMessagingService()))
+                .withPrimaryElection(managementService.getElectionService().getElectionFor(partition.id()))
+                .withSessionIdProvider(managementService.getSessionIdService())
+                .withThreadContextFactory(threadFactory)
+                .build();
+    }
+
+    @Override
+    public boolean isRunning() {
+        return client != null;
+    }
+
+    @Override
+    public CompletableFuture<Void> stop() {
+        return client != null ? client.close() : CompletableFuture.completedFuture(null);
+    }
 }

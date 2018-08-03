@@ -23,41 +23,42 @@ import io.atomix.primitive.session.SessionIdService;
 /**
  * Partition management service.
  */
+// TODO: 2018/7/31 by zmyer
 public interface PartitionManagementService {
 
-  /**
-   * Returns the cluster service.
-   *
-   * @return the cluster service
-   */
-  ClusterMembershipService getMembershipService();
+    /**
+     * Returns the cluster service.
+     *
+     * @return the cluster service
+     */
+    ClusterMembershipService getMembershipService();
 
-  /**
-   * Returns the cluster messaging service.
-   *
-   * @return the cluster messaging service
-   */
-  ClusterCommunicationService getMessagingService();
+    /**
+     * Returns the cluster messaging service.
+     *
+     * @return the cluster messaging service
+     */
+    ClusterCommunicationService getMessagingService();
 
-  /**
-   * Returns the primitive type registry.
-   *
-   * @return the primitive type registry
-   */
-  PrimitiveTypeRegistry getPrimitiveTypes();
+    /**
+     * Returns the primitive type registry.
+     *
+     * @return the primitive type registry
+     */
+    PrimitiveTypeRegistry getPrimitiveTypes();
 
-  /**
-   * Returns the primary election service.
-   *
-   * @return the primary election service
-   */
-  PrimaryElectionService getElectionService();
+    /**
+     * Returns the primary election service.
+     *
+     * @return the primary election service
+     */
+    PrimaryElectionService getElectionService();
 
-  /**
-   * Returns the session ID generator service.
-   *
-   * @return the session ID generator service
-   */
-  SessionIdService getSessionIdService();
+    /**
+     * Returns the session ID generator service.
+     *
+     * @return the session ID generator service
+     */
+    SessionIdService getSessionIdService();
 
 }

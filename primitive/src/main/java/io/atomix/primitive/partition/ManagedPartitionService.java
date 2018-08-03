@@ -20,5 +20,6 @@ import io.atomix.utils.Managed;
 /**
  * Managed partition service.
  */
+// TODO: 2018/7/30 by zmyer
 public interface ManagedPartitionService extends PartitionService, Managed<PartitionService> {
 }

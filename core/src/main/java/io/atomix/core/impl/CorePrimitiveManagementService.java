@@ -30,80 +30,81 @@ import java.util.concurrent.ScheduledExecutorService;
 /**
  * Default primitive management service.
  */
+// TODO: 2018/7/30 by zmyer
 public class CorePrimitiveManagementService implements PrimitiveManagementService {
-  private final ScheduledExecutorService executorService;
-  private final ClusterMembershipService membershipService;
-  private final ClusterCommunicationService communicationService;
-  private final ClusterEventService eventService;
-  private final PartitionService partitionService;
-  private final PrimitiveRegistry primitiveRegistry;
-  private final PrimitiveTypeRegistry primitiveTypeRegistry;
-  private final PrimitiveProtocolTypeRegistry protocolTypeRegistry;
-  private final PartitionGroupTypeRegistry partitionGroupTypeRegistry;
+    private final ScheduledExecutorService executorService;
+    private final ClusterMembershipService membershipService;
+    private final ClusterCommunicationService communicationService;
+    private final ClusterEventService eventService;
+    private final PartitionService partitionService;
+    private final PrimitiveRegistry primitiveRegistry;
+    private final PrimitiveTypeRegistry primitiveTypeRegistry;
+    private final PrimitiveProtocolTypeRegistry protocolTypeRegistry;
+    private final PartitionGroupTypeRegistry partitionGroupTypeRegistry;
 
-  public CorePrimitiveManagementService(
-      ScheduledExecutorService executorService,
-      ClusterMembershipService membershipService,
-      ClusterCommunicationService communicationService,
-      ClusterEventService eventService,
-      PartitionService partitionService,
-      PrimitiveRegistry primitiveRegistry,
-      PrimitiveTypeRegistry primitiveTypeRegistry,
-      PrimitiveProtocolTypeRegistry protocolTypeRegistry,
-      PartitionGroupTypeRegistry partitionGroupTypeRegistry) {
-    this.executorService = executorService;
-    this.membershipService = membershipService;
-    this.communicationService = communicationService;
-    this.eventService = eventService;
-    this.partitionService = partitionService;
-    this.primitiveRegistry = primitiveRegistry;
-    this.primitiveTypeRegistry = primitiveTypeRegistry;
-    this.protocolTypeRegistry = protocolTypeRegistry;
-    this.partitionGroupTypeRegistry = partitionGroupTypeRegistry;
-  }
+    public CorePrimitiveManagementService(
+            ScheduledExecutorService executorService,
+            ClusterMembershipService membershipService,
+            ClusterCommunicationService communicationService,
+            ClusterEventService eventService,
+            PartitionService partitionService,
+            PrimitiveRegistry primitiveRegistry,
+            PrimitiveTypeRegistry primitiveTypeRegistry,
+            PrimitiveProtocolTypeRegistry protocolTypeRegistry,
+            PartitionGroupTypeRegistry partitionGroupTypeRegistry) {
+        this.executorService = executorService;
+        this.membershipService = membershipService;
+        this.communicationService = communicationService;
+        this.eventService = eventService;
+        this.partitionService = partitionService;
+        this.primitiveRegistry = primitiveRegistry;
+        this.primitiveTypeRegistry = primitiveTypeRegistry;
+        this.protocolTypeRegistry = protocolTypeRegistry;
+        this.partitionGroupTypeRegistry = partitionGroupTypeRegistry;
+    }
 
-  @Override
-  public ScheduledExecutorService getExecutorService() {
-    return executorService;
-  }
+    @Override
+    public ScheduledExecutorService getExecutorService() {
+        return executorService;
+    }
 
-  @Override
-  public ClusterMembershipService getMembershipService() {
-    return membershipService;
-  }
+    @Override
+    public ClusterMembershipService getMembershipService() {
+        return membershipService;
+    }
 
-  @Override
-  public ClusterCommunicationService getCommunicationService() {
-    return communicationService;
-  }
+    @Override
+    public ClusterCommunicationService getCommunicationService() {
+        return communicationService;
+    }
 
-  @Override
-  public ClusterEventService getEventService() {
-    return eventService;
-  }
+    @Override
+    public ClusterEventService getEventService() {
+        return eventService;
+    }
 
-  @Override
-  public PartitionService getPartitionService() {
-    return partitionService;
-  }
+    @Override
+    public PartitionService getPartitionService() {
+        return partitionService;
+    }
 
-  @Override
-  public PrimitiveRegistry getPrimitiveRegistry() {
-    return primitiveRegistry;
-  }
+    @Override
+    public PrimitiveRegistry getPrimitiveRegistry() {
+        return primitiveRegistry;
+    }
 
-  @Override
-  public PrimitiveTypeRegistry getPrimitiveTypeRegistry() {
-    return primitiveTypeRegistry;
-  }
+    @Override
+    public PrimitiveTypeRegistry getPrimitiveTypeRegistry() {
+        return primitiveTypeRegistry;
+    }
 
-  @Override
-  public PrimitiveProtocolTypeRegistry getProtocolTypeRegistry() {
-    return protocolTypeRegistry;
-  }
+    @Override
+    public PrimitiveProtocolTypeRegistry getProtocolTypeRegistry() {
+        return protocolTypeRegistry;
+    }
 
-  @Override
-  public PartitionGroupTypeRegistry getPartitionGroupTypeRegistry() {
-    return partitionGroupTypeRegistry;
-  }
+    @Override
+    public PartitionGroupTypeRegistry getPartitionGroupTypeRegistry() {
+        return partitionGroupTypeRegistry;
+    }
 }

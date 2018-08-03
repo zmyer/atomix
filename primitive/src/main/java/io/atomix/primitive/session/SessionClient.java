@@ -29,106 +29,107 @@ import java.util.function.Consumer;
 /**
  * Partition proxy.
  */
+// TODO: 2018/7/31 by zmyer
 public interface SessionClient {
 
-  /**
-   * Returns the primitive name.
-   *
-   * @return the primitive name
-   */
-  String name();
+    /**
+     * Returns the primitive name.
+     *
+     * @return the primitive name
+     */
+    String name();
 
-  /**
-   * Returns the client proxy type.
-   *
-   * @return The client proxy type.
-   */
-  PrimitiveType type();
+    /**
+     * Returns the client proxy type.
+     *
+     * @return The client proxy type.
+     */
+    PrimitiveType type();
 
-  /**
-   * Returns the session state.
-   *
-   * @return The session state.
-   */
-  PrimitiveState getState();
+    /**
+     * Returns the session state.
+     *
+     * @return The session state.
+     */
+    PrimitiveState getState();
 
-  /**
-   * Returns the proxy session identifier.
-   *
-   * @return The proxy session identifier
-   */
-  SessionId sessionId();
+    /**
+     * Returns the proxy session identifier.
+     *
+     * @return The proxy session identifier
+     */
+    SessionId sessionId();
 
-  /**
-   * Returns the partition identifier.
-   *
-   * @return the partition identifier.
-   */
-  PartitionId partitionId();
+    /**
+     * Returns the partition identifier.
+     *
+     * @return the partition identifier.
+     */
+    PartitionId partitionId();
 
-  /**
-   * Returns the partition thread context.
-   *
-   * @return the partition thread context
-   */
-  ThreadContext context();
+    /**
+     * Returns the partition thread context.
+     *
+     * @return the partition thread context
+     */
+    ThreadContext context();
 
-  /**
-   * Executes an operation to the cluster.
-   *
-   * @param operation the operation to execute
-   * @return a future to be completed with the operation result
-   * @throws NullPointerException if {@code operation} is null
-   */
-  CompletableFuture<byte[]> execute(PrimitiveOperation operation);
+    /**
+     * Executes an operation to the cluster.
+     *
+     * @param operation the operation to execute
+     * @return a future to be completed with the operation result
+     * @throws NullPointerException if {@code operation} is null
+     */
+    CompletableFuture<byte[]> execute(PrimitiveOperation operation);
 
-  /**
-   * Adds an event listener.
-   *
-   * @param eventType the event type for which to add the listener
-   * @param listener  the event listener to add
-   */
-  void addEventListener(EventType eventType, Consumer<PrimitiveEvent> listener);
+    /**
+     * Adds an event listener.
+     *
+     * @param eventType the event type for which to add the listener
+     * @param listener  the event listener to add
+     */
+    void addEventListener(EventType eventType, Consumer<PrimitiveEvent> listener);
 
-  /**
-   * Removes an event listener.
-   *
-   * @param eventType the event type for which to remove the listener
-   * @param listener  the event listener to remove
-   */
-  void removeEventListener(EventType eventType, Consumer<PrimitiveEvent> listener);
+    /**
+     * Removes an event listener.
+     *
+     * @param eventType the event type for which to remove the listener
+     * @param listener  the event listener to remove
+     */
+    void removeEventListener(EventType eventType, Consumer<PrimitiveEvent> listener);
 
-  /**
-   * Registers a session state change listener.
-   *
-   * @param listener The callback to call when the session state changes.
-   */
-  void addStateChangeListener(Consumer<PrimitiveState> listener);
+    /**
+     * Registers a session state change listener.
+     *
+     * @param listener The callback to call when the session state changes.
+     */
+    void addStateChangeListener(Consumer<PrimitiveState> listener);
 
-  /**
-   * Removes a state change listener.
-   *
-   * @param listener the state change listener to remove
-   */
-  void removeStateChangeListener(Consumer<PrimitiveState> listener);
+    /**
+     * Removes a state change listener.
+     *
+     * @param listener the state change listener to remove
+     */
+    void removeStateChangeListener(Consumer<PrimitiveState> listener);
 
-  /**
-   * Connects the proxy.
-   *
-   * @return a future to be completed once the proxy has been connected
-   */
-  CompletableFuture<SessionClient> connect();
+    /**
+     * Connects the proxy.
+     *
+     * @return a future to be completed once the proxy has been connected
+     */
+    CompletableFuture<SessionClient> connect();
 
-  /**
-   * Closes the proxy.
-   *
-   * @return a future to be completed once the proxy has been closed
-   */
-  CompletableFuture<Void> close();
+    /**
+     * Closes the proxy.
+     *
+     * @return a future to be completed once the proxy has been closed
+     */
+    CompletableFuture<Void> close();
 
-  /**
-   * Partition proxy builder.
-   */
-  abstract class Builder implements io.atomix.utils.Builder<SessionClient> {
-  }
+    /**
+     * Partition proxy builder.
+     */
+    abstract class Builder implements io.atomix.utils.Builder<SessionClient> {
+    }
 }

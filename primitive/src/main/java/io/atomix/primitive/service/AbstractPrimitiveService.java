@@ -44,327 +44,329 @@ import java.util.function.Consumer;
 /**
  * Raft service.
  */
+// TODO: 2018/8/1 by zmyer
 public abstract class AbstractPrimitiveService<C> implements PrimitiveService {
-  private final PrimitiveType primitiveType;
-  private final Class<C> clientInterface;
-  private final Serializer serializer;
-  private Logger log;
-  private ServiceContext context;
-  private ServiceExecutor executor;
-  private final Map<SessionId, Session<C>> sessions = Maps.newHashMap();
+    private final PrimitiveType primitiveType;
+    private final Class<C> clientInterface;
+    private final Serializer serializer;
+    private Logger log;
+    private ServiceContext context;
+    private ServiceExecutor executor;
+    private final Map<SessionId, Session<C>> sessions = Maps.newHashMap();
 
-  protected AbstractPrimitiveService(PrimitiveType primitiveType) {
-    this(primitiveType, null);
-  }
-
-  protected AbstractPrimitiveService(PrimitiveType primitiveType, Class<C> clientInterface) {
-    this.primitiveType = primitiveType;
-    this.clientInterface = clientInterface;
-    this.serializer = Serializer.using(primitiveType.namespace());
-  }
-
-  @Override
-  public Serializer serializer() {
-    return serializer;
-  }
-
-  /**
-   * Encodes the given object using the configured {@link #serializer()}.
-   *
-   * @param object the object to encode
-   * @param <T>    the object type
-   * @return the encoded bytes
-   */
-  protected <T> byte[] encode(T object) {
-    return object != null ? serializer().encode(object) : null;
-  }
-
-  /**
-   * Decodes the given object using the configured {@link #serializer()}.
-   *
-   * @param bytes the bytes to decode
-   * @param <T>   the object type
-   * @return the decoded object
-   */
-  protected <T> T decode(byte[] bytes) {
-    return bytes != null ? serializer().decode(bytes) : null;
-  }
-
-  @Override
-  public final void init(ServiceContext context) {
-    this.context = context;
-    this.executor = new DefaultServiceExecutor(context, serializer());
-    this.log = ContextualLoggerFactory.getLogger(getClass(), LoggerContext.builder(PrimitiveService.class)
-        .addValue(context.serviceId())
-        .add("type", context.serviceType())
-        .add("name", context.serviceName())
-        .build());
-    configure(executor);
-  }
-
-  @Override
-  public final void tick(WallClockTimestamp timestamp) {
-    executor.tick(timestamp);
-  }
-
-  @Override
-  public final byte[] apply(Commit<byte[]> commit) {
-    return executor.apply(commit);
-  }
-
-  /**
-   * Configures the state machine.
-   * <p>
-   * By default, this method will configure state machine operations by extracting public methods with
-   * a single {@link Commit} parameter via reflection. Override this method to explicitly register
-   * state machine operations via the provided {@link ServiceExecutor}.
-   *
-   * @param executor The state machine executor.
-   */
-  protected void configure(ServiceExecutor executor) {
-    Operations.getOperationMap(getClass()).forEach(((operationId, method) -> configure(operationId, method, executor)));
-  }
-
-  /**
-   * Configures the given operation on the given executor.
-   *
-   * @param operationId the operation identifier
-   * @param method      the operation method
-   * @param executor    the service executor
-   */
-  private void configure(OperationId operationId, Method method, ServiceExecutor executor) {
-    if (method.getReturnType() == Void.TYPE) {
-      if (method.getParameterTypes().length == 0) {
-        executor.register(operationId, () -> {
-          try {
-            method.invoke(this);
-          } catch (IllegalAccessException | InvocationTargetException e) {
-            throw new PrimitiveException.ServiceException(e.getMessage());
-          }
-        });
-      } else {
-        executor.register(operationId, args -> {
-          try {
-            method.invoke(this, (Object[]) args.value());
-          } catch (IllegalAccessException | InvocationTargetException e) {
-            throw new PrimitiveException.ServiceException(e.getMessage());
-          }
-        });
-      }
-    } else {
-      if (method.getParameterTypes().length == 0) {
-        executor.register(operationId, () -> {
-          try {
-            return method.invoke(this);
-          } catch (IllegalAccessException | InvocationTargetException e) {
-            throw new PrimitiveException.ServiceException(e.getMessage());
-          }
-        });
-      } else {
-        executor.register(operationId, args -> {
-          try {
-            return method.invoke(this, (Object[]) args.value());
-          } catch (IllegalAccessException | InvocationTargetException e) {
-            throw new PrimitiveException.ServiceException(e.getMessage());
-          }
-        });
-      }
+    protected AbstractPrimitiveService(PrimitiveType primitiveType) {
+        this(primitiveType, null);
     }
-  }
 
-  /**
-   * Returns the primitive type.
-   *
-   * @return the primitive type
-   */
-  protected PrimitiveType getPrimitiveType() {
-    return primitiveType;
-  }
-
-  /**
-   * Returns the service logger.
-   *
-   * @return the service logger
-   */
-  protected Logger getLogger() {
-    return log;
-  }
-
-  /**
-   * Returns the state machine scheduler.
-   *
-   * @return The state machine scheduler.
-   */
-  protected Scheduler getScheduler() {
-    return executor;
-  }
-
-  /**
-   * Returns the unique state machine identifier.
-   *
-   * @return The unique state machine identifier.
-   */
-  protected PrimitiveId getServiceId() {
-    return context.serviceId();
-  }
-
-  /**
-   * Returns the unique state machine name.
-   *
-   * @return The unique state machine name.
-   */
-  protected String getServiceName() {
-    return context.serviceName();
-  }
-
-  /**
-   * Returns the state machine's current index.
-   *
-   * @return The state machine's current index.
-   */
-  protected long getCurrentIndex() {
-    return context.currentIndex();
-  }
-
-  /**
-   * Returns the current session.
-   *
-   * @return the current session
-   */
-  protected Session<C> getCurrentSession() {
-    return getSession(context.currentSession().sessionId());
-  }
-
-  /**
-   * Returns the state machine's clock.
-   *
-   * @return The state machine's clock.
-   */
-  protected Clock getClock() {
-    return getWallClock();
-  }
-
-  /**
-   * Returns the state machine's wall clock.
-   *
-   * @return The state machine's wall clock.
-   */
-  protected WallClock getWallClock() {
-    return context.wallClock();
-  }
-
-  /**
-   * Returns the state machine's logical clock.
-   *
-   * @return The state machine's logical clock.
-   */
-  protected LogicalClock getLogicalClock() {
-    return context.logicalClock();
-  }
-
-  /**
-   * Returns the session with the given identifier.
-   *
-   * @param sessionId the session identifier
-   * @return the primitive session
-   */
-  protected Session<C> getSession(long sessionId) {
-    return getSession(SessionId.from(sessionId));
-  }
-
-  /**
-   * Returns the session with the given identifier.
-   *
-   * @param sessionId the session identifier
-   * @return the primitive session
-   */
-  protected Session<C> getSession(SessionId sessionId) {
-    return sessions.get(sessionId);
-  }
-
-  /**
-   * Returns the collection of open sessions.
-   *
-   * @return the collection of open sessions
-   */
-  protected Collection<Session<C>> getSessions() {
-    return sessions.values();
-  }
-
-  @Override
-  @SuppressWarnings("unchecked")
-  public final void register(Session session) {
-    sessions.put(session.sessionId(), new ClientSession<>(clientInterface, session));
-    onOpen(session);
-  }
-
-  @Override
-  public final void expire(SessionId sessionId) {
-    Session session = sessions.remove(sessionId);
-    if (session != null) {
-      onExpire(session);
+    protected AbstractPrimitiveService(PrimitiveType primitiveType, Class<C> clientInterface) {
+        this.primitiveType = primitiveType;
+        this.clientInterface = clientInterface;
+        this.serializer = Serializer.using(primitiveType.namespace());
     }
-  }
 
-  @Override
-  public final void close(SessionId sessionId) {
-    Session session = sessions.remove(sessionId);
-    if (session != null) {
-      onClose(session);
+    @Override
+    public Serializer serializer() {
+        return serializer;
     }
-  }
 
-  /**
-   * Called when a new session is registered.
-   * <p>
-   * A session is registered when a new client connects to the cluster or an existing client recovers its
-   * session after being partitioned from the cluster. It's important to note that when this method is called,
-   * the {@link Session} is <em>not yet open</em> and so events cannot be {@link Session#accept(Consumer) published}
-   * to the registered session. This is because clients cannot reliably track messages pushed from server state machines
-   * to the client until the session has been fully registered. Session event messages may still be published to
-   * other already-registered sessions in reaction to a session being registered.
-   * <p>
-   * To push session event messages to a client through its session upon registration, state machines can
-   * use an asynchronous callback or schedule a callback to send a message.
-   * <pre>
-   *   {@code
-   *   public void onOpen(RaftSession session) {
-   *     executor.execute(() -> session.publish("foo", "Hello world!"));
-   *   }
-   *   }
-   * </pre>
-   * Sending a session event message in an asynchronous callback allows the server time to register the session
-   * and notify the client before the event message is sent. Published event messages sent via this method will
-   * be sent the next time an operation is applied to the state machine.
-   *
-   * @param session The session that was registered
-   */
-  protected void onOpen(Session session) {
+    /**
+     * Encodes the given object using the configured {@link #serializer()}.
+     *
+     * @param object the object to encode
+     * @param <T>    the object type
+     * @return the encoded bytes
+     */
+    protected <T> byte[] encode(T object) {
+        return object != null ? serializer().encode(object) : null;
+    }
 
-  }
+    /**
+     * Decodes the given object using the configured {@link #serializer()}.
+     *
+     * @param bytes the bytes to decode
+     * @param <T>   the object type
+     * @return the decoded object
+     */
+    protected <T> T decode(byte[] bytes) {
+        return bytes != null ? serializer().decode(bytes) : null;
+    }
 
-  /**
-   * Called when a session is expired by the system.
-   * <p>
-   * This method is called when a client fails to keep its session alive with the cluster. If the leader hasn't heard
-   * from a client for a configurable time interval, the leader will expire the session to free the related memory.
-   * This method will always be called for a given session before {@link #onClose(Session)}, and {@link #onClose(Session)}
-   * will always be called following this method.
-   *
-   * @param session The session that was expired
-   */
-  protected void onExpire(Session session) {
+    @Override
+    public final void init(ServiceContext context) {
+        this.context = context;
+        this.executor = new DefaultServiceExecutor(context, serializer());
+        this.log = ContextualLoggerFactory.getLogger(getClass(), LoggerContext.builder(PrimitiveService.class)
+                .addValue(context.serviceId())
+                .add("type", context.serviceType())
+                .add("name", context.serviceName())
+                .build());
+        configure(executor);
+    }
 
-  }
+    @Override
+    public final void tick(WallClockTimestamp timestamp) {
+        executor.tick(timestamp);
+    }
 
-  /**
-   * Called when a session was closed by the client.
-   * <p>
-   * This method is called when a client explicitly closes a session.
-   *
-   * @param session The session that was closed
-   */
-  protected void onClose(Session session) {
+    @Override
+    public final byte[] apply(Commit<byte[]> commit) {
+        return executor.apply(commit);
+    }
 
-  }
+    /**
+     * Configures the state machine.
+     * <p>
+     * By default, this method will configure state machine operations by extracting public methods with
+     * a single {@link Commit} parameter via reflection. Override this method to explicitly register
+     * state machine operations via the provided {@link ServiceExecutor}.
+     *
+     * @param executor The state machine executor.
+     */
+    protected void configure(ServiceExecutor executor) {
+        Operations.getOperationMap(getClass()).forEach(
+                ((operationId, method) -> configure(operationId, method, executor)));
+    }
+
+    /**
+     * Configures the given operation on the given executor.
+     *
+     * @param operationId the operation identifier
+     * @param method      the operation method
+     * @param executor    the service executor
+     */
+    private void configure(OperationId operationId, Method method, ServiceExecutor executor) {
+        if (method.getReturnType() == Void.TYPE) {
+            if (method.getParameterTypes().length == 0) {
+                executor.register(operationId, () -> {
+                    try {
+                        method.invoke(this);
+                    } catch (IllegalAccessException | InvocationTargetException e) {
+                        throw new PrimitiveException.ServiceException(e.getMessage());
+                    }
+                });
+            } else {
+                executor.register(operationId, args -> {
+                    try {
+                        method.invoke(this, (Object[]) args.value());
+                    } catch (IllegalAccessException | InvocationTargetException e) {
+                        throw new PrimitiveException.ServiceException(e.getMessage());
+                    }
+                });
+            }
+        } else {
+            if (method.getParameterTypes().length == 0) {
+                executor.register(operationId, () -> {
+                    try {
+                        return method.invoke(this);
+                    } catch (IllegalAccessException | InvocationTargetException e) {
+                        throw new PrimitiveException.ServiceException(e.getMessage());
+                    }
+                });
+            } else {
+                executor.register(operationId, args -> {
+                    try {
+                        return method.invoke(this, (Object[]) args.value());
+                    } catch (IllegalAccessException | InvocationTargetException e) {
+                        throw new PrimitiveException.ServiceException(e.getMessage());
+                    }
+                });
+            }
+        }
+    }
+
+    /**
+     * Returns the primitive type.
+     *
+     * @return the primitive type
+     */
+    protected PrimitiveType getPrimitiveType() {
+        return primitiveType;
+    }
+
+    /**
+     * Returns the service logger.
+     *
+     * @return the service logger
+     */
+    protected Logger getLogger() {
+        return log;
+    }
+
+    /**
+     * Returns the state machine scheduler.
+     *
+     * @return The state machine scheduler.
+     */
+    protected Scheduler getScheduler() {
+        return executor;
+    }
+
+    /**
+     * Returns the unique state machine identifier.
+     *
+     * @return The unique state machine identifier.
+     */
+    protected PrimitiveId getServiceId() {
+        return context.serviceId();
+    }
+
+    /**
+     * Returns the unique state machine name.
+     *
+     * @return The unique state machine name.
+     */
+    protected String getServiceName() {
+        return context.serviceName();
+    }
+
+    /**
+     * Returns the state machine's current index.
+     *
+     * @return The state machine's current index.
+     */
+    protected long getCurrentIndex() {
+        return context.currentIndex();
+    }
+
+    /**
+     * Returns the current session.
+     *
+     * @return the current session
+     */
+    protected Session<C> getCurrentSession() {
+        return getSession(context.currentSession().sessionId());
+    }
+
+    /**
+     * Returns the state machine's clock.
+     *
+     * @return The state machine's clock.
+     */
+    protected Clock getClock() {
+        return getWallClock();
+    }
+
+    /**
+     * Returns the state machine's wall clock.
+     *
+     * @return The state machine's wall clock.
+     */
+    protected WallClock getWallClock() {
+        return context.wallClock();
+    }
+
+    /**
+     * Returns the state machine's logical clock.
+     *
+     * @return The state machine's logical clock.
+     */
+    protected LogicalClock getLogicalClock() {
+        return context.logicalClock();
+    }
+
+    /**
+     * Returns the session with the given identifier.
+     *
+     * @param sessionId the session identifier
+     * @return the primitive session
+     */
+    protected Session<C> getSession(long sessionId) {
+        return getSession(SessionId.from(sessionId));
+    }
+
+    /**
+     * Returns the session with the given identifier.
+     *
+     * @param sessionId the session identifier
+     * @return the primitive session
+     */
+    protected Session<C> getSession(SessionId sessionId) {
+        return sessions.get(sessionId);
+    }
+
+    /**
+     * Returns the collection of open sessions.
+     *
+     * @return the collection of open sessions
+     */
+    protected Collection<Session<C>> getSessions() {
+        return sessions.values();
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public final void register(Session session) {
+        sessions.put(session.sessionId(), new ClientSession<>(clientInterface, session));
+        onOpen(session);
+    }
+
+    @Override
+    public final void expire(SessionId sessionId) {
+        Session session = sessions.remove(sessionId);
+        if (session != null) {
+            onExpire(session);
+        }
+    }
+
+    @Override
+    public final void close(SessionId sessionId) {
+        Session session = sessions.remove(sessionId);
+        if (session != null) {
+            onClose(session);
+        }
+    }
+
+    /**
+     * Called when a new session is registered.
+     * <p>
+     * A session is registered when a new client connects to the cluster or an existing client recovers its
+     * session after being partitioned from the cluster. It's important to note that when this method is called,
+     * the {@link Session} is <em>not yet open</em> and so events cannot be {@link Session#accept(Consumer) published}
+     * to the registered session. This is because clients cannot reliably track messages pushed from server state machines
+     * to the client until the session has been fully registered. Session event messages may still be published to
+     * other already-registered sessions in reaction to a session being registered.
+     * <p>
+     * To push session event messages to a client through its session upon registration, state machines can
+     * use an asynchronous callback or schedule a callback to send a message.
+     * <pre>
+     *   {@code
+     *   public void onOpen(RaftSession session) {
+     *     executor.execute(() -> session.publish("foo", "Hello world!"));
+     *   }
+     *   }
+     * </pre>
+     * Sending a session event message in an asynchronous callback allows the server time to register the session
+     * and notify the client before the event message is sent. Published event messages sent via this method will
+     * be sent the next time an operation is applied to the state machine.
+     *
+     * @param session The session that was registered
+     */
+    protected void onOpen(Session session) {
+
+    }
+
+    /**
+     * Called when a session is expired by the system.
+     * <p>
+     * This method is called when a client fails to keep its session alive with the cluster. If the leader hasn't heard
+     * from a client for a configurable time interval, the leader will expire the session to free the related memory.
+     * This method will always be called for a given session before {@link #onClose(Session)}, and {@link #onClose(Session)}
+     * will always be called following this method.
+     *
+     * @param session The session that was expired
+     */
+    protected void onExpire(Session session) {
+
+    }
+
+    /**
+     * Called when a session was closed by the client.
+     * <p>
+     * This method is called when a client explicitly closes a session.
+     *
+     * @param session The session that was closed
+     */
+    protected void onClose(Session session) {
+
+    }
 }

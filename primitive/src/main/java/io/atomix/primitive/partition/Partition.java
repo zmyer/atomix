@@ -22,48 +22,49 @@ import java.util.Collection;
 /**
  * Atomix partition.
  */
+// TODO: 2018/7/31 by zmyer
 public interface Partition {
 
-  /**
-   * Returns the partition identifier.
-   *
-   * @return the partition identifier
-   */
-  PartitionId id();
+    /**
+     * Returns the partition identifier.
+     *
+     * @return the partition identifier
+     */
+    PartitionId id();
 
-  /**
-   * Returns the partition term.
-   *
-   * @return the partition term
-   */
-  long term();
+    /**
+     * Returns the partition term.
+     *
+     * @return the partition term
+     */
+    long term();
 
-  /**
-   * Returns the collection of all members in the partition.
-   *
-   * @return the collection of all members in the partition
-   */
-  Collection<MemberId> members();
+    /**
+     * Returns the collection of all members in the partition.
+     *
+     * @return the collection of all members in the partition
+     */
+    Collection<MemberId> members();
 
-  /**
-   * Returns the partition's current primary.
-   *
-   * @return the partition's current primary
-   */
-  MemberId primary();
+    /**
+     * Returns the partition's current primary.
+     *
+     * @return the partition's current primary
+     */
+    MemberId primary();
 
-  /**
-   * Returns the partition's backups.
-   *
-   * @return the partition's backups
-   */
-  Collection<MemberId> backups();
+    /**
+     * Returns the partition's backups.
+     *
+     * @return the partition's backups
+     */
+    Collection<MemberId> backups();
 
-  /**
-   * Returns the partition client.
-   *
-   * @return the partition client
-   */
-  PartitionClient getClient();
+    /**
+     * Returns the partition client.
+     *
+     * @return the partition client
+     */
+    PartitionClient getClient();
 
 }

@@ -57,346 +57,362 @@ import static com.google.common.base.Preconditions.checkState;
 /**
  * Core transaction service.
  */
+// TODO: 2018/7/30 by zmyer
 public class CoreTransactionService implements ManagedTransactionService {
-  private static final Logger LOGGER = LoggerFactory.getLogger(CoreTransactionService.class);
-  private static final Serializer SERIALIZER = Serializer.using(Namespace.builder()
-      .register(Namespaces.BASIC)
-      .register(MemberId.class)
-      .register(MemberId.Type.class)
-      .register(TransactionId.class)
-      .register(TransactionState.class)
-      .register(ParticipantInfo.class)
-      .register(TransactionInfo.class)
-      .build());
-  private final PrimitiveManagementService managementService;
-  private final MemberId localMemberId;
-  private final ClusterMembershipEventListener clusterEventListener = this::onMembershipChange;
-  private AsyncConsistentMap<TransactionId, TransactionInfo> transactions;
-  private final AtomicBoolean started = new AtomicBoolean();
+    private static final Logger LOGGER = LoggerFactory.getLogger(CoreTransactionService.class);
+    private static final Serializer SERIALIZER = Serializer.using(Namespace.builder()
+            .register(Namespaces.BASIC)
+            .register(MemberId.class)
+            .register(MemberId.Type.class)
+            .register(TransactionId.class)
+            .register(TransactionState.class)
+            .register(ParticipantInfo.class)
+            .register(TransactionInfo.class)
+            .build());
+    private final PrimitiveManagementService managementService;
+    private final MemberId localMemberId;
+    private final ClusterMembershipEventListener clusterEventListener = this::onMembershipChange;
+    private AsyncConsistentMap<TransactionId, TransactionInfo> transactions;
+    private final AtomicBoolean started = new AtomicBoolean();
 
-  public CoreTransactionService(PrimitiveManagementService managementService) {
-    this.managementService = checkNotNull(managementService);
-    this.localMemberId = managementService.getMembershipService().getLocalMember().id();
-  }
-
-  @Override
-  public Set<TransactionId> getActiveTransactions() {
-    checkState(isRunning());
-    return transactions.keySet().join();
-  }
-
-  @Override
-  public TransactionState getTransactionState(TransactionId transactionId) {
-    checkState(isRunning());
-    TransactionInfo info = Versioned.valueOrNull(transactions.get(transactionId).join());
-    return info != null ? info.state : null;
-  }
-
-  @Override
-  public CompletableFuture<TransactionId> begin() {
-    checkState(isRunning());
-    TransactionId transactionId = TransactionId.from(UUID.randomUUID().toString());
-    TransactionInfo info = new TransactionInfo(localMemberId, TransactionState.ACTIVE, ImmutableSet.of());
-    return transactions.put(transactionId, info).thenApply(v -> transactionId);
-  }
-
-  @Override
-  public CompletableFuture<Void> preparing(TransactionId transactionId, Set<ParticipantInfo> participants) {
-    checkState(isRunning());
-    return transactions.compute(transactionId, (id, info) -> {
-      if (info == null) {
-        return null;
-      } else if (info.state == TransactionState.ACTIVE && info.coordinator.equals(localMemberId)) {
-        return new TransactionInfo(info.coordinator, TransactionState.PREPARING, participants);
-      } else {
-        return info;
-      }
-    }).thenCompose(value -> {
-      if (value == null || value.value() == null) {
-        return Futures.exceptionalFuture(new TransactionException("Unknown transaction " + transactionId));
-      } else if (value.value().state != TransactionState.PREPARING) {
-        return Futures.exceptionalFuture(new TransactionException("Concurrent transaction modification " + transactionId));
-      } else if (!value.value().coordinator.equals(localMemberId)) {
-        return Futures.exceptionalFuture(new TransactionException("Transaction " + transactionId + " recovered by another member"));
-      }
-      return Futures.completedFuture(null);
-    });
-  }
-
-  @Override
-  public CompletableFuture<Void> committing(TransactionId transactionId) {
-    checkState(isRunning());
-    return transactions.compute(transactionId, (id, info) -> {
-      if (info == null) {
-        return null;
-      } else if (info.state == TransactionState.PREPARING && info.coordinator.equals(localMemberId)) {
-        return new TransactionInfo(info.coordinator, TransactionState.COMMITTING, info.participants);
-      } else {
-        return info;
-      }
-    }).thenCompose(value -> {
-      if (value == null || value.value() == null) {
-        return Futures.exceptionalFuture(new TransactionException("Unknown transaction " + transactionId));
-      } else if (value.value().state != TransactionState.COMMITTING) {
-        return Futures.exceptionalFuture(new TransactionException("Concurrent transaction modification " + transactionId));
-      } else if (!value.value().coordinator.equals(localMemberId)) {
-        return Futures.exceptionalFuture(new TransactionException("Transaction " + transactionId + " recovered by another member"));
-      }
-      return Futures.completedFuture(null);
-    });
-  }
-
-  @Override
-  public CompletableFuture<Void> aborting(TransactionId transactionId) {
-    checkState(isRunning());
-    return transactions.compute(transactionId, (id, info) -> {
-      if (info == null) {
-        return null;
-      } else if (info.state == TransactionState.PREPARING && info.coordinator.equals(localMemberId)) {
-        return new TransactionInfo(info.coordinator, TransactionState.ROLLING_BACK, info.participants);
-      } else {
-        return info;
-      }
-    }).thenCompose(value -> {
-      if (value == null || value.value() == null) {
-        return Futures.exceptionalFuture(new TransactionException("Unknown transaction " + transactionId));
-      } else if (value.value().state != TransactionState.ROLLING_BACK) {
-        return Futures.exceptionalFuture(new TransactionException("Concurrent transaction modification " + transactionId));
-      } else if (!value.value().coordinator.equals(localMemberId)) {
-        return Futures.exceptionalFuture(new TransactionException("Transaction " + transactionId + " recovered by another member"));
-      }
-      return Futures.completedFuture(null);
-    });
-  }
-
-  @Override
-  public CompletableFuture<Void> complete(TransactionId transactionId) {
-    checkState(isRunning());
-    return transactions.remove(transactionId).thenApply(v -> null);
-  }
-
-  /**
-   * Handles a cluster membership change event.
-   */
-  private void onMembershipChange(ClusterMembershipEvent event) {
-    if (event.type() == ClusterMembershipEvent.Type.MEMBER_REMOVED) {
-      transactions.entrySet().thenAccept(entries -> entries.stream()
-          .filter(entry -> entry.getValue().value().coordinator.equals(event.subject().id()))
-          .forEach(entry -> {
-            recoverTransaction(entry.getKey(), entry.getValue().value());
-          }));
+    public CoreTransactionService(PrimitiveManagementService managementService) {
+        this.managementService = checkNotNull(managementService);
+        this.localMemberId = managementService.getMembershipService().getLocalMember().id();
     }
-  }
 
-  /**
-   * Recovers and completes the given transaction.
-   *
-   * @param transactionId   the transaction identifier
-   * @param transactionInfo the transaction info
-   */
-  private void recoverTransaction(TransactionId transactionId, TransactionInfo transactionInfo) {
-    switch (transactionInfo.state) {
-      case PREPARING:
-        completePreparingTransaction(transactionId);
-        break;
-      case COMMITTING:
-        completeCommittingTransaction(transactionId);
-        break;
-      case ROLLING_BACK:
-        completeRollingBackTransaction(transactionId);
-        break;
-      default:
-        break;
+    @Override
+    public Set<TransactionId> getActiveTransactions() {
+        checkState(isRunning());
+        return transactions.keySet().join();
     }
-  }
 
-  /**
-   * Completes a transaction in the {@link TransactionState#PREPARING} state.
-   *
-   * @param transactionId the transaction identifier for the transaction to complete
-   */
-  private void completePreparingTransaction(TransactionId transactionId) {
-    // Change ownership of the transaction to the local node and set its state to ROLLING_BACK and then roll it back.
-    completeTransaction(
-        transactionId,
-        TransactionState.PREPARING,
-        info -> new TransactionInfo(localMemberId, TransactionState.ROLLING_BACK, info.participants),
-        info -> info.state == TransactionState.ROLLING_BACK,
-        (id, transactional) -> transactional.rollback(id))
-        .whenComplete((result, error) -> {
-          if (error != null) {
-            error = Throwables.getRootCause(error);
-            if (error instanceof TransactionException) {
-              LOGGER.warn("Failed to complete transaction", error);
+    @Override
+    public TransactionState getTransactionState(TransactionId transactionId) {
+        checkState(isRunning());
+        TransactionInfo info = Versioned.valueOrNull(transactions.get(transactionId).join());
+        return info != null ? info.state : null;
+    }
+
+    @Override
+    public CompletableFuture<TransactionId> begin() {
+        checkState(isRunning());
+        TransactionId transactionId = TransactionId.from(UUID.randomUUID().toString());
+        TransactionInfo info = new TransactionInfo(localMemberId, TransactionState.ACTIVE, ImmutableSet.of());
+        return transactions.put(transactionId, info).thenApply(v -> transactionId);
+    }
+
+    @Override
+    public CompletableFuture<Void> preparing(TransactionId transactionId, Set<ParticipantInfo> participants) {
+        checkState(isRunning());
+        return transactions.compute(transactionId, (id, info) -> {
+            if (info == null) {
+                return null;
+            } else if (info.state == TransactionState.ACTIVE && info.coordinator.equals(localMemberId)) {
+                return new TransactionInfo(info.coordinator, TransactionState.PREPARING, participants);
             } else {
-              LOGGER.warn("Failed to roll back transaction " + transactionId);
+                return info;
             }
-          }
+        }).thenCompose(value -> {
+            if (value == null || value.value() == null) {
+                return Futures.exceptionalFuture(new TransactionException("Unknown transaction " + transactionId));
+            } else if (value.value().state != TransactionState.PREPARING) {
+                return Futures.exceptionalFuture(
+                        new TransactionException("Concurrent transaction modification " + transactionId));
+            } else if (!value.value().coordinator.equals(localMemberId)) {
+                return Futures.exceptionalFuture(
+                        new TransactionException("Transaction " + transactionId + " recovered by another member"));
+            }
+            return Futures.completedFuture(null);
         });
-  }
+    }
 
-  /**
-   * Completes a transaction in the {@link TransactionState#PREPARING} state.
-   *
-   * @param transactionId the transaction identifier for the transaction to complete
-   */
-  private void completeCommittingTransaction(TransactionId transactionId) {
-    // Change ownership of the transaction to the local node and then commit it.
-    completeTransaction(
-        transactionId,
-        TransactionState.COMMITTING,
-        info -> new TransactionInfo(localMemberId, TransactionState.COMMITTING, info.participants),
-        info -> info.state == TransactionState.COMMITTING && info.coordinator.equals(localMemberId),
-        (id, transactional) -> transactional.commit(id))
-        .whenComplete((result, error) -> {
-          if (error != null) {
-            error = Throwables.getRootCause(error);
-            if (error instanceof TransactionException) {
-              LOGGER.warn("Failed to complete transaction", error);
+    @Override
+    public CompletableFuture<Void> committing(TransactionId transactionId) {
+        checkState(isRunning());
+        return transactions.compute(transactionId, (id, info) -> {
+            if (info == null) {
+                return null;
+            } else if (info.state == TransactionState.PREPARING && info.coordinator.equals(localMemberId)) {
+                return new TransactionInfo(info.coordinator, TransactionState.COMMITTING, info.participants);
             } else {
-              LOGGER.warn("Failed to commit transaction " + transactionId);
+                return info;
             }
-          }
+        }).thenCompose(value -> {
+            if (value == null || value.value() == null) {
+                return Futures.exceptionalFuture(new TransactionException("Unknown transaction " + transactionId));
+            } else if (value.value().state != TransactionState.COMMITTING) {
+                return Futures.exceptionalFuture(
+                        new TransactionException("Concurrent transaction modification " + transactionId));
+            } else if (!value.value().coordinator.equals(localMemberId)) {
+                return Futures.exceptionalFuture(
+                        new TransactionException("Transaction " + transactionId + " recovered by another member"));
+            }
+            return Futures.completedFuture(null);
         });
-  }
+    }
 
-  /**
-   * Completes a transaction in the {@link TransactionState#PREPARING} state.
-   *
-   * @param transactionId the transaction identifier for the transaction to complete
-   */
-  private void completeRollingBackTransaction(TransactionId transactionId) {
-    // Change ownership of the transaction to the local node and then roll it back.
-    completeTransaction(
-        transactionId,
-        TransactionState.ROLLING_BACK,
-        info -> new TransactionInfo(localMemberId, TransactionState.ROLLING_BACK, info.participants),
-        info -> info.state == TransactionState.ROLLING_BACK && info.coordinator.equals(localMemberId),
-        (id, transactional) -> transactional.rollback(id))
-        .whenComplete((result, error) -> {
-          if (error != null) {
-            error = Throwables.getRootCause(error);
-            if (error instanceof TransactionException) {
-              LOGGER.warn("Failed to complete transaction", error);
+    @Override
+    public CompletableFuture<Void> aborting(TransactionId transactionId) {
+        checkState(isRunning());
+        return transactions.compute(transactionId, (id, info) -> {
+            if (info == null) {
+                return null;
+            } else if (info.state == TransactionState.PREPARING && info.coordinator.equals(localMemberId)) {
+                return new TransactionInfo(info.coordinator, TransactionState.ROLLING_BACK, info.participants);
             } else {
-              LOGGER.warn("Failed to roll back transaction " + transactionId);
+                return info;
             }
-          }
+        }).thenCompose(value -> {
+            if (value == null || value.value() == null) {
+                return Futures.exceptionalFuture(new TransactionException("Unknown transaction " + transactionId));
+            } else if (value.value().state != TransactionState.ROLLING_BACK) {
+                return Futures.exceptionalFuture(
+                        new TransactionException("Concurrent transaction modification " + transactionId));
+            } else if (!value.value().coordinator.equals(localMemberId)) {
+                return Futures.exceptionalFuture(
+                        new TransactionException("Transaction " + transactionId + " recovered by another member"));
+            }
+            return Futures.completedFuture(null);
         });
-  }
-
-  /**
-   * Completes a transaction by modifying the transaction state to change ownership to this member and then completing
-   * the transaction based on the existing transaction state.
-   */
-  @SuppressWarnings("unchecked")
-  private CompletableFuture<Void> completeTransaction(
-      TransactionId transactionId,
-      TransactionState expectState,
-      Function<TransactionInfo, TransactionInfo> updateFunction,
-      Predicate<TransactionInfo> updatedPredicate,
-      BiFunction<TransactionId, Transactional<?>, CompletableFuture<Void>> completionFunction) {
-    return transactions.compute(transactionId, (id, info) -> {
-      if (info == null) {
-        return null;
-      } else if (info.state == expectState) {
-        return updateFunction.apply(info);
-      } else {
-        return info;
-      }
-    }).thenCompose(value -> {
-      if (value != null && updatedPredicate.test(value.value())) {
-        return Futures.allOf(value.value().participants.stream()
-            .map(participantInfo -> completeParticipant(participantInfo, info -> completionFunction.apply(transactionId, info))))
-            .thenApply(v -> null);
-      }
-      return Futures.exceptionalFuture(new TransactionException("Failed to acquire transaction lock"));
-    });
-  }
-
-  /**
-   * Completes an individual participant in a transaction by loading the primitive by type/protocol/partition group
-   * and applying the given completion function to it.
-   */
-  @SuppressWarnings("unchecked")
-  private CompletableFuture<Void> completeParticipant(
-      ParticipantInfo participantInfo,
-      Function<Transactional<?>, CompletableFuture<Void>> completionFunction) {
-    // Look up the primitive type for the participant. If the primitive type is not found, return an exception.
-    PrimitiveType primitiveType = managementService.getPrimitiveTypeRegistry().getPrimitiveType(participantInfo.type());
-    if (primitiveType == null) {
-      return Futures.exceptionalFuture(new TransactionException("Failed to locate primitive type " + participantInfo.type() + " for participant " + participantInfo.name()));
     }
 
-    // Look up the protocol type for the participant.
-    PrimitiveProtocol.Type protocolType = managementService.getProtocolTypeRegistry().getProtocolType(participantInfo.protocol());
-    if (protocolType == null) {
-      return Futures.exceptionalFuture(new TransactionException("Failed to locate protocol type for participant " + participantInfo.name()));
+    @Override
+    public CompletableFuture<Void> complete(TransactionId transactionId) {
+        checkState(isRunning());
+        return transactions.remove(transactionId).thenApply(v -> null);
     }
 
-    // Look up the partition group in which the primitive is stored.
-    PartitionGroup partitionGroup;
-    if (participantInfo.group() == null) {
-      partitionGroup = managementService.getPartitionService().getPartitionGroup(protocolType);
-    } else {
-      partitionGroup = managementService.getPartitionService().getPartitionGroup(participantInfo.group());
+    /**
+     * Handles a cluster membership change event.
+     */
+    private void onMembershipChange(ClusterMembershipEvent event) {
+        if (event.type() == ClusterMembershipEvent.Type.MEMBER_REMOVED) {
+            transactions.entrySet().thenAccept(entries -> entries.stream()
+                    .filter(entry -> entry.getValue().value().coordinator.equals(event.subject().id()))
+                    .forEach(entry -> {
+                        recoverTransaction(entry.getKey(), entry.getValue().value());
+                    }));
+        }
     }
 
-    // If the partition group is not found, return an exception.
-    if (partitionGroup == null) {
-      return Futures.exceptionalFuture(new TransactionException("Failed to locate partition group for participant " + participantInfo.name()));
+    /**
+     * Recovers and completes the given transaction.
+     *
+     * @param transactionId   the transaction identifier
+     * @param transactionInfo the transaction info
+     */
+    private void recoverTransaction(TransactionId transactionId, TransactionInfo transactionInfo) {
+        switch (transactionInfo.state) {
+        case PREPARING:
+            completePreparingTransaction(transactionId);
+            break;
+        case COMMITTING:
+            completeCommittingTransaction(transactionId);
+            break;
+        case ROLLING_BACK:
+            completeRollingBackTransaction(transactionId);
+            break;
+        default:
+            break;
+        }
     }
 
-    DistributedPrimitive primitive = primitiveType.newBuilder(participantInfo.name(), primitiveType.newConfig(), managementService)
-        .withProtocol(partitionGroup.newProtocol())
-        .build();
-    return completionFunction.apply((Transactional<?>) primitive);
-  }
+    /**
+     * Completes a transaction in the {@link TransactionState#PREPARING} state.
+     *
+     * @param transactionId the transaction identifier for the transaction to complete
+     */
+    private void completePreparingTransaction(TransactionId transactionId) {
+        // Change ownership of the transaction to the local node and set its state to ROLLING_BACK and then roll it back.
+        completeTransaction(
+                transactionId,
+                TransactionState.PREPARING,
+                info -> new TransactionInfo(localMemberId, TransactionState.ROLLING_BACK, info.participants),
+                info -> info.state == TransactionState.ROLLING_BACK,
+                (id, transactional) -> transactional.rollback(id))
+                .whenComplete((result, error) -> {
+                    if (error != null) {
+                        error = Throwables.getRootCause(error);
+                        if (error instanceof TransactionException) {
+                            LOGGER.warn("Failed to complete transaction", error);
+                        } else {
+                            LOGGER.warn("Failed to roll back transaction " + transactionId);
+                        }
+                    }
+                });
+    }
 
-  @Override
-  @SuppressWarnings("unchecked")
-  public CompletableFuture<TransactionService> start() {
-    managementService.getMembershipService().addListener(clusterEventListener);
-    return ConsistentMapType.<TransactionId, TransactionInfo>instance()
-        .newBuilder("atomix-transactions", new ConsistentMapConfig(), managementService)
-        .withProtocol(managementService.getPartitionService().getSystemPartitionGroup().newProtocol())
-        .withSerializer(SERIALIZER)
-        .withCacheEnabled()
-        .buildAsync()
-        .thenApply(transactions -> {
-          this.transactions = transactions.async();
-          LOGGER.info("Started");
-          started.set(true);
-          return this;
+    /**
+     * Completes a transaction in the {@link TransactionState#PREPARING} state.
+     *
+     * @param transactionId the transaction identifier for the transaction to complete
+     */
+    private void completeCommittingTransaction(TransactionId transactionId) {
+        // Change ownership of the transaction to the local node and then commit it.
+        completeTransaction(
+                transactionId,
+                TransactionState.COMMITTING,
+                info -> new TransactionInfo(localMemberId, TransactionState.COMMITTING, info.participants),
+                info -> info.state == TransactionState.COMMITTING && info.coordinator.equals(localMemberId),
+                (id, transactional) -> transactional.commit(id))
+                .whenComplete((result, error) -> {
+                    if (error != null) {
+                        error = Throwables.getRootCause(error);
+                        if (error instanceof TransactionException) {
+                            LOGGER.warn("Failed to complete transaction", error);
+                        } else {
+                            LOGGER.warn("Failed to commit transaction " + transactionId);
+                        }
+                    }
+                });
+    }
+
+    /**
+     * Completes a transaction in the {@link TransactionState#PREPARING} state.
+     *
+     * @param transactionId the transaction identifier for the transaction to complete
+     */
+    private void completeRollingBackTransaction(TransactionId transactionId) {
+        // Change ownership of the transaction to the local node and then roll it back.
+        completeTransaction(
+                transactionId,
+                TransactionState.ROLLING_BACK,
+                info -> new TransactionInfo(localMemberId, TransactionState.ROLLING_BACK, info.participants),
+                info -> info.state == TransactionState.ROLLING_BACK && info.coordinator.equals(localMemberId),
+                (id, transactional) -> transactional.rollback(id))
+                .whenComplete((result, error) -> {
+                    if (error != null) {
+                        error = Throwables.getRootCause(error);
+                        if (error instanceof TransactionException) {
+                            LOGGER.warn("Failed to complete transaction", error);
+                        } else {
+                            LOGGER.warn("Failed to roll back transaction " + transactionId);
+                        }
+                    }
+                });
+    }
+
+    /**
+     * Completes a transaction by modifying the transaction state to change ownership to this member and then completing
+     * the transaction based on the existing transaction state.
+     */
+    @SuppressWarnings("unchecked")
+    private CompletableFuture<Void> completeTransaction(
+            TransactionId transactionId,
+            TransactionState expectState,
+            Function<TransactionInfo, TransactionInfo> updateFunction,
+            Predicate<TransactionInfo> updatedPredicate,
+            BiFunction<TransactionId, Transactional<?>, CompletableFuture<Void>> completionFunction) {
+        return transactions.compute(transactionId, (id, info) -> {
+            if (info == null) {
+                return null;
+            } else if (info.state == expectState) {
+                return updateFunction.apply(info);
+            } else {
+                return info;
+            }
+        }).thenCompose(value -> {
+            if (value != null && updatedPredicate.test(value.value())) {
+                return Futures.allOf(value.value().participants.stream()
+                        .map(participantInfo -> completeParticipant(participantInfo,
+                                info -> completionFunction.apply(transactionId, info))))
+                        .thenApply(v -> null);
+            }
+            return Futures.exceptionalFuture(new TransactionException("Failed to acquire transaction lock"));
         });
-  }
-
-  @Override
-  public boolean isRunning() {
-    return started.get();
-  }
-
-  @Override
-  public CompletableFuture<Void> stop() {
-    if (started.compareAndSet(true, false)) {
-      managementService.getMembershipService().removeListener(clusterEventListener);
-      return transactions.close().exceptionally(e -> null);
     }
-    return CompletableFuture.completedFuture(null);
-  }
 
-  /**
-   * Transaction info.
-   */
-  private static class TransactionInfo {
-    private final MemberId coordinator;
-    private final TransactionState state;
-    private final Set<ParticipantInfo> participants;
+    /**
+     * Completes an individual participant in a transaction by loading the primitive by type/protocol/partition group
+     * and applying the given completion function to it.
+     */
+    @SuppressWarnings("unchecked")
+    private CompletableFuture<Void> completeParticipant(
+            ParticipantInfo participantInfo,
+            Function<Transactional<?>, CompletableFuture<Void>> completionFunction) {
+        // Look up the primitive type for the participant. If the primitive type is not found, return an exception.
+        PrimitiveType primitiveType = managementService.getPrimitiveTypeRegistry().getPrimitiveType(
+                participantInfo.type());
+        if (primitiveType == null) {
+            return Futures.exceptionalFuture(new TransactionException(
+                    "Failed to locate primitive type " + participantInfo.type() + " for participant " +
+                            participantInfo.name()));
+        }
 
-    TransactionInfo(MemberId coordinator, TransactionState state, Set<ParticipantInfo> participants) {
-      this.coordinator = coordinator;
-      this.state = state;
-      this.participants = participants;
+        // Look up the protocol type for the participant.
+        PrimitiveProtocol.Type protocolType = managementService.getProtocolTypeRegistry().getProtocolType(
+                participantInfo.protocol());
+        if (protocolType == null) {
+            return Futures.exceptionalFuture(new TransactionException(
+                    "Failed to locate protocol type for participant " + participantInfo.name()));
+        }
+
+        // Look up the partition group in which the primitive is stored.
+        PartitionGroup partitionGroup;
+        if (participantInfo.group() == null) {
+            partitionGroup = managementService.getPartitionService().getPartitionGroup(protocolType);
+        } else {
+            partitionGroup = managementService.getPartitionService().getPartitionGroup(participantInfo.group());
+        }
+
+        // If the partition group is not found, return an exception.
+        if (partitionGroup == null) {
+            return Futures.exceptionalFuture(new TransactionException(
+                    "Failed to locate partition group for participant " + participantInfo.name()));
+        }
+
+        DistributedPrimitive primitive = primitiveType.newBuilder(participantInfo.name(), primitiveType.newConfig(),
+                managementService)
+                .withProtocol(partitionGroup.newProtocol())
+                .build();
+        return completionFunction.apply((Transactional<?>) primitive);
     }
-  }
+
+    // TODO: 2018/8/1 by zmyer
+    @Override
+    @SuppressWarnings("unchecked")
+    public CompletableFuture<TransactionService> start() {
+        managementService.getMembershipService().addListener(clusterEventListener);
+        return ConsistentMapType.<TransactionId, TransactionInfo>instance()
+                .newBuilder("atomix-transactions", new ConsistentMapConfig(), managementService)
+                .withProtocol(managementService.getPartitionService().getSystemPartitionGroup().newProtocol())
+                .withSerializer(SERIALIZER)
+                .withCacheEnabled()
+                .buildAsync()
+                .thenApply(transactions -> {
+                    this.transactions = transactions.async();
+                    LOGGER.info("Started");
+                    started.set(true);
+                    return this;
+                });
+    }
+
+    @Override
+    public boolean isRunning() {
+        return started.get();
+    }
+
+    @Override
+    public CompletableFuture<Void> stop() {
+        if (started.compareAndSet(true, false)) {
+            managementService.getMembershipService().removeListener(clusterEventListener);
+            return transactions.close().exceptionally(e -> null);
+        }
+        return CompletableFuture.completedFuture(null);
+    }
+
+    /**
+     * Transaction info.
+     */
+    private static class TransactionInfo {
+        private final MemberId coordinator;
+        private final TransactionState state;
+        private final Set<ParticipantInfo> participants;
+
+        TransactionInfo(MemberId coordinator, TransactionState state, Set<ParticipantInfo> participants) {
+            this.coordinator = coordinator;
+            this.state = state;
+            this.participants = participants;
+        }
+    }
 }

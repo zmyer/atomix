@@ -18,23 +18,24 @@ package io.atomix.protocols.backup.protocol;
 /**
  * Primary-backup response.
  */
+// TODO: 2018/8/1 by zmyer
 public abstract class PrimaryBackupResponse {
 
-  /**
-   * Response status.
-   */
-  public enum Status {
-    OK,
-    ERROR,
-  }
+    /**
+     * Response status.
+     */
+    public enum Status {
+        OK,
+        ERROR,
+    }
 
-  private final Status status;
+    private final Status status;
 
-  public PrimaryBackupResponse(Status status) {
-    this.status = status;
-  }
+    public PrimaryBackupResponse(Status status) {
+        this.status = status;
+    }
 
-  public Status status() {
-    return status;
-  }
+    public Status status() {
+        return status;
+    }
 }

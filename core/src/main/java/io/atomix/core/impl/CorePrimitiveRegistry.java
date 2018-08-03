@@ -47,111 +47,117 @@ import static com.google.common.base.Preconditions.checkNotNull;
 /**
  * Core primitive registry.
  */
+// TODO: 2018/7/30 by zmyer
 public class CorePrimitiveRegistry implements ManagedPrimitiveRegistry {
-  private static final Serializer SERIALIZER = Serializer.using(Namespaces.BASIC);
+    private static final Serializer SERIALIZER = Serializer.using(Namespaces.BASIC);
 
-  private final PartitionService partitionService;
-  private final PrimitiveTypeRegistry primitiveTypeRegistry;
-  private final AtomicBoolean started = new AtomicBoolean();
-  private AsyncConsistentMap<String, String> primitives;
+    private final PartitionService partitionService;
+    private final PrimitiveTypeRegistry primitiveTypeRegistry;
+    private final AtomicBoolean started = new AtomicBoolean();
+    private AsyncConsistentMap<String, String> primitives;
 
-  public CorePrimitiveRegistry(PartitionService partitionService, PrimitiveTypeRegistry primitiveTypeRegistry) {
-    this.partitionService = checkNotNull(partitionService);
-    this.primitiveTypeRegistry = checkNotNull(primitiveTypeRegistry);
-  }
-
-  @Override
-  public CompletableFuture<PrimitiveInfo> createPrimitive(String name, PrimitiveType type) {
-    PrimitiveInfo info = new PrimitiveInfo(name, type);
-    CompletableFuture<PrimitiveInfo> future = new CompletableFuture<>();
-    primitives.putIfAbsent(name, type.name()).whenComplete((result, error) -> {
-      if (error != null) {
-        future.completeExceptionally(error);
-      } else if (result == null || result.value().equals(type.name())) {
-        future.complete(info);
-      } else {
-        future.completeExceptionally(new PrimitiveException("A different primitive with the same name already exists"));
-      }
-    });
-    return future;
-  }
-
-  @Override
-  public Collection<PrimitiveInfo> getPrimitives() {
-    try {
-      return primitives.entrySet()
-          .get(DistributedPrimitive.DEFAULT_OPERATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
-          .stream()
-          .map(entry -> new PrimitiveInfo(entry.getKey(), primitiveTypeRegistry.getPrimitiveType(entry.getValue().value())))
-          .collect(Collectors.toList());
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new PrimitiveException.Interrupted();
-    } catch (TimeoutException e) {
-      throw new PrimitiveException.Timeout();
-    } catch (ExecutionException e) {
-      throw new PrimitiveException(e.getCause());
+    public CorePrimitiveRegistry(PartitionService partitionService, PrimitiveTypeRegistry primitiveTypeRegistry) {
+        this.partitionService = checkNotNull(partitionService);
+        this.primitiveTypeRegistry = checkNotNull(primitiveTypeRegistry);
     }
-  }
 
-  @Override
-  public Collection<PrimitiveInfo> getPrimitives(PrimitiveType primitiveType) {
-    return getPrimitives()
-        .stream()
-        .filter(primitive -> primitive.type().equals(primitiveType))
-        .collect(Collectors.toList());
-  }
-
-  @Override
-  public PrimitiveInfo getPrimitive(String name) {
-    try {
-      return primitives.get(name)
-          .thenApply(value -> value == null ? null : value.map(type -> new PrimitiveInfo(name, primitiveTypeRegistry.getPrimitiveType(type))).value())
-          .get(DistributedPrimitive.DEFAULT_OPERATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new PrimitiveException.Interrupted();
-    } catch (TimeoutException e) {
-      throw new PrimitiveException.Timeout();
-    } catch (ExecutionException e) {
-      throw new PrimitiveException(e.getCause());
-    }
-  }
-
-  @Override
-  @SuppressWarnings("unchecked")
-  public CompletableFuture<PrimitiveRegistry> start() {
-    PrimitiveProtocol protocol = partitionService.getSystemPartitionGroup().newProtocol();
-    ProxyClient<ConsistentMapService> proxy = protocol.newProxy(
-        "primitives",
-        ConsistentMapType.instance(),
-        ConsistentMapService.class,
-        new ServiceConfig(),
-        partitionService);
-    return proxy.connect()
-        .thenApply(v -> {
-          ConsistentMapProxy mapProxy = new ConsistentMapProxy(proxy, this);
-          primitives = new TranscodingAsyncConsistentMap<>(
-              mapProxy,
-              key -> key,
-              key -> key,
-              value -> value != null ? SERIALIZER.encode(value) : null,
-              value -> value != null ? SERIALIZER.decode(value) : null);
-          started.set(true);
-          return this;
+    // TODO: 2018/8/1 by zmyer
+    @Override
+    public CompletableFuture<PrimitiveInfo> createPrimitive(String name, PrimitiveType type) {
+        final PrimitiveInfo info = new PrimitiveInfo(name, type);
+        final CompletableFuture<PrimitiveInfo> future = new CompletableFuture<>();
+        primitives.putIfAbsent(name, type.name()).whenComplete((result, error) -> {
+            if (error != null) {
+                future.completeExceptionally(error);
+            } else if (result == null || result.value().equals(type.name())) {
+                future.complete(info);
+            } else {
+                future.completeExceptionally(
+                        new PrimitiveException("A different primitive with the same name already exists"));
+            }
         });
-  }
-
-  @Override
-  public boolean isRunning() {
-    return started.get();
-  }
-
-  @Override
-  public CompletableFuture<Void> stop() {
-    if (started.compareAndSet(true, false)) {
-      return primitives.close().exceptionally(e -> null);
+        return future;
     }
-    return CompletableFuture.completedFuture(null);
-  }
+
+    @Override
+    public Collection<PrimitiveInfo> getPrimitives() {
+        try {
+            return primitives.entrySet()
+                    .get(DistributedPrimitive.DEFAULT_OPERATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+                    .stream()
+                    .map(entry -> new PrimitiveInfo(entry.getKey(),
+                            primitiveTypeRegistry.getPrimitiveType(entry.getValue().value())))
+                    .collect(Collectors.toList());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new PrimitiveException.Interrupted();
+        } catch (TimeoutException e) {
+            throw new PrimitiveException.Timeout();
+        } catch (ExecutionException e) {
+            throw new PrimitiveException(e.getCause());
+        }
+    }
+
+    @Override
+    public Collection<PrimitiveInfo> getPrimitives(PrimitiveType primitiveType) {
+        return getPrimitives()
+                .stream()
+                .filter(primitive -> primitive.type().equals(primitiveType))
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public PrimitiveInfo getPrimitive(String name) {
+        try {
+            return primitives.get(name)
+                    .thenApply(value -> value == null ? null : value.map(
+                            type -> new PrimitiveInfo(name, primitiveTypeRegistry.getPrimitiveType(type))).value())
+                    .get(DistributedPrimitive.DEFAULT_OPERATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new PrimitiveException.Interrupted();
+        } catch (TimeoutException e) {
+            throw new PrimitiveException.Timeout();
+        } catch (ExecutionException e) {
+            throw new PrimitiveException(e.getCause());
+        }
+    }
+
+    // TODO: 2018/8/1 by zmyer
+    @Override
+    @SuppressWarnings("unchecked")
+    public CompletableFuture<PrimitiveRegistry> start() {
+        final PrimitiveProtocol protocol = partitionService.getSystemPartitionGroup().newProtocol();
+        final ProxyClient<ConsistentMapService> proxy = protocol.newProxy(
+                "primitives",
+                ConsistentMapType.instance(),
+                ConsistentMapService.class,
+                new ServiceConfig(),
+                partitionService);
+        return proxy.connect()
+                .thenApply(v -> {
+                    final ConsistentMapProxy mapProxy = new ConsistentMapProxy(proxy, this);
+                    primitives = new TranscodingAsyncConsistentMap<>(
+                            mapProxy,
+                            key -> key,
+                            key -> key,
+                            value -> value != null ? SERIALIZER.encode(value) : null,
+                            value -> value != null ? SERIALIZER.decode(value) : null);
+                    started.set(true);
+                    return this;
+                });
+    }
+
+    @Override
+    public boolean isRunning() {
+        return started.get();
+    }
+
+    @Override
+    public CompletableFuture<Void> stop() {
+        if (started.compareAndSet(true, false)) {
+            return primitives.close().exceptionally(e -> null);
+        }
+        return CompletableFuture.completedFuture(null);
+    }
 }

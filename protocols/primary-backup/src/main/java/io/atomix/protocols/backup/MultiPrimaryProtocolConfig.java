@@ -27,167 +27,168 @@ import java.time.Duration;
 /**
  * Multi-primary protocol configuration.
  */
+// TODO: 2018/8/1 by zmyer
 public class MultiPrimaryProtocolConfig extends PrimitiveProtocolConfig<MultiPrimaryProtocolConfig> {
-  private Partitioner<String> partitioner = Partitioner.MURMUR3;
-  private Consistency consistency = Consistency.SEQUENTIAL;
-  private Replication replication = Replication.ASYNCHRONOUS;
-  private Recovery recovery = Recovery.RECOVER;
-  private int backups = 1;
-  private int maxRetries = 0;
-  private Duration retryDelay = Duration.ofMillis(100);
+    private Partitioner<String> partitioner = Partitioner.MURMUR3;
+    private Consistency consistency = Consistency.SEQUENTIAL;
+    private Replication replication = Replication.ASYNCHRONOUS;
+    private Recovery recovery = Recovery.RECOVER;
+    private int backups = 1;
+    private int maxRetries = 0;
+    private Duration retryDelay = Duration.ofMillis(100);
 
-  @Override
-  public PrimitiveProtocol.Type getType() {
-    return MultiPrimaryProtocol.TYPE;
-  }
+    @Override
+    public PrimitiveProtocol.Type getType() {
+        return MultiPrimaryProtocol.TYPE;
+    }
 
-  /**
-   * Returns the protocol partitioner.
-   *
-   * @return the protocol partitioner
-   */
-  public Partitioner<String> getPartitioner() {
-    return partitioner;
-  }
+    /**
+     * Returns the protocol partitioner.
+     *
+     * @return the protocol partitioner
+     */
+    public Partitioner<String> getPartitioner() {
+        return partitioner;
+    }
 
-  /**
-   * Sets the protocol partitioner.
-   *
-   * @param partitioner the protocol partitioner
-   * @return the protocol configuration
-   */
-  public MultiPrimaryProtocolConfig setPartitioner(Partitioner<String> partitioner) {
-    this.partitioner = partitioner;
-    return this;
-  }
+    /**
+     * Sets the protocol partitioner.
+     *
+     * @param partitioner the protocol partitioner
+     * @return the protocol configuration
+     */
+    public MultiPrimaryProtocolConfig setPartitioner(Partitioner<String> partitioner) {
+        this.partitioner = partitioner;
+        return this;
+    }
 
-  /**
-   * Returns the consistency level.
-   *
-   * @return the consistency level
-   */
-  public Consistency getConsistency() {
-    return consistency;
-  }
+    /**
+     * Returns the consistency level.
+     *
+     * @return the consistency level
+     */
+    public Consistency getConsistency() {
+        return consistency;
+    }
 
-  /**
-   * Sets the consistency level.
-   *
-   * @param consistency the consistency level
-   * @return the protocol configuration
-   */
-  public MultiPrimaryProtocolConfig setConsistency(Consistency consistency) {
-    this.consistency = consistency;
-    return this;
-  }
+    /**
+     * Sets the consistency level.
+     *
+     * @param consistency the consistency level
+     * @return the protocol configuration
+     */
+    public MultiPrimaryProtocolConfig setConsistency(Consistency consistency) {
+        this.consistency = consistency;
+        return this;
+    }
 
-  /**
-   * Returns the replication level.
-   *
-   * @return the replication level
-   */
-  public Replication getReplication() {
-    return replication;
-  }
+    /**
+     * Returns the replication level.
+     *
+     * @return the replication level
+     */
+    public Replication getReplication() {
+        return replication;
+    }
 
-  /**
-   * Sets the replication level.
-   *
-   * @param replication the replication level
-   * @return the protocol configuration
-   */
-  public MultiPrimaryProtocolConfig setReplication(Replication replication) {
-    this.replication = replication;
-    return this;
-  }
+    /**
+     * Sets the replication level.
+     *
+     * @param replication the replication level
+     * @return the protocol configuration
+     */
+    public MultiPrimaryProtocolConfig setReplication(Replication replication) {
+        this.replication = replication;
+        return this;
+    }
 
-  /**
-   * Returns the recovery strategy.
-   *
-   * @return the recovery strategy
-   */
-  public Recovery getRecovery() {
-    return recovery;
-  }
+    /**
+     * Returns the recovery strategy.
+     *
+     * @return the recovery strategy
+     */
+    public Recovery getRecovery() {
+        return recovery;
+    }
 
-  /**
-   * Sets the recovery strategy.
-   *
-   * @param recovery the recovery strategy
-   * @return the protocol configuration
-   */
-  public MultiPrimaryProtocolConfig setRecovery(Recovery recovery) {
-    this.recovery = recovery;
-    return this;
-  }
+    /**
+     * Sets the recovery strategy.
+     *
+     * @param recovery the recovery strategy
+     * @return the protocol configuration
+     */
+    public MultiPrimaryProtocolConfig setRecovery(Recovery recovery) {
+        this.recovery = recovery;
+        return this;
+    }
 
-  /**
-   * Returns the number of backups.
-   *
-   * @return the number of backups
-   */
-  public int getBackups() {
-    return backups;
-  }
+    /**
+     * Returns the number of backups.
+     *
+     * @return the number of backups
+     */
+    public int getBackups() {
+        return backups;
+    }
 
-  /**
-   * Sets the number of backups.
-   *
-   * @param numBackups the number of backups
-   * @return the protocol configuration
-   */
-  public MultiPrimaryProtocolConfig setBackups(int numBackups) {
-    this.backups = numBackups;
-    return this;
-  }
+    /**
+     * Sets the number of backups.
+     *
+     * @param numBackups the number of backups
+     * @return the protocol configuration
+     */
+    public MultiPrimaryProtocolConfig setBackups(int numBackups) {
+        this.backups = numBackups;
+        return this;
+    }
 
-  /**
-   * Returns the maximum allowed number of retries.
-   *
-   * @return the maximum allowed number of retries
-   */
-  public int getMaxRetries() {
-    return maxRetries;
-  }
+    /**
+     * Returns the maximum allowed number of retries.
+     *
+     * @return the maximum allowed number of retries
+     */
+    public int getMaxRetries() {
+        return maxRetries;
+    }
 
-  /**
-   * Sets the maximum allowed number of retries.
-   *
-   * @param maxRetries the maximum allowed number of retries
-   * @return the protocol configuration
-   */
-  public MultiPrimaryProtocolConfig setMaxRetries(int maxRetries) {
-    this.maxRetries = maxRetries;
-    return this;
-  }
+    /**
+     * Sets the maximum allowed number of retries.
+     *
+     * @param maxRetries the maximum allowed number of retries
+     * @return the protocol configuration
+     */
+    public MultiPrimaryProtocolConfig setMaxRetries(int maxRetries) {
+        this.maxRetries = maxRetries;
+        return this;
+    }
 
-  /**
-   * Returns the retry delay.
-   *
-   * @return the retry delay
-   */
-  public Duration getRetryDelay() {
-    return retryDelay;
-  }
+    /**
+     * Returns the retry delay.
+     *
+     * @return the retry delay
+     */
+    public Duration getRetryDelay() {
+        return retryDelay;
+    }
 
-  /**
-   * Sets the retry delay.
-   *
-   * @param retryDelayMillis the retry delay in milliseconds
-   * @return the protocol configuration
-   */
-  public MultiPrimaryProtocolConfig setRetryDelayMillis(long retryDelayMillis) {
-    return setRetryDelay(Duration.ofMillis(retryDelayMillis));
-  }
+    /**
+     * Sets the retry delay.
+     *
+     * @param retryDelayMillis the retry delay in milliseconds
+     * @return the protocol configuration
+     */
+    public MultiPrimaryProtocolConfig setRetryDelayMillis(long retryDelayMillis) {
+        return setRetryDelay(Duration.ofMillis(retryDelayMillis));
+    }
 
-  /**
-   * Sets the retry delay.
-   *
-   * @param retryDelay the retry delay
-   * @return the protocol configuration
-   */
-  public MultiPrimaryProtocolConfig setRetryDelay(Duration retryDelay) {
-    this.retryDelay = retryDelay;
-    return this;
-  }
+    /**
+     * Sets the retry delay.
+     *
+     * @param retryDelay the retry delay
+     * @return the protocol configuration
+     */
+    public MultiPrimaryProtocolConfig setRetryDelay(Duration retryDelay) {
+        this.retryDelay = retryDelay;
+        return this;
+    }
 }

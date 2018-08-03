@@ -66,73 +66,74 @@ import static com.google.common.base.Preconditions.checkNotNull;
  * @see PrimitiveService
  * @see ServiceContext
  */
+// TODO: 2018/8/1 by zmyer
 public interface ServiceExecutor extends Executor, Scheduler {
 
-  /**
-   * Increments the service clock.
-   *
-   * @param timestamp the wall clock timestamp
-   */
-  void tick(WallClockTimestamp timestamp);
+    /**
+     * Increments the service clock.
+     *
+     * @param timestamp the wall clock timestamp
+     */
+    void tick(WallClockTimestamp timestamp);
 
-  /**
-   * Applies the given commit to the executor.
-   *
-   * @param commit the commit to apply
-   * @return the commit result
-   */
-  byte[] apply(Commit<byte[]> commit);
+    /**
+     * Applies the given commit to the executor.
+     *
+     * @param commit the commit to apply
+     * @return the commit result
+     */
+    byte[] apply(Commit<byte[]> commit);
 
-  /**
-   * Registers a operation callback.
-   *
-   * @param operationId the operation identifier
-   * @param callback    the operation callback
-   * @throws NullPointerException if the {@code operationId} or {@code callback} is null
-   */
-  void handle(OperationId operationId, Function<Commit<byte[]>, byte[]> callback);
+    /**
+     * Registers a operation callback.
+     *
+     * @param operationId the operation identifier
+     * @param callback    the operation callback
+     * @throws NullPointerException if the {@code operationId} or {@code callback} is null
+     */
+    void handle(OperationId operationId, Function<Commit<byte[]>, byte[]> callback);
 
-  /**
-   * Registers a operation callback.
-   *
-   * @param operationId the operation identifier
-   * @param callback    the operation callback
-   * @throws NullPointerException if the {@code operationId} or {@code callback} is null
-   */
-  default void register(OperationId operationId, Runnable callback) {
-    checkNotNull(operationId, "operationId cannot be null");
-    checkNotNull(callback, "callback cannot be null");
-    handle(operationId, commit -> {
-      callback.run();
-      return null;
-    });
-  }
+    /**
+     * Registers a operation callback.
+     *
+     * @param operationId the operation identifier
+     * @param callback    the operation callback
+     * @throws NullPointerException if the {@code operationId} or {@code callback} is null
+     */
+    default void register(OperationId operationId, Runnable callback) {
+        checkNotNull(operationId, "operationId cannot be null");
+        checkNotNull(callback, "callback cannot be null");
+        handle(operationId, commit -> {
+            callback.run();
+            return null;
+        });
+    }
 
-  /**
-   * Registers a no argument operation callback.
-   *
-   * @param operationId the operation identifier
-   * @param callback    the operation callback
-   * @throws NullPointerException if the {@code operationId} or {@code callback} is null
-   */
-  <R> void register(OperationId operationId, Supplier<R> callback);
+    /**
+     * Registers a no argument operation callback.
+     *
+     * @param operationId the operation identifier
+     * @param callback    the operation callback
+     * @throws NullPointerException if the {@code operationId} or {@code callback} is null
+     */
+    <R> void register(OperationId operationId, Supplier<R> callback);
 
-  /**
-   * Registers a operation callback.
-   *
-   * @param operationId the operation identifier
-   * @param callback    the operation callback
-   * @throws NullPointerException if the {@code operationId} or {@code callback} is null
-   */
-  <T> void register(OperationId operationId, Consumer<Commit<T>> callback);
+    /**
+     * Registers a operation callback.
+     *
+     * @param operationId the operation identifier
+     * @param callback    the operation callback
+     * @throws NullPointerException if the {@code operationId} or {@code callback} is null
+     */
+    <T> void register(OperationId operationId, Consumer<Commit<T>> callback);
 
-  /**
-   * Registers an operation callback.
-   *
-   * @param operationId the operation identifier
-   * @param callback    the operation callback
-   * @throws NullPointerException if the {@code operationId} or {@code callback} is null
-   */
-  <T, R> void register(OperationId operationId, Function<Commit<T>, R> callback);
+    /**
+     * Registers an operation callback.
+     *
+     * @param operationId the operation identifier
+     * @param callback    the operation callback
+     * @throws NullPointerException if the {@code operationId} or {@code callback} is null
+     */
+    <T, R> void register(OperationId operationId, Function<Commit<T>, R> callback);
 
 }

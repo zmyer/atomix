@@ -29,48 +29,50 @@ import static com.google.common.base.MoreObjects.toStringHelper;
 /**
  * Atomic counter primitive type.
  */
+// TODO: 2018/8/1 by zmyer
 public class AtomicCounterType implements PrimitiveType<AtomicCounterBuilder, AtomicCounterConfig, AtomicCounter> {
-  private static final String NAME = "counter";
-  private static final AtomicCounterType INSTANCE = new AtomicCounterType();
+    private static final String NAME = "counter";
+    private static final AtomicCounterType INSTANCE = new AtomicCounterType();
 
-  /**
-   * Returns a new atomic counter type.
-   *
-   * @return a new atomic counter type
-   */
-  public static AtomicCounterType instance() {
-    return INSTANCE;
-  }
+    /**
+     * Returns a new atomic counter type.
+     *
+     * @return a new atomic counter type
+     */
+    public static AtomicCounterType instance() {
+        return INSTANCE;
+    }
 
-  @Override
-  public String name() {
-    return NAME;
-  }
+    @Override
+    public String name() {
+        return NAME;
+    }
 
-  @Override
-  public PrimitiveService newService(ServiceConfig config) {
-    return new DefaultAtomicCounterService();
-  }
+    @Override
+    public PrimitiveService newService(ServiceConfig config) {
+        return new DefaultAtomicCounterService();
+    }
 
-  @Override
-  public PrimitiveResource newResource(AtomicCounter primitive) {
-    return new AtomicCounterResource(primitive.async());
-  }
+    @Override
+    public PrimitiveResource newResource(AtomicCounter primitive) {
+        return new AtomicCounterResource(primitive.async());
+    }
 
-  @Override
-  public AtomicCounterConfig newConfig() {
-    return new AtomicCounterConfig();
-  }
+    @Override
+    public AtomicCounterConfig newConfig() {
+        return new AtomicCounterConfig();
+    }
 
-  @Override
-  public AtomicCounterBuilder newBuilder(String name, AtomicCounterConfig config, PrimitiveManagementService managementService) {
-    return new AtomicCounterProxyBuilder(name, config, managementService);
-  }
+    @Override
+    public AtomicCounterBuilder newBuilder(String name, AtomicCounterConfig config,
+            PrimitiveManagementService managementService) {
+        return new AtomicCounterProxyBuilder(name, config, managementService);
+    }
 
-  @Override
-  public String toString() {
-    return toStringHelper(this)
-        .add("name", name())
-        .toString();
-  }
+    @Override
+    public String toString() {
+        return toStringHelper(this)
+                .add("name", name())
+                .toString();
+    }
 }

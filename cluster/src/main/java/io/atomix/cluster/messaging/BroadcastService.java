@@ -20,32 +20,33 @@ import java.util.function.Consumer;
 /**
  * Broadcast service.
  */
+// TODO: 2018/7/31 by zmyer
 public interface BroadcastService {
 
-  /**
-   * Broadcasts the given message.
-   *
-   * @param message the message to broadcast
-   */
-  void broadcast(byte[] message);
+    /**
+     * Broadcasts the given message.
+     *
+     * @param message the message to broadcast
+     */
+    void broadcast(byte[] message);
 
-  /**
-   * Adds a broadcast listener.
-   *
-   * @param listener the broadcast listener to add
-   */
-  void addListener(Consumer<byte[]> listener);
+    /**
+     * Adds a broadcast listener.
+     *
+     * @param listener the broadcast listener to add
+     */
+    void addListener(Consumer<byte[]> listener);
 
-  /**
-   * Removes a broadcast listener.
-   *
-   * @param listener the broadcast listener to remove
-   */
-  void removeListener(Consumer<byte[]> listener);
+    /**
+     * Removes a broadcast listener.
+     *
+     * @param listener the broadcast listener to remove
+     */
+    void removeListener(Consumer<byte[]> listener);
 
-  /**
-   * Broadcast service builder.
-   */
-  interface Builder extends io.atomix.utils.Builder<BroadcastService> {
-  }
+    /**
+     * Broadcast service builder.
+     */
+    interface Builder extends io.atomix.utils.Builder<BroadcastService> {
+    }
 }

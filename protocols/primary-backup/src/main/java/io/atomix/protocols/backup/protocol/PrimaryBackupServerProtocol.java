@@ -25,93 +25,94 @@ import java.util.function.Function;
 /**
  * Primary-backup server protocol.
  */
+// TODO: 2018/8/1 by zmyer
 public interface PrimaryBackupServerProtocol {
 
-  /**
-   * Sends a backup request to the given node.
-   *
-   * @param memberId  the node to which to send the request
-   * @param request the request to send
-   * @return a future to be completed with the response
-   */
-  CompletableFuture<BackupResponse> backup(MemberId memberId, BackupRequest request);
+    /**
+     * Sends a backup request to the given node.
+     *
+     * @param memberId  the node to which to send the request
+     * @param request the request to send
+     * @return a future to be completed with the response
+     */
+    CompletableFuture<BackupResponse> backup(MemberId memberId, BackupRequest request);
 
-  /**
-   * Sends a restore request to the given node.
-   *
-   * @param memberId  the node to which to send the request
-   * @param request the request to send
-   * @return a future to be completed with the response
-   */
-  CompletableFuture<RestoreResponse> restore(MemberId memberId, RestoreRequest request);
+    /**
+     * Sends a restore request to the given node.
+     *
+     * @param memberId  the node to which to send the request
+     * @param request the request to send
+     * @return a future to be completed with the response
+     */
+    CompletableFuture<RestoreResponse> restore(MemberId memberId, RestoreRequest request);
 
-  /**
-   * Sends a primitive event to the given node.
-   *
-   * @param memberId  the node to which to publish the event
-   * @param session the session to which to publish the event
-   * @param event   the primitive event to publish
-   */
-  void event(MemberId memberId, SessionId session, PrimitiveEvent event);
+    /**
+     * Sends a primitive event to the given node.
+     *
+     * @param memberId  the node to which to publish the event
+     * @param session the session to which to publish the event
+     * @param event   the primitive event to publish
+     */
+    void event(MemberId memberId, SessionId session, PrimitiveEvent event);
 
-  /**
-   * Registers a execute request callback.
-   *
-   * @param handler the execute request handler to register
-   */
-  void registerExecuteHandler(Function<ExecuteRequest, CompletableFuture<ExecuteResponse>> handler);
+    /**
+     * Registers a execute request callback.
+     *
+     * @param handler the execute request handler to register
+     */
+    void registerExecuteHandler(Function<ExecuteRequest, CompletableFuture<ExecuteResponse>> handler);
 
-  /**
-   * Unregisters the execute request handler.
-   */
-  void unregisterExecuteHandler();
+    /**
+     * Unregisters the execute request handler.
+     */
+    void unregisterExecuteHandler();
 
-  /**
-   * Registers a backup request callback.
-   *
-   * @param handler the backup request handler to register
-   */
-  void registerBackupHandler(Function<BackupRequest, CompletableFuture<BackupResponse>> handler);
+    /**
+     * Registers a backup request callback.
+     *
+     * @param handler the backup request handler to register
+     */
+    void registerBackupHandler(Function<BackupRequest, CompletableFuture<BackupResponse>> handler);
 
-  /**
-   * Unregisters the backup request handler.
-   */
-  void unregisterBackupHandler();
+    /**
+     * Unregisters the backup request handler.
+     */
+    void unregisterBackupHandler();
 
-  /**
-   * Registers a restore request callback.
-   *
-   * @param handler the restore request handler to register
-   */
-  void registerRestoreHandler(Function<RestoreRequest, CompletableFuture<RestoreResponse>> handler);
+    /**
+     * Registers a restore request callback.
+     *
+     * @param handler the restore request handler to register
+     */
+    void registerRestoreHandler(Function<RestoreRequest, CompletableFuture<RestoreResponse>> handler);
 
-  /**
-   * Unregisters the restore request handler.
-   */
-  void unregisterRestoreHandler();
+    /**
+     * Unregisters the restore request handler.
+     */
+    void unregisterRestoreHandler();
 
-  /**
-   * Registers a close request callback.
-   *
-   * @param handler the close request handler to register
-   */
-  void registerCloseHandler(Function<CloseRequest, CompletableFuture<CloseResponse>> handler);
+    /**
+     * Registers a close request callback.
+     *
+     * @param handler the close request handler to register
+     */
+    void registerCloseHandler(Function<CloseRequest, CompletableFuture<CloseResponse>> handler);
 
-  /**
-   * Unregisters the close request handler.
-   */
-  void unregisterCloseHandler();
+    /**
+     * Unregisters the close request handler.
+     */
+    void unregisterCloseHandler();
 
-  /**
-   * Registers a metadata request callback.
-   *
-   * @param handler the metadata request handler to register
-   */
-  void registerMetadataHandler(Function<MetadataRequest, CompletableFuture<MetadataResponse>> handler);
+    /**
+     * Registers a metadata request callback.
+     *
+     * @param handler the metadata request handler to register
+     */
+    void registerMetadataHandler(Function<MetadataRequest, CompletableFuture<MetadataResponse>> handler);
 
-  /**
-   * Unregisters the metadata request handler.
-   */
-  void unregisterMetadataHandler();
+    /**
+     * Unregisters the metadata request handler.
+     */
+    void unregisterMetadataHandler();
 
 }

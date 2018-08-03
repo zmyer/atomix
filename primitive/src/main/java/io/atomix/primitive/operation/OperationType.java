@@ -18,14 +18,15 @@ package io.atomix.primitive.operation;
 /**
  * Raft operation type.
  */
+// TODO: 2018/8/1 by zmyer
 public enum OperationType {
-  /**
-   * Command operation.
-   */
-  COMMAND,
+    /**
+     * Command operation.
+     */
+    COMMAND,
 
-  /**
-   * Query operation.
-   */
-  QUERY,
+    /**
+     * Query operation.
+     */
+    QUERY,
 }

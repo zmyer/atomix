@@ -20,6 +20,7 @@ import io.atomix.utils.Managed;
 /**
  * Managed partition group membership service.
  */
+// TODO: 2018/7/31 by zmyer
 public interface ManagedPartitionGroupMembershipService
-    extends PartitionGroupMembershipService, Managed<PartitionGroupMembershipService> {
+        extends PartitionGroupMembershipService, Managed<PartitionGroupMembershipService> {
 }

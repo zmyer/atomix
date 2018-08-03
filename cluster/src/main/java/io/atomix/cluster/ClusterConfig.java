@@ -25,182 +25,183 @@ import java.util.List;
 /**
  * Cluster configuration.
  */
+// TODO: 2018/7/30 by zmyer
 public class ClusterConfig implements Config {
-  private static final String DEFAULT_CLUSTER_NAME = "atomix";
-  private static final String DEFAULT_MULTICAST_IP = "230.0.0.1";
-  private static final int DEFAULT_MULTICAST_PORT = 54321;
+    private static final String DEFAULT_CLUSTER_NAME = "atomix";
+    private static final String DEFAULT_MULTICAST_IP = "230.0.0.1";
+    private static final int DEFAULT_MULTICAST_PORT = 54321;
 
-  private String name = DEFAULT_CLUSTER_NAME;
-  private String localMemberId;
-  private MemberConfig localMember;
-  private List<MemberConfig> members = new ArrayList<>();
-  private boolean multicastEnabled = false;
-  private Address multicastAddress;
-  private GroupMembershipConfig membershipConfig = new GroupMembershipConfig();
+    private String name = DEFAULT_CLUSTER_NAME;
+    private String localMemberId;
+    private MemberConfig localMember;
+    private List<MemberConfig> members = new ArrayList<>();
+    private boolean multicastEnabled = false;
+    private Address multicastAddress;
+    private GroupMembershipConfig membershipConfig = new GroupMembershipConfig();
 
-  public ClusterConfig() {
-    try {
-      multicastAddress = Address.from(DEFAULT_MULTICAST_IP, DEFAULT_MULTICAST_PORT);
-    } catch (MalformedAddressException e) {
-      multicastAddress = Address.from(DEFAULT_MULTICAST_PORT);
+    public ClusterConfig() {
+        try {
+            multicastAddress = Address.from(DEFAULT_MULTICAST_IP, DEFAULT_MULTICAST_PORT);
+        } catch (MalformedAddressException e) {
+            multicastAddress = Address.from(DEFAULT_MULTICAST_PORT);
+        }
     }
-  }
 
-  /**
-   * Returns the cluster name.
-   *
-   * @return the cluster name
-   */
-  public String getName() {
-    return name;
-  }
-
-  /**
-   * Sets the cluster name.
-   *
-   * @param name the cluster name
-   * @return the cluster configuration
-   */
-  public ClusterConfig setName(String name) {
-    this.name = name;
-    return this;
-  }
-
-  /**
-   * Returns the local member identifier.
-   *
-   * @return the local member identifier
-   */
-  public String getLocalMemberId() {
-    return localMemberId;
-  }
-
-  /**
-   * Sets the local member identifier.
-   *
-   * @param localMemberId the local member identifier
-   * @return the cluster configuration
-   */
-  public ClusterConfig setLocalMemberId(String localMemberId) {
-    this.localMemberId = localMemberId;
-    return this;
-  }
-
-  /**
-   * Returns the local node configuration.
-   *
-   * @return the local node configuration
-   */
-  public MemberConfig getLocalMember() {
-    MemberConfig member = localMember;
-    if (member == null && localMemberId != null) {
-      member = members.stream()
-          .filter(m -> m.getId().id().equals(localMemberId))
-          .findFirst()
-          .orElse(null);
+    /**
+     * Returns the cluster name.
+     *
+     * @return the cluster name
+     */
+    public String getName() {
+        return name;
     }
-    return member;
-  }
 
-  /**
-   * Sets the local node configuration.
-   *
-   * @param localMember the local node configuration
-   * @return the cluster configuration
-   */
-  public ClusterConfig setLocalMember(MemberConfig localMember) {
-    this.localMember = localMember;
-    return this;
-  }
+    /**
+     * Sets the cluster name.
+     *
+     * @param name the cluster name
+     * @return the cluster configuration
+     */
+    public ClusterConfig setName(String name) {
+        this.name = name;
+        return this;
+    }
 
-  /**
-   * Returns the cluster nodes.
-   *
-   * @return the cluster nodes
-   */
-  public List<MemberConfig> getMembers() {
-    return members;
-  }
+    /**
+     * Returns the local member identifier.
+     *
+     * @return the local member identifier
+     */
+    public String getLocalMemberId() {
+        return localMemberId;
+    }
 
-  /**
-   * Sets the cluster nodes.
-   *
-   * @param members the cluster nodes
-   * @return the cluster configuration
-   */
-  public ClusterConfig setMembers(List<MemberConfig> members) {
-    this.members = members;
-    return this;
-  }
+    /**
+     * Sets the local member identifier.
+     *
+     * @param localMemberId the local member identifier
+     * @return the cluster configuration
+     */
+    public ClusterConfig setLocalMemberId(String localMemberId) {
+        this.localMemberId = localMemberId;
+        return this;
+    }
 
-  /**
-   * Adds a member to the configuration.
-   *
-   * @param member the member to add
-   * @return the cluster configuration
-   */
-  public ClusterConfig addMember(MemberConfig member) {
-    members.add(member);
-    return this;
-  }
+    /**
+     * Returns the local node configuration.
+     *
+     * @return the local node configuration
+     */
+    public MemberConfig getLocalMember() {
+        MemberConfig member = localMember;
+        if (member == null && localMemberId != null) {
+            member = members.stream()
+                    .filter(m -> m.getId().id().equals(localMemberId))
+                    .findFirst()
+                    .orElse(null);
+        }
+        return member;
+    }
 
-  /**
-   * Returns whether multicast is enabled.
-   *
-   * @return whether multicast is enabled
-   */
-  public boolean isMulticastEnabled() {
-    return multicastEnabled;
-  }
+    /**
+     * Sets the local node configuration.
+     *
+     * @param localMember the local node configuration
+     * @return the cluster configuration
+     */
+    public ClusterConfig setLocalMember(MemberConfig localMember) {
+        this.localMember = localMember;
+        return this;
+    }
 
-  /**
-   * Sets whether multicast is enabled.
-   *
-   * @param multicastEnabled whether multicast is enabled
-   * @return the cluster configuration
-   */
-  public ClusterConfig setMulticastEnabled(boolean multicastEnabled) {
-    this.multicastEnabled = multicastEnabled;
-    return this;
-  }
+    /**
+     * Returns the cluster nodes.
+     *
+     * @return the cluster nodes
+     */
+    public List<MemberConfig> getMembers() {
+        return members;
+    }
 
-  /**
-   * Returns the multicast address.
-   *
-   * @return the multicast address
-   */
-  public Address getMulticastAddress() {
-    return multicastAddress;
-  }
+    /**
+     * Sets the cluster nodes.
+     *
+     * @param members the cluster nodes
+     * @return the cluster configuration
+     */
+    public ClusterConfig setMembers(List<MemberConfig> members) {
+        this.members = members;
+        return this;
+    }
 
-  /**
-   * Sets the multicast address.
-   *
-   * @param multicastAddress the multicast address
-   * @return the cluster configuration
-   */
-  public ClusterConfig setMulticastAddress(Address multicastAddress) {
-    this.multicastAddress = multicastAddress;
-    return this;
-  }
+    /**
+     * Adds a member to the configuration.
+     *
+     * @param member the member to add
+     * @return the cluster configuration
+     */
+    public ClusterConfig addMember(MemberConfig member) {
+        members.add(member);
+        return this;
+    }
 
-  /**
-   * Returns the group membership configuration.
-   *
-   * @return the group membership configuration
-   */
-  public GroupMembershipConfig getMembershipConfig() {
-    return membershipConfig;
-  }
+    /**
+     * Returns whether multicast is enabled.
+     *
+     * @return whether multicast is enabled
+     */
+    public boolean isMulticastEnabled() {
+        return multicastEnabled;
+    }
 
-  /**
-   * Sets the group membership configuration.
-   *
-   * @param membershipConfig the group membership configuration
-   * @return the cluster configuration
-   */
-  public ClusterConfig setMembershipConfig(GroupMembershipConfig membershipConfig) {
-    this.membershipConfig = membershipConfig;
-    return this;
-  }
+    /**
+     * Sets whether multicast is enabled.
+     *
+     * @param multicastEnabled whether multicast is enabled
+     * @return the cluster configuration
+     */
+    public ClusterConfig setMulticastEnabled(boolean multicastEnabled) {
+        this.multicastEnabled = multicastEnabled;
+        return this;
+    }
+
+    /**
+     * Returns the multicast address.
+     *
+     * @return the multicast address
+     */
+    public Address getMulticastAddress() {
+        return multicastAddress;
+    }
+
+    /**
+     * Sets the multicast address.
+     *
+     * @param multicastAddress the multicast address
+     * @return the cluster configuration
+     */
+    public ClusterConfig setMulticastAddress(Address multicastAddress) {
+        this.multicastAddress = multicastAddress;
+        return this;
+    }
+
+    /**
+     * Returns the group membership configuration.
+     *
+     * @return the group membership configuration
+     */
+    public GroupMembershipConfig getMembershipConfig() {
+        return membershipConfig;
+    }
+
+    /**
+     * Sets the group membership configuration.
+     *
+     * @param membershipConfig the group membership configuration
+     * @return the cluster configuration
+     */
+    public ClusterConfig setMembershipConfig(GroupMembershipConfig membershipConfig) {
+        this.membershipConfig = membershipConfig;
+        return this;
+    }
 }

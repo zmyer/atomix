@@ -23,41 +23,43 @@ import java.util.Set;
  * Service for obtaining information about the individual members within
  * the cluster.
  */
-public interface ClusterMembershipService extends ListenerService<ClusterMembershipEvent, ClusterMembershipEventListener> {
+// TODO: 2018/7/31 by zmyer
+public interface ClusterMembershipService
+        extends ListenerService<ClusterMembershipEvent, ClusterMembershipEventListener> {
 
-  /**
-   * Returns the local member.
-   *
-   * @return local member
-   */
-  Member getLocalMember();
+    /**
+     * Returns the local member.
+     *
+     * @return local member
+     */
+    Member getLocalMember();
 
-  /**
-   * Returns the set of current cluster members.
-   *
-   * @return set of cluster members
-   */
-  Set<Member> getMembers();
+    /**
+     * Returns the set of current cluster members.
+     *
+     * @return set of cluster members
+     */
+    Set<Member> getMembers();
 
-  /**
-   * Returns the specified member node.
-   * <p>
-   * This is a convenience method that wraps the given {@link String} in a {@link MemberId}. To avoid unnecessary
-   * object allocation, repeated invocations of this method should instead use {@link #getMember(MemberId)}.
-   *
-   * @param memberId the member identifier
-   * @return the member or {@code null} if no node with the given identifier exists
-   */
-  default Member getMember(String memberId) {
-    return getMember(MemberId.from(memberId));
-  }
+    /**
+     * Returns the specified member node.
+     * <p>
+     * This is a convenience method that wraps the given {@link String} in a {@link MemberId}. To avoid unnecessary
+     * object allocation, repeated invocations of this method should instead use {@link #getMember(MemberId)}.
+     *
+     * @param memberId the member identifier
+     * @return the member or {@code null} if no node with the given identifier exists
+     */
+    default Member getMember(String memberId) {
+        return getMember(MemberId.from(memberId));
+    }
 
-  /**
-   * Returns the specified member.
-   *
-   * @param memberId the member identifier
-   * @return the member or {@code null} if no node with the given identifier exists
-   */
-  Member getMember(MemberId memberId);
+    /**
+     * Returns the specified member.
+     *
+     * @param memberId the member identifier
+     * @return the member or {@code null} if no node with the given identifier exists
+     */
+    Member getMember(MemberId memberId);
 
 }

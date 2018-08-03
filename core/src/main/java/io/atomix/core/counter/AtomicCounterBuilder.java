@@ -21,9 +21,10 @@ import io.atomix.primitive.PrimitiveManagementService;
 /**
  * Builder for AtomicCounter.
  */
+// TODO: 2018/8/1 by zmyer
 public abstract class AtomicCounterBuilder
-    extends DistributedPrimitiveBuilder<AtomicCounterBuilder, AtomicCounterConfig, AtomicCounter> {
-  public AtomicCounterBuilder(String name, AtomicCounterConfig config, PrimitiveManagementService managementService) {
-    super(AtomicCounterType.instance(), name, config, managementService);
-  }
+        extends DistributedPrimitiveBuilder<AtomicCounterBuilder, AtomicCounterConfig, AtomicCounter> {
+    public AtomicCounterBuilder(String name, AtomicCounterConfig config, PrimitiveManagementService managementService) {
+        super(AtomicCounterType.instance(), name, config, managementService);
+    }
 }

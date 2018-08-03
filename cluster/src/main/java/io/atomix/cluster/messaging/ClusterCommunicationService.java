@@ -31,313 +31,315 @@ import static io.atomix.utils.serializer.serializers.DefaultSerializers.BASIC;
 /**
  * Service for assisting communications between controller cluster nodes.
  */
+// TODO: 2018/7/31 by zmyer
 public interface ClusterCommunicationService {
 
-  /**
-   * Broadcasts a message to all controller nodes.
-   *
-   * @param subject  message subject
-   * @param message message to send
-   * @param <M>     message type
-   */
-  default <M> void broadcast(String subject, M message) {
-    broadcast(subject, message, BASIC::encode);
-  }
+    /**
+     * Broadcasts a message to all controller nodes.
+     *
+     * @param subject  message subject
+     * @param message message to send
+     * @param <M>     message type
+     */
+    default <M> void broadcast(String subject, M message) {
+        broadcast(subject, message, BASIC::encode);
+    }
 
-  /**
-   * Broadcasts a message to all controller nodes.
-   *
-   * @param subject  message subject
-   * @param message message to send
-   * @param encoder function for encoding message to byte[]
-   * @param <M>     message type
-   */
-  <M> void broadcast(String subject, M message, Function<M, byte[]> encoder);
+    /**
+     * Broadcasts a message to all controller nodes.
+     *
+     * @param subject  message subject
+     * @param message message to send
+     * @param encoder function for encoding message to byte[]
+     * @param <M>     message type
+     */
+    <M> void broadcast(String subject, M message, Function<M, byte[]> encoder);
 
-  /**
-   * Broadcasts a message to all controller nodes including self.
-   *
-   * @param subject  message subject
-   * @param message message to send
-   * @param <M>     message type
-   */
-  default <M> void broadcastIncludeSelf(String subject, M message) {
-    broadcastIncludeSelf(subject, message, BASIC::encode);
-  }
+    /**
+     * Broadcasts a message to all controller nodes including self.
+     *
+     * @param subject  message subject
+     * @param message message to send
+     * @param <M>     message type
+     */
+    default <M> void broadcastIncludeSelf(String subject, M message) {
+        broadcastIncludeSelf(subject, message, BASIC::encode);
+    }
 
-  /**
-   * Broadcasts a message to all controller nodes including self.
-   *
-   * @param subject  message subject
-   * @param message message to send
-   * @param encoder function for encoding message to byte[]
-   * @param <M>     message type
-   */
-  <M> void broadcastIncludeSelf(String subject, M message, Function<M, byte[]> encoder);
+    /**
+     * Broadcasts a message to all controller nodes including self.
+     *
+     * @param subject  message subject
+     * @param message message to send
+     * @param encoder function for encoding message to byte[]
+     * @param <M>     message type
+     */
+    <M> void broadcastIncludeSelf(String subject, M message, Function<M, byte[]> encoder);
 
-  /**
-   * Sends a message to the specified controller node.
-   *
-   * @param subject  message subject
-   * @param message  message to send
-   * @param toMemberId destination node identifier
-   * @param <M>      message type
-   * @return future that is completed when the message is sent
-   */
-  default <M> CompletableFuture<Void> unicast(String subject, M message, MemberId toMemberId) {
-    return unicast(subject, message, BASIC::encode, toMemberId);
-  }
+    /**
+     * Sends a message to the specified controller node.
+     *
+     * @param subject  message subject
+     * @param message  message to send
+     * @param toMemberId destination node identifier
+     * @param <M>      message type
+     * @return future that is completed when the message is sent
+     */
+    default <M> CompletableFuture<Void> unicast(String subject, M message, MemberId toMemberId) {
+        return unicast(subject, message, BASIC::encode, toMemberId);
+    }
 
-  /**
-   * Sends a message to the specified controller node.
-   *
-   * @param subject  message subject
-   * @param message  message to send
-   * @param encoder  function for encoding message to byte[]
-   * @param toMemberId destination node identifier
-   * @param <M>      message type
-   * @return future that is completed when the message is sent
-   */
-  <M> CompletableFuture<Void> unicast(String subject, M message, Function<M, byte[]> encoder, MemberId toMemberId);
+    /**
+     * Sends a message to the specified controller node.
+     *
+     * @param subject  message subject
+     * @param message  message to send
+     * @param encoder  function for encoding message to byte[]
+     * @param toMemberId destination node identifier
+     * @param <M>      message type
+     * @return future that is completed when the message is sent
+     */
+    <M> CompletableFuture<Void> unicast(String subject, M message, Function<M, byte[]> encoder, MemberId toMemberId);
 
-  /**
-   * Multicasts a message to a set of controller nodes.
-   *
-   * @param subject  message subject
-   * @param message message to send
-   * @param memberIds recipient node identifiers
-   * @param <M>     message type
-   */
-  default <M> void multicast(String subject, M message, Set<MemberId> memberIds) {
-    multicast(subject, message, BASIC::encode, memberIds);
-  }
+    /**
+     * Multicasts a message to a set of controller nodes.
+     *
+     * @param subject  message subject
+     * @param message message to send
+     * @param memberIds recipient node identifiers
+     * @param <M>     message type
+     */
+    default <M> void multicast(String subject, M message, Set<MemberId> memberIds) {
+        multicast(subject, message, BASIC::encode, memberIds);
+    }
 
-  /**
-   * Multicasts a message to a set of controller nodes.
-   *
-   * @param subject  message subject
-   * @param message message to send
-   * @param encoder function for encoding message to byte[]
-   * @param memberIds recipient node identifiers
-   * @param <M>     message type
-   */
-  <M> void multicast(String subject, M message, Function<M, byte[]> encoder, Set<MemberId> memberIds);
+    /**
+     * Multicasts a message to a set of controller nodes.
+     *
+     * @param subject  message subject
+     * @param message message to send
+     * @param encoder function for encoding message to byte[]
+     * @param memberIds recipient node identifiers
+     * @param <M>     message type
+     */
+    <M> void multicast(String subject, M message, Function<M, byte[]> encoder, Set<MemberId> memberIds);
 
-  /**
-   * Sends a message and expects a reply.
-   *
-   * @param subject  message subject
-   * @param message  message to send
-   * @param toMemberId recipient node identifier
-   * @param <M>      request type
-   * @param <R>      reply type
-   * @return reply future
-   */
-  default <M, R> CompletableFuture<R> send(
-      String subject,
-      M message,
-      MemberId toMemberId) {
-    return send(subject, message, BASIC::encode, BASIC::decode, toMemberId, null);
-  }
+    /**
+     * Sends a message and expects a reply.
+     *
+     * @param subject  message subject
+     * @param message  message to send
+     * @param toMemberId recipient node identifier
+     * @param <M>      request type
+     * @param <R>      reply type
+     * @return reply future
+     */
+    default <M, R> CompletableFuture<R> send(
+            String subject,
+            M message,
+            MemberId toMemberId) {
+        return send(subject, message, BASIC::encode, BASIC::decode, toMemberId, null);
+    }
 
-  /**
-   * Sends a message and expects a reply.
-   *
-   * @param subject  message subject
-   * @param message  message to send
-   * @param toMemberId recipient node identifier
-   * @param timeout  response timeout
-   * @param <M>      request type
-   * @param <R>      reply type
-   * @return reply future
-   */
-  default <M, R> CompletableFuture<R> send(
-      String subject,
-      M message,
-      MemberId toMemberId,
-      Duration timeout) {
-    return send(subject, message, BASIC::encode, BASIC::decode, toMemberId, timeout);
-  }
+    /**
+     * Sends a message and expects a reply.
+     *
+     * @param subject  message subject
+     * @param message  message to send
+     * @param toMemberId recipient node identifier
+     * @param timeout  response timeout
+     * @param <M>      request type
+     * @param <R>      reply type
+     * @return reply future
+     */
+    default <M, R> CompletableFuture<R> send(
+            String subject,
+            M message,
+            MemberId toMemberId,
+            Duration timeout) {
+        return send(subject, message, BASIC::encode, BASIC::decode, toMemberId, timeout);
+    }
 
-  /**
-   * Sends a message and expects a reply.
-   *
-   * @param subject  message subject
-   * @param message  message to send
-   * @param encoder  function for encoding request to byte[]
-   * @param decoder  function for decoding response from byte[]
-   * @param toMemberId recipient node identifier
-   * @param <M>      request type
-   * @param <R>      reply type
-   * @return reply future
-   */
-  default <M, R> CompletableFuture<R> send(
-      String subject,
-      M message,
-      Function<M, byte[]> encoder,
-      Function<byte[], R> decoder,
-      MemberId toMemberId) {
-    return send(subject, message, encoder, decoder, toMemberId, null);
-  }
+    /**
+     * Sends a message and expects a reply.
+     *
+     * @param subject  message subject
+     * @param message  message to send
+     * @param encoder  function for encoding request to byte[]
+     * @param decoder  function for decoding response from byte[]
+     * @param toMemberId recipient node identifier
+     * @param <M>      request type
+     * @param <R>      reply type
+     * @return reply future
+     */
+    // TODO: 2018/7/31 by zmyer
+    default <M, R> CompletableFuture<R> send(
+            String subject,
+            M message,
+            Function<M, byte[]> encoder,
+            Function<byte[], R> decoder,
+            MemberId toMemberId) {
+        return send(subject, message, encoder, decoder, toMemberId, null);
+    }
 
-  /**
-   * Sends a message and expects a reply.
-   *
-   * @param subject  message subject
-   * @param message  message to send
-   * @param encoder  function for encoding request to byte[]
-   * @param decoder  function for decoding response from byte[]
-   * @param toMemberId recipient node identifier
-   * @param timeout  response timeout
-   * @param <M>      request type
-   * @param <R>      reply type
-   * @return reply future
-   */
-  <M, R> CompletableFuture<R> send(
-      String subject,
-      M message,
-      Function<M, byte[]> encoder,
-      Function<byte[], R> decoder,
-      MemberId toMemberId,
-      Duration timeout);
+    /**
+     * Sends a message and expects a reply.
+     *
+     * @param subject  message subject
+     * @param message  message to send
+     * @param encoder  function for encoding request to byte[]
+     * @param decoder  function for decoding response from byte[]
+     * @param toMemberId recipient node identifier
+     * @param timeout  response timeout
+     * @param <M>      request type
+     * @param <R>      reply type
+     * @return reply future
+     */
+    <M, R> CompletableFuture<R> send(
+            String subject,
+            M message,
+            Function<M, byte[]> encoder,
+            Function<byte[], R> decoder,
+            MemberId toMemberId,
+            Duration timeout);
 
-  /**
-   * Adds a new subscriber for the specified message subject.
-   *
-   * @param subject  message subject
-   * @param handler  handler function that processes the incoming message and produces a reply
-   * @param executor executor to run this handler on
-   * @param <M>      incoming message type
-   * @param <R>      reply message type
-   * @return future to be completed once the subscription has been propagated
-   */
-  default <M, R> CompletableFuture<Void> subscribe(
-      String subject,
-      Function<M, R> handler,
-      Executor executor) {
-    return subscribe(subject, BASIC::decode, handler, BASIC::encode, executor);
-  }
+    /**
+     * Adds a new subscriber for the specified message subject.
+     *
+     * @param subject  message subject
+     * @param handler  handler function that processes the incoming message and produces a reply
+     * @param executor executor to run this handler on
+     * @param <M>      incoming message type
+     * @param <R>      reply message type
+     * @return future to be completed once the subscription has been propagated
+     */
+    default <M, R> CompletableFuture<Void> subscribe(
+            String subject,
+            Function<M, R> handler,
+            Executor executor) {
+        return subscribe(subject, BASIC::decode, handler, BASIC::encode, executor);
+    }
 
-  /**
-   * Adds a new subscriber for the specified message subject.
-   *
-   * @param subject  message subject
-   * @param decoder  decoder for resurrecting incoming message
-   * @param handler  handler function that processes the incoming message and produces a reply
-   * @param encoder  encoder for serializing reply
-   * @param executor executor to run this handler on
-   * @param <M>      incoming message type
-   * @param <R>      reply message type
-   * @return future to be completed once the subscription has been propagated
-   */
-  <M, R> CompletableFuture<Void> subscribe(
-      String subject,
-      Function<byte[], M> decoder,
-      Function<M, R> handler,
-      Function<R, byte[]> encoder,
-      Executor executor);
+    /**
+     * Adds a new subscriber for the specified message subject.
+     *
+     * @param subject  message subject
+     * @param decoder  decoder for resurrecting incoming message
+     * @param handler  handler function that processes the incoming message and produces a reply
+     * @param encoder  encoder for serializing reply
+     * @param executor executor to run this handler on
+     * @param <M>      incoming message type
+     * @param <R>      reply message type
+     * @return future to be completed once the subscription has been propagated
+     */
+    <M, R> CompletableFuture<Void> subscribe(
+            String subject,
+            Function<byte[], M> decoder,
+            Function<M, R> handler,
+            Function<R, byte[]> encoder,
+            Executor executor);
 
-  /**
-   * Adds a new subscriber for the specified message subject.
-   *
-   * @param subject message subject
-   * @param handler handler function that processes the incoming message and produces a reply
-   * @param <M>     incoming message type
-   * @param <R>     reply message type
-   * @return future to be completed once the subscription has been propagated
-   */
-  default <M, R> CompletableFuture<Void> subscribe(
-      String subject,
-      Function<M, CompletableFuture<R>> handler) {
-    return subscribe(subject, BASIC::decode, handler, BASIC::encode);
-  }
+    /**
+     * Adds a new subscriber for the specified message subject.
+     *
+     * @param subject message subject
+     * @param handler handler function that processes the incoming message and produces a reply
+     * @param <M>     incoming message type
+     * @param <R>     reply message type
+     * @return future to be completed once the subscription has been propagated
+     */
+    default <M, R> CompletableFuture<Void> subscribe(
+            String subject,
+            Function<M, CompletableFuture<R>> handler) {
+        return subscribe(subject, BASIC::decode, handler, BASIC::encode);
+    }
 
-  /**
-   * Adds a new subscriber for the specified message subject.
-   *
-   * @param subject message subject
-   * @param decoder decoder for resurrecting incoming message
-   * @param handler handler function that processes the incoming message and produces a reply
-   * @param encoder encoder for serializing reply
-   * @param <M>     incoming message type
-   * @param <R>     reply message type
-   * @return future to be completed once the subscription has been propagated
-   */
-  <M, R> CompletableFuture<Void> subscribe(
-      String subject,
-      Function<byte[], M> decoder,
-      Function<M, CompletableFuture<R>> handler,
-      Function<R, byte[]> encoder);
+    /**
+     * Adds a new subscriber for the specified message subject.
+     *
+     * @param subject message subject
+     * @param decoder decoder for resurrecting incoming message
+     * @param handler handler function that processes the incoming message and produces a reply
+     * @param encoder encoder for serializing reply
+     * @param <M>     incoming message type
+     * @param <R>     reply message type
+     * @return future to be completed once the subscription has been propagated
+     */
+    <M, R> CompletableFuture<Void> subscribe(
+            String subject,
+            Function<byte[], M> decoder,
+            Function<M, CompletableFuture<R>> handler,
+            Function<R, byte[]> encoder);
 
-  /**
-   * Adds a new subscriber for the specified message subject.
-   *
-   * @param subject  message subject
-   * @param handler  handler for handling message
-   * @param executor executor to run this handler on
-   * @param <M>      incoming message type
-   * @return future to be completed once the subscription has been propagated
-   */
-  default <M> CompletableFuture<Void> subscribe(
-      String subject,
-      Consumer<M> handler,
-      Executor executor) {
-    return subscribe(subject, BASIC::decode, handler, executor);
-  }
+    /**
+     * Adds a new subscriber for the specified message subject.
+     *
+     * @param subject  message subject
+     * @param handler  handler for handling message
+     * @param executor executor to run this handler on
+     * @param <M>      incoming message type
+     * @return future to be completed once the subscription has been propagated
+     */
+    default <M> CompletableFuture<Void> subscribe(
+            String subject,
+            Consumer<M> handler,
+            Executor executor) {
+        return subscribe(subject, BASIC::decode, handler, executor);
+    }
 
-  /**
-   * Adds a new subscriber for the specified message subject.
-   *
-   * @param subject  message subject
-   * @param handler  handler for handling message
-   * @param executor executor to run this handler on
-   * @param <M>      incoming message type
-   * @return future to be completed once the subscription has been propagated
-   */
-  default <M> CompletableFuture<Void> subscribe(
-          String subject,
-          BiConsumer<Address, M> handler,
-          Executor executor) {
-    return subscribe(subject, BASIC::decode, handler, executor);
-  }
+    /**
+     * Adds a new subscriber for the specified message subject.
+     *
+     * @param subject  message subject
+     * @param handler  handler for handling message
+     * @param executor executor to run this handler on
+     * @param <M>      incoming message type
+     * @return future to be completed once the subscription has been propagated
+     */
+    default <M> CompletableFuture<Void> subscribe(
+            String subject,
+            BiConsumer<Address, M> handler,
+            Executor executor) {
+        return subscribe(subject, BASIC::decode, handler, executor);
+    }
 
-  /**
-   * Adds a new subscriber for the specified message subject.
-   *
-   * @param subject  message subject
-   * @param decoder  decoder to resurrecting incoming message
-   * @param handler  handler for handling message
-   * @param executor executor to run this handler on
-   * @param <M>      incoming message type
-   * @return future to be completed once the subscription has been propagated
-   */
-  <M> CompletableFuture<Void> subscribe(
-      String subject,
-      Function<byte[], M> decoder,
-      Consumer<M> handler,
-      Executor executor);
+    /**
+     * Adds a new subscriber for the specified message subject.
+     *
+     * @param subject  message subject
+     * @param decoder  decoder to resurrecting incoming message
+     * @param handler  handler for handling message
+     * @param executor executor to run this handler on
+     * @param <M>      incoming message type
+     * @return future to be completed once the subscription has been propagated
+     */
+    <M> CompletableFuture<Void> subscribe(
+            String subject,
+            Function<byte[], M> decoder,
+            Consumer<M> handler,
+            Executor executor);
 
-  /**
-   * Adds a new subscriber for the specified message subject.
-   *
-   * @param subject  message subject
-   * @param decoder  decoder to resurrecting incoming message
-   * @param handler  handler for handling message
-   * @param executor executor to run this handler on
-   * @param <M>      incoming message type
-   * @return future to be completed once the subscription has been propagated
-   */
-  <M> CompletableFuture<Void> subscribe(
-          String subject,
-          Function<byte[], M> decoder,
-          BiConsumer<Address, M> handler,
-          Executor executor);
+    /**
+     * Adds a new subscriber for the specified message subject.
+     *
+     * @param subject  message subject
+     * @param decoder  decoder to resurrecting incoming message
+     * @param handler  handler for handling message
+     * @param executor executor to run this handler on
+     * @param <M>      incoming message type
+     * @return future to be completed once the subscription has been propagated
+     */
+    <M> CompletableFuture<Void> subscribe(
+            String subject,
+            Function<byte[], M> decoder,
+            BiConsumer<Address, M> handler,
+            Executor executor);
 
-  /**
-   * Removes a subscriber for the specified message subject.
-   *
-   * @param subject message subject
-   */
-  void unsubscribe(String subject);
+    /**
+     * Removes a subscriber for the specified message subject.
+     *
+     * @param subject message subject
+     */
+    void unsubscribe(String subject);
 
 }

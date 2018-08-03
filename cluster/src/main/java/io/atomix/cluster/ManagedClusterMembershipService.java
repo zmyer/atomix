@@ -20,5 +20,6 @@ import io.atomix.utils.Managed;
 /**
  * Managed cluster.
  */
+// TODO: 2018/7/31 by zmyer
 public interface ManagedClusterMembershipService extends ClusterMembershipService, Managed<ClusterMembershipService> {
 }

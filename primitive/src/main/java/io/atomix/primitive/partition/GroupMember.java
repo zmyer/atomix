@@ -27,52 +27,54 @@ import static com.google.common.base.MoreObjects.toStringHelper;
  * A member represents a tuple of {@link MemberId} and {@link MemberGroupId} which can be used to prioritize members
  * during primary elections.
  */
+// TODO: 2018/7/31 by zmyer
 public class GroupMember {
-  private final MemberId memberId;
-  private final MemberGroupId groupId;
+    private final MemberId memberId;
+    private final MemberGroupId groupId;
 
-  public GroupMember(MemberId memberId, MemberGroupId groupId) {
-    this.memberId = memberId;
-    this.groupId = groupId;
-  }
-
-  /**
-   * Returns the member ID.
-   *
-   * @return the member ID
-   */
-  public MemberId memberId() {
-    return memberId;
-  }
-
-  /**
-   * Returns the member group ID.
-   *
-   * @return the member group ID
-   */
-  public MemberGroupId groupId() {
-    return groupId;
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(memberId, groupId);
-  }
-
-  @Override
-  public boolean equals(Object object) {
-    if (object instanceof GroupMember) {
-      GroupMember member = (GroupMember) object;
-      return member.memberId.equals(memberId) && member.groupId.equals(groupId);
+    // TODO: 2018/7/31 by zmyer
+    public GroupMember(MemberId memberId, MemberGroupId groupId) {
+        this.memberId = memberId;
+        this.groupId = groupId;
     }
-    return false;
-  }
 
-  @Override
-  public String toString() {
-    return toStringHelper(this)
-        .add("memberId", memberId)
-        .add("groupId", groupId)
-        .toString();
-  }
+    /**
+     * Returns the member ID.
+     *
+     * @return the member ID
+     */
+    public MemberId memberId() {
+        return memberId;
+    }
+
+    /**
+     * Returns the member group ID.
+     *
+     * @return the member group ID
+     */
+    public MemberGroupId groupId() {
+        return groupId;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(memberId, groupId);
+    }
+
+    @Override
+    public boolean equals(Object object) {
+        if (object instanceof GroupMember) {
+            GroupMember member = (GroupMember) object;
+            return member.memberId.equals(memberId) && member.groupId.equals(groupId);
+        }
+        return false;
+    }
+
+    @Override
+    public String toString() {
+        return toStringHelper(this)
+                .add("memberId", memberId)
+                .add("groupId", groupId)
+                .toString();
+    }
 }

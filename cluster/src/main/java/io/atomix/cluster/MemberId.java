@@ -23,87 +23,88 @@ import java.util.UUID;
 /**
  * Controller cluster identity.
  */
+// TODO: 2018/7/31 by zmyer
 public final class MemberId extends AbstractIdentifier<String> implements Comparable<MemberId> {
 
-  /**
-   * Creates a new cluster node identifier from the specified string.
-   *
-   * @return node id
-   */
-  public static MemberId anonymous() {
-    return new MemberId(UUID.randomUUID().toString(), Type.ANONYMOUS);
-  }
-
-  /**
-   * Creates a new cluster node identifier from the specified string.
-   *
-   * @param id string identifier
-   * @return node id
-   */
-  public static MemberId from(String id) {
-    return new MemberId(id, Type.IDENTIFIED);
-  }
-
-  /**
-   * Member ID type.
-   */
-  public enum Type {
-
     /**
-     * Represents a user-provided member identifier.
+     * Creates a new cluster node identifier from the specified string.
+     *
+     * @return node id
      */
-    IDENTIFIED,
-
-    /**
-     * Represents a randomly generated member identifier.
-     */
-    ANONYMOUS,
-  }
-
-  private final Type type;
-
-  /**
-   * Constructor for serialization.
-   */
-  private MemberId() {
-    this("", Type.ANONYMOUS);
-  }
-
-  /**
-   * Creates a new cluster node identifier from the specified string.
-   *
-   * @param id string identifier
-   */
-  public MemberId(String id, Type type) {
-    super(id);
-    this.type = type;
-  }
-
-  /**
-   * Returns the member identifier type.
-   *
-   * @return the member identifier type
-   */
-  public Type type() {
-    return type;
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(id(), type());
-  }
-
-  @Override
-  public boolean equals(Object object) {
-    if (object instanceof MemberId) {
-      MemberId memberId = (MemberId) object;
-      return memberId.id().equals(id()) && memberId.type() == type();
+    public static MemberId anonymous() {
+        return new MemberId(UUID.randomUUID().toString(), Type.ANONYMOUS);
     }
-    return false;
-  }
 
-  @Override
-  public int compareTo(MemberId that) {
-    return identifier.compareTo(that.identifier);
-  }
+    /**
+     * Creates a new cluster node identifier from the specified string.
+     *
+     * @param id string identifier
+     * @return node id
+     */
+    public static MemberId from(String id) {
+        return new MemberId(id, Type.IDENTIFIED);
+    }
+
+    /**
+     * Member ID type.
+     */
+    public enum Type {
+
+        /**
+         * Represents a user-provided member identifier.
+         */
+        IDENTIFIED,
+
+        /**
+         * Represents a randomly generated member identifier.
+         */
+        ANONYMOUS,
+    }
+
+    private final Type type;
+
+    /**
+     * Constructor for serialization.
+     */
+    private MemberId() {
+        this("", Type.ANONYMOUS);
+    }
+
+    /**
+     * Creates a new cluster node identifier from the specified string.
+     *
+     * @param id string identifier
+     */
+    public MemberId(String id, Type type) {
+        super(id);
+        this.type = type;
+    }
+
+    /**
+     * Returns the member identifier type.
+     *
+     * @return the member identifier type
+     */
+    public Type type() {
+        return type;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id(), type());
+    }
+
+    @Override
+    public boolean equals(Object object) {
+        if (object instanceof MemberId) {
+            MemberId memberId = (MemberId) object;
+            return memberId.id().equals(id()) && memberId.type() == type();
+        }
+        return false;
+    }
+
+    @Override
+    public int compareTo(MemberId that) {
+        return identifier.compareTo(that.identifier);
+    }
 }

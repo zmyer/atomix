@@ -25,24 +25,25 @@ import java.util.Map;
 /**
  * Primitive type registry.
  */
+// TODO: 2018/8/1 by zmyer
 public class DefaultPrimitiveTypeRegistry implements PrimitiveTypeRegistry {
-  private final Map<String, PrimitiveType> primitiveTypes;
+    private final Map<String, PrimitiveType> primitiveTypes;
 
-  public DefaultPrimitiveTypeRegistry(Map<String, PrimitiveType> primitiveTypes) {
-    this.primitiveTypes = primitiveTypes;
-  }
-
-  @Override
-  public Collection<PrimitiveType> getPrimitiveTypes() {
-    return primitiveTypes.values();
-  }
-
-  @Override
-  public PrimitiveType getPrimitiveType(String typeName) {
-    PrimitiveType type = primitiveTypes.get(typeName);
-    if (type == null) {
-      throw new ServiceException("Unknown primitive type " + typeName);
+    public DefaultPrimitiveTypeRegistry(Map<String, PrimitiveType> primitiveTypes) {
+        this.primitiveTypes = primitiveTypes;
     }
-    return type;
-  }
+
+    @Override
+    public Collection<PrimitiveType> getPrimitiveTypes() {
+        return primitiveTypes.values();
+    }
+
+    @Override
+    public PrimitiveType getPrimitiveType(String typeName) {
+        PrimitiveType type = primitiveTypes.get(typeName);
+        if (type == null) {
+            throw new ServiceException("Unknown primitive type " + typeName);
+        }
+        return type;
+    }
 }

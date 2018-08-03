@@ -26,26 +26,27 @@ import java.util.Collection;
  * The member group service provides member group info within the context of a {@link PartitionGroup}. Each partition
  * group may be assigned a different {@link MemberGroupProvider} and thus can define member groups differently.
  */
+// TODO: 2018/8/1 by zmyer
 public interface MemberGroupService extends ListenerService<MemberGroupEvent, MemberGroupEventListener> {
 
-  /**
-   * Returns the collection of member groups.
-   *
-   * @return the collection of member groups
-   */
-  Collection<MemberGroup> getMemberGroups();
+    /**
+     * Returns the collection of member groups.
+     *
+     * @return the collection of member groups
+     */
+    Collection<MemberGroup> getMemberGroups();
 
-  /**
-   * Returns the group for the given node.
-   *
-   * @param member the node for which to return the group
-   * @return the group for the given node
-   */
-  default MemberGroup getMemberGroup(Member member) {
-    return getMemberGroups()
-        .stream()
-        .filter(group -> group.isMember(member))
-        .findAny()
-        .orElse(null);
-  }
+    /**
+     * Returns the group for the given node.
+     *
+     * @param member the node for which to return the group
+     * @return the group for the given node
+     */
+    default MemberGroup getMemberGroup(Member member) {
+        return getMemberGroups()
+                .stream()
+                .filter(group -> group.isMember(member))
+                .findAny()
+                .orElse(null);
+    }
 }

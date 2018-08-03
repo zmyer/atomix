@@ -18,17 +18,18 @@ package io.atomix.utils.event;
 /**
  * Entity capable of filtering events.
  */
+// TODO: 2018/7/30 by zmyer
 public interface EventFilter<E extends Event> {
 
-  /**
-   * Indicates whether the specified event is of interest or not.
-   * Default implementation always returns true.
-   *
-   * @param event event to be inspected
-   * @return true if event is relevant; false otherwise
-   */
-  default boolean isRelevant(E event) {
-    return true;
-  }
+    /**
+     * Indicates whether the specified event is of interest or not.
+     * Default implementation always returns true.
+     *
+     * @param event event to be inspected
+     * @return true if event is relevant; false otherwise
+     */
+    default boolean isRelevant(E event) {
+        return true;
+    }
 
 }

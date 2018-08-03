@@ -18,53 +18,54 @@ package io.atomix.protocols.backup.protocol;
 /**
  * Backup operation.
  */
+// TODO: 2018/8/1 by zmyer
 public class BackupOperation {
 
-  /**
-   * Backup operation type.
-   */
-  public enum Type {
-
     /**
-     * Execute operation.
+     * Backup operation type.
      */
-    EXECUTE,
+    public enum Type {
 
-    /**
-     * Heartbeat operation.
-     */
-    HEARTBEAT,
+        /**
+         * Execute operation.
+         */
+        EXECUTE,
 
-    /**
-     * Expire operation.
-     */
-    EXPIRE,
+        /**
+         * Heartbeat operation.
+         */
+        HEARTBEAT,
 
-    /**
-     * Close operation.
-     */
-    CLOSE,
-  }
+        /**
+         * Expire operation.
+         */
+        EXPIRE,
 
-  private final Type type;
-  private final long index;
-  private final long timestamp;
+        /**
+         * Close operation.
+         */
+        CLOSE,
+    }
 
-  public BackupOperation(Type type, long index, long timestamp) {
-    this.type = type;
-    this.index = index;
-    this.timestamp = timestamp;
-  }
+    private final Type type;
+    private final long index;
+    private final long timestamp;
 
-  public Type type() {
-    return type;
-  }
+    public BackupOperation(Type type, long index, long timestamp) {
+        this.type = type;
+        this.index = index;
+        this.timestamp = timestamp;
+    }
 
-  public long index() {
-    return index;
-  }
+    public Type type() {
+        return type;
+    }
 
-  public long timestamp() {
-    return timestamp;
-  }
+    public long index() {
+        return index;
+    }
+
+    public long timestamp() {
+        return timestamp;
+    }
 }

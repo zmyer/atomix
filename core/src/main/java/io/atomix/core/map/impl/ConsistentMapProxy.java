@@ -25,14 +25,16 @@ import java.time.Duration;
 /**
  * Distributed resource providing the {@link AsyncConsistentMap} primitive.
  */
-public class ConsistentMapProxy extends AbstractConsistentMapProxy<AsyncConsistentMap<String, byte[]>, ConsistentMapService>
-    implements AsyncConsistentMap<String, byte[]>, ConsistentMapClient {
-  public ConsistentMapProxy(ProxyClient<ConsistentMapService> proxy, PrimitiveRegistry registry) {
-    super(proxy, registry);
-  }
+// TODO: 2018/8/1 by zmyer
+public class ConsistentMapProxy
+        extends AbstractConsistentMapProxy<AsyncConsistentMap<String, byte[]>, ConsistentMapService>
+        implements AsyncConsistentMap<String, byte[]>, ConsistentMapClient {
+    public ConsistentMapProxy(ProxyClient<ConsistentMapService> proxy, PrimitiveRegistry registry) {
+        super(proxy, registry);
+    }
 
-  @Override
-  public ConsistentMap<String, byte[]> sync(Duration operationTimeout) {
-    return new BlockingConsistentMap<>(this, operationTimeout.toMillis());
-  }
+    @Override
+    public ConsistentMap<String, byte[]> sync(Duration operationTimeout) {
+        return new BlockingConsistentMap<>(this, operationTimeout.toMillis());
+    }
 }

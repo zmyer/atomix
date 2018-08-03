@@ -34,91 +34,98 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Asynchronous replicator.
  */
+// TODO: 2018/8/1 by zmyer
 class AsynchronousReplicator implements Replicator {
-  private static final int MAX_BATCH_SIZE = 100;
-  private static final long MAX_BATCH_TIME = 100;
+    private static final int MAX_BATCH_SIZE = 100;
+    private static final long MAX_BATCH_TIME = 100;
 
-  private final PrimaryBackupServiceContext context;
-  private final Logger log;
-  private final Map<MemberId, BackupQueue> queues = new HashMap<>();
+    private final PrimaryBackupServiceContext context;
+    private final Logger log;
+    private final Map<MemberId, BackupQueue> queues = new HashMap<>();
 
-  AsynchronousReplicator(PrimaryBackupServiceContext context, Logger log) {
-    this.context = context;
-    this.log = log;
-  }
-
-  @Override
-  public CompletableFuture<Void> replicate(BackupOperation operation) {
-    for (MemberId backup : context.backups()) {
-      queues.computeIfAbsent(backup, BackupQueue::new).add(operation);
+    AsynchronousReplicator(PrimaryBackupServiceContext context, Logger log) {
+        this.context = context;
+        this.log = log;
     }
-    context.setCommitIndex(operation.index());
-    return CompletableFuture.completedFuture(null);
-  }
 
-  @Override
-  public void close() {
-    queues.values().forEach(BackupQueue::close);
-  }
+    // TODO: 2018/8/1 by zmyer
+    @Override
+    public CompletableFuture<Void> replicate(BackupOperation operation) {
+        for (final MemberId backup : context.backups()) {
+            queues.computeIfAbsent(backup, BackupQueue::new).add(operation);
+        }
+        context.setCommitIndex(operation.index());
+        return CompletableFuture.completedFuture(null);
+    }
 
-  /**
-   * Asynchronous backup queue.
-   */
-  private final class BackupQueue {
-    private final Queue<BackupOperation> operations = new LinkedList<>();
-    private final MemberId memberId;
-    private final Scheduled backupTimer;
-    private long lastSent;
-
-    BackupQueue(MemberId memberId) {
-      this.memberId = memberId;
-      this.backupTimer = context.threadContext()
-          .schedule(Duration.ofMillis(MAX_BATCH_TIME / 2), Duration.ofMillis(MAX_BATCH_TIME / 2), this::maybeBackup);
+    @Override
+    public void close() {
+        queues.values().forEach(BackupQueue::close);
     }
 
     /**
-     * Adds an operation to the queue.
-     *
-     * @param operation the operation to add
+     * Asynchronous backup queue.
      */
-    void add(BackupOperation operation) {
-      operations.add(operation);
-      if (operations.size() >= MAX_BATCH_SIZE) {
-        backup();
-      }
-    }
+    // TODO: 2018/8/1 by zmyer
+    private final class BackupQueue {
+        private final Queue<BackupOperation> operations = new LinkedList<>();
+        private final MemberId memberId;
+        private final Scheduled backupTimer;
+        private long lastSent;
 
-    /**
-     * Sends the next batch if enough time has elapsed.
-     */
-    private void maybeBackup() {
-      if (System.currentTimeMillis() - lastSent > MAX_BATCH_TIME && !operations.isEmpty()) {
-        backup();
-      }
-    }
+        BackupQueue(MemberId memberId) {
+            this.memberId = memberId;
+            this.backupTimer = context.threadContext()
+                    .schedule(Duration.ofMillis(MAX_BATCH_TIME / 2), Duration.ofMillis(MAX_BATCH_TIME / 2),
+                            this::maybeBackup);
+        }
 
-    /**
-     * Sends the next batch to the backup.
-     */
-    private void backup() {
-      List<BackupOperation> batch = ImmutableList.copyOf(operations);
-      operations.clear();
-      BackupRequest request = BackupRequest.request(
-          context.descriptor(),
-          context.memberId(),
-          context.currentTerm(),
-          context.currentIndex(),
-          batch);
-      log.trace("Sending {} to {}", request, memberId);
-      context.protocol().backup(memberId, request);
-      lastSent = System.currentTimeMillis();
-    }
+        /**
+         * Adds an operation to the queue.
+         *
+         * @param operation the operation to add
+         */
+        // TODO: 2018/8/1 by zmyer
+        void add(BackupOperation operation) {
+            operations.add(operation);
+            if (operations.size() >= MAX_BATCH_SIZE) {
+                backup();
+            }
+        }
 
-    /**
-     * Closes the queue.
-     */
-    void close() {
-      backupTimer.cancel();
+        /**
+         * Sends the next batch if enough time has elapsed.
+         */
+        // TODO: 2018/8/1 by zmyer
+        private void maybeBackup() {
+            if (System.currentTimeMillis() - lastSent > MAX_BATCH_TIME && !operations.isEmpty()) {
+                backup();
+            }
+        }
+
+        /**
+         * Sends the next batch to the backup.
+         */
+        // TODO: 2018/8/1 by zmyer
+        private void backup() {
+            List<BackupOperation> batch = ImmutableList.copyOf(operations);
+            operations.clear();
+            BackupRequest request = BackupRequest.request(
+                    context.descriptor(),
+                    context.memberId(),
+                    context.currentTerm(),
+                    context.currentIndex(),
+                    batch);
+            log.trace("Sending {} to {}", request, memberId);
+            context.protocol().backup(memberId, request);
+            lastSent = System.currentTimeMillis();
+        }
+
+        /**
+         * Closes the queue.
+         */
+        void close() {
+            backupTimer.cancel();
+        }
     }
-  }
 }

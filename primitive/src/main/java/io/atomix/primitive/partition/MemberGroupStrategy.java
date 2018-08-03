@@ -31,72 +31,74 @@ import java.util.stream.Collectors;
  * <p>
  * Member group strategies are default implementations of {@link MemberGroupProvider} for built-in node attributes.
  */
+// TODO: 2018/7/30 by zmyer
 public enum MemberGroupStrategy implements MemberGroupProvider {
 
-  /**
-   * Zone aware member group strategy.
-   * <p>
-   * This strategy will create a member group for each unique zone in the cluster.
-   */
-  ZONE_AWARE {
-    @Override
-    public Collection<MemberGroup> getMemberGroups(Collection<Member> members) {
-      return groupNodes(members, node -> node.zone() != null ? node.zone() : node.id().id());
-    }
-  },
+    /**
+     * Zone aware member group strategy.
+     * <p>
+     * This strategy will create a member group for each unique zone in the cluster.
+     */
+    ZONE_AWARE {
+        @Override
+        public Collection<MemberGroup> getMemberGroups(Collection<Member> members) {
+            return groupNodes(members, node -> node.zone() != null ? node.zone() : node.id().id());
+        }
+    },
 
-  /**
-   * Rack aware member group strategy.
-   * <p>
-   * This strategy will create a member group for each unique rack in the cluster.
-   */
-  RACK_AWARE {
-    @Override
-    public Collection<MemberGroup> getMemberGroups(Collection<Member> members) {
-      return groupNodes(members, node -> node.rack() != null ? node.rack() : node.id().id());
-    }
-  },
+    /**
+     * Rack aware member group strategy.
+     * <p>
+     * This strategy will create a member group for each unique rack in the cluster.
+     */
+    RACK_AWARE {
+        @Override
+        public Collection<MemberGroup> getMemberGroups(Collection<Member> members) {
+            return groupNodes(members, node -> node.rack() != null ? node.rack() : node.id().id());
+        }
+    },
 
-  /**
-   * Host aware member group strategy.
-   * <p>
-   * This strategy will create a member group for each unique host in the cluster.
-   */
-  HOST_AWARE {
-    @Override
-    public Collection<MemberGroup> getMemberGroups(Collection<Member> members) {
-      return groupNodes(members, node -> node.host() != null ? node.host() : node.id().id());
-    }
-  },
+    /**
+     * Host aware member group strategy.
+     * <p>
+     * This strategy will create a member group for each unique host in the cluster.
+     */
+    HOST_AWARE {
+        @Override
+        public Collection<MemberGroup> getMemberGroups(Collection<Member> members) {
+            return groupNodes(members, node -> node.host() != null ? node.host() : node.id().id());
+        }
+    },
 
-  /**
-   * Node aware member group strategy (the default).
-   * <p>
-   * This strategy will create a member group for each node in the cluster, effectively behaving the same as if
-   * no member groups were defined.
-   */
-  NODE_AWARE {
-    @Override
-    public Collection<MemberGroup> getMemberGroups(Collection<Member> members) {
-      return groupNodes(members, node -> node.id().id());
-    }
-  };
+    /**
+     * Node aware member group strategy (the default).
+     * <p>
+     * This strategy will create a member group for each node in the cluster, effectively behaving the same as if
+     * no member groups were defined.
+     */
+    NODE_AWARE {
+        @Override
+        public Collection<MemberGroup> getMemberGroups(Collection<Member> members) {
+            return groupNodes(members, node -> node.id().id());
+        }
+    };
 
-  /**
-   * Groups nodes by the given key function.
-   *
-   * @param members       the nodes to group
-   * @param keyFunction the key function to apply to nodes to extract a key
-   * @return a collection of node member groups
-   */
-  protected Collection<MemberGroup> groupNodes(Collection<Member> members, Function<Member, String> keyFunction) {
-    Map<String, Set<Member>> groups = new HashMap<>();
-    for (Member member : members) {
-      groups.computeIfAbsent(keyFunction.apply(member), k -> new HashSet<>()).add(member);
-    }
+    /**
+     * Groups nodes by the given key function.
+     *
+     * @param members       the nodes to group
+     * @param keyFunction the key function to apply to nodes to extract a key
+     * @return a collection of node member groups
+     */
+    // TODO: 2018/7/30 by zmyer
+    protected Collection<MemberGroup> groupNodes(Collection<Member> members, Function<Member, String> keyFunction) {
+        Map<String, Set<Member>> groups = new HashMap<>();
+        for (Member member : members) {
+            groups.computeIfAbsent(keyFunction.apply(member), k -> new HashSet<>()).add(member);
+        }
 
-    return groups.entrySet().stream()
-        .map(entry -> new NodeMemberGroup(MemberGroupId.from(entry.getKey()), entry.getValue()))
-        .collect(Collectors.toList());
-  }
+        return groups.entrySet().stream()
+                .map(entry -> new NodeMemberGroup(MemberGroupId.from(entry.getKey()), entry.getValue()))
+                .collect(Collectors.toList());
+    }
 }

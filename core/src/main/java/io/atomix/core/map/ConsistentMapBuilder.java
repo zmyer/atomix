@@ -24,31 +24,32 @@ import io.atomix.primitive.PrimitiveManagementService;
  * @param <K> type for map key
  * @param <V> type for map value
  */
+// TODO: 2018/7/30 by zmyer
 public abstract class ConsistentMapBuilder<K, V>
-    extends DistributedPrimitiveBuilder<ConsistentMapBuilder<K, V>, ConsistentMapConfig, ConsistentMap<K, V>> {
+        extends DistributedPrimitiveBuilder<ConsistentMapBuilder<K, V>, ConsistentMapConfig, ConsistentMap<K, V>> {
 
-  public ConsistentMapBuilder(String name, ConsistentMapConfig config, PrimitiveManagementService managementService) {
-    super(ConsistentMapType.instance(), name, config, managementService);
-  }
+    public ConsistentMapBuilder(String name, ConsistentMapConfig config, PrimitiveManagementService managementService) {
+        super(ConsistentMapType.instance(), name, config, managementService);
+    }
 
-  /**
-   * Enables null values in the map.
-   *
-   * @return this builder
-   */
-  public ConsistentMapBuilder<K, V> withNullValues() {
-    config.setNullValues();
-    return this;
-  }
+    /**
+     * Enables null values in the map.
+     *
+     * @return this builder
+     */
+    public ConsistentMapBuilder<K, V> withNullValues() {
+        config.setNullValues();
+        return this;
+    }
 
-  /**
-   * Sets whether null values are allowed.
-   *
-   * @param nullValues whether null values are allowed
-   * @return this builder
-   */
-  public ConsistentMapBuilder<K, V> withNullValues(boolean nullValues) {
-    config.setNullValues(nullValues);
-    return this;
-  }
+    /**
+     * Sets whether null values are allowed.
+     *
+     * @param nullValues whether null values are allowed
+     * @return this builder
+     */
+    public ConsistentMapBuilder<K, V> withNullValues(boolean nullValues) {
+        config.setNullValues(nullValues);
+        return this;
+    }
 }

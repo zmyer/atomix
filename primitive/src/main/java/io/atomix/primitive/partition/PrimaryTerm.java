@@ -33,119 +33,121 @@ import static com.google.common.base.MoreObjects.toStringHelper;
  * such that the default {@link #backups(int)} implementation can properly select backups or else {@link #backups(int)}
  * should be overridden.
  */
+// TODO: 2018/7/31 by zmyer
 public class PrimaryTerm {
-  private final long term;
-  private final GroupMember primary;
-  private final List<GroupMember> candidates;
+    private final long term;
+    private final GroupMember primary;
+    private final List<GroupMember> candidates;
 
-  public PrimaryTerm(long term, GroupMember primary, List<GroupMember> candidates) {
-    this.term = term;
-    this.primary = primary;
-    this.candidates = candidates;
-  }
-
-  /**
-   * Returns the primary term number.
-   * <p>
-   * The term number is monotonically increasing and guaranteed to be unique for a given {@link #primary()}. No two
-   * primaries may ever have the same term.
-   *
-   * @return the primary term number
-   */
-  public long term() {
-    return term;
-  }
-
-  /**
-   * Returns the primary member.
-   * <p>
-   * The primary is the node through which writes are replicated in the primary-backup protocol.
-   *
-   * @return the primary member
-   */
-  public GroupMember primary() {
-    return primary;
-  }
-
-  /**
-   * Returns the list of members.
-   * <p>
-   * The candidate list represents the list of members that are participating in the election but not necessarily in
-   * replication. This list is used to select a set of {@link #backups(int) backups} based on a primitive configuration.
-   *
-   * @return the list of members
-   */
-  public List<GroupMember> candidates() {
-    return candidates;
-  }
-
-  /**
-   * Returns an ordered list of backup members.
-   * <p>
-   * The backups are populated from the set of {@link #candidates()} based on order and group information. The list of
-   * backups is guaranteed not to contain any duplicate {@link MemberGroup}s unless not enough groups exist to
-   * satisfy the number of backups.
-   *
-   * @param numBackups the number of backups to return
-   * @return an ordered list of backup members
-   */
-  public List<GroupMember> backups(int numBackups) {
-    if (primary == null) {
-      return Collections.emptyList();
+    public PrimaryTerm(long term, GroupMember primary, List<GroupMember> candidates) {
+        this.term = term;
+        this.primary = primary;
+        this.candidates = candidates;
     }
 
-    List<GroupMember> backups = new ArrayList<>();
-    Set<MemberGroupId> groups = new HashSet<>();
+    /**
+     * Returns the primary term number.
+     * <p>
+     * The term number is monotonically increasing and guaranteed to be unique for a given {@link #primary()}. No two
+     * primaries may ever have the same term.
+     *
+     * @return the primary term number
+     */
+    public long term() {
+        return term;
+    }
 
-    // Add the primary group to the set of groups to avoid assigning a backup in the same group.
-    groups.add(primary.groupId());
+    /**
+     * Returns the primary member.
+     * <p>
+     * The primary is the node through which writes are replicated in the primary-backup protocol.
+     *
+     * @return the primary member
+     */
+    public GroupMember primary() {
+        return primary;
+    }
 
-    // First populate backups with members from a unique set of groups.
-    int i = 0;
-    for (int j = 0; j < numBackups; j++) {
-      while (i < candidates.size()) {
-        GroupMember member = candidates.get(i++);
-        if (groups.add(member.groupId())) {
-          backups.add(member);
-          break;
+    /**
+     * Returns the list of members.
+     * <p>
+     * The candidate list represents the list of members that are participating in the election but not necessarily in
+     * replication. This list is used to select a set of {@link #backups(int) backups} based on a primitive configuration.
+     *
+     * @return the list of members
+     */
+    public List<GroupMember> candidates() {
+        return candidates;
+    }
+
+    /**
+     * Returns an ordered list of backup members.
+     * <p>
+     * The backups are populated from the set of {@link #candidates()} based on order and group information. The list of
+     * backups is guaranteed not to contain any duplicate {@link MemberGroup}s unless not enough groups exist to
+     * satisfy the number of backups.
+     *
+     * @param numBackups the number of backups to return
+     * @return an ordered list of backup members
+     */
+    // TODO: 2018/8/1 by zmyer
+    public List<GroupMember> backups(int numBackups) {
+        if (primary == null) {
+            return Collections.emptyList();
         }
-      }
-    }
 
-    // If there are still not enough backups, add duplicate groups.
-    for (int j = backups.size(); j < numBackups; j++) {
-      for (GroupMember candidate : candidates) {
-        if (!candidate.equals(primary) && !backups.contains(candidate)) {
-          backups.add(candidate);
-          break;
+        final List<GroupMember> backups = new ArrayList<>();
+        final Set<MemberGroupId> groups = new HashSet<>();
+
+        // Add the primary group to the set of groups to avoid assigning a backup in the same group.
+        groups.add(primary.groupId());
+
+        // First populate backups with members from a unique set of groups.
+        int i = 0;
+        for (int j = 0; j < numBackups; j++) {
+            while (i < candidates.size()) {
+                GroupMember member = candidates.get(i++);
+                if (groups.add(member.groupId())) {
+                    backups.add(member);
+                    break;
+                }
+            }
         }
-      }
+
+        // If there are still not enough backups, add duplicate groups.
+        for (int j = backups.size(); j < numBackups; j++) {
+            for (GroupMember candidate : candidates) {
+                if (!candidate.equals(primary) && !backups.contains(candidate)) {
+                    backups.add(candidate);
+                    break;
+                }
+            }
+        }
+        return backups;
     }
-    return backups;
-  }
 
-  @Override
-  public int hashCode() {
-    return Objects.hash(term, primary, candidates);
-  }
-
-  @Override
-  public boolean equals(Object object) {
-    if (object instanceof PrimaryTerm) {
-      PrimaryTerm term = (PrimaryTerm) object;
-      return term.term == this.term
-          && Objects.equals(term.primary, primary)
-          && Objects.equals(term.candidates, candidates);
+    @Override
+    public int hashCode() {
+        return Objects.hash(term, primary, candidates);
     }
-    return false;
-  }
 
-  @Override
-  public String toString() {
-    return toStringHelper(this)
-        .add("term", term)
-        .add("primary", primary)
-        .add("candidates", candidates)
-        .toString();
-  }
+    @Override
+    public boolean equals(Object object) {
+        if (object instanceof PrimaryTerm) {
+            PrimaryTerm term = (PrimaryTerm) object;
+            return term.term == this.term
+                    && Objects.equals(term.primary, primary)
+                    && Objects.equals(term.candidates, candidates);
+        }
+        return false;
+    }
+
+    @Override
+    public String toString() {
+        return toStringHelper(this)
+                .add("term", term)
+                .add("primary", primary)
+                .add("candidates", candidates)
+                .toString();
+    }
 }

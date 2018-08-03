@@ -18,5 +18,6 @@ package io.atomix.utils;
 /**
  * Named type.
  */
+// TODO: 2018/7/30 by zmyer
 public interface NamedType extends Named, Type {
 }

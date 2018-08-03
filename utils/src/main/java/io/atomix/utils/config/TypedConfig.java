@@ -18,13 +18,14 @@ package io.atomix.utils.config;
 /**
  * Typed configuration.
  */
+// TODO: 2018/7/30 by zmyer
 public interface TypedConfig<C extends TypedConfig<C, T>, T> extends Config {
 
-  /**
-   * Returns the type name.
-   *
-   * @return the type name
-   */
-  T getType();
+    /**
+     * Returns the type name.
+     *
+     * @return the type name
+     */
+    T getType();
 
 }

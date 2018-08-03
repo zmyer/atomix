@@ -15,46 +15,47 @@
  */
 package io.atomix.core.map;
 
-import io.atomix.primitive.config.PrimitiveConfig;
 import io.atomix.primitive.PrimitiveType;
+import io.atomix.primitive.config.PrimitiveConfig;
 
 /**
  * Consistent map configuration.
  */
+// TODO: 2018/8/1 by zmyer
 public class ConsistentMapConfig extends PrimitiveConfig<ConsistentMapConfig> {
-  private boolean nullValues = false;
+    private boolean nullValues = false;
 
-  @Override
-  public PrimitiveType getType() {
-    return ConsistentMapType.instance();
-  }
+    @Override
+    public PrimitiveType getType() {
+        return ConsistentMapType.instance();
+    }
 
-  /**
-   * Enables null values in the map.
-   *
-   * @return the map configuration
-   */
-  public ConsistentMapConfig setNullValues() {
-    return setNullValues(true);
-  }
+    /**
+     * Enables null values in the map.
+     *
+     * @return the map configuration
+     */
+    public ConsistentMapConfig setNullValues() {
+        return setNullValues(true);
+    }
 
-  /**
-   * Enables null values in the map.
-   *
-   * @param nullValues whether null values are allowed
-   * @return the map configuration
-   */
-  public ConsistentMapConfig setNullValues(boolean nullValues) {
-    this.nullValues = nullValues;
-    return this;
-  }
+    /**
+     * Enables null values in the map.
+     *
+     * @param nullValues whether null values are allowed
+     * @return the map configuration
+     */
+    public ConsistentMapConfig setNullValues(boolean nullValues) {
+        this.nullValues = nullValues;
+        return this;
+    }
 
-  /**
-   * Returns whether null values are supported by the map.
-   *
-   * @return {@code true} if null values are supported; {@code false} otherwise
-   */
-  public boolean isNullValues() {
-    return nullValues;
-  }
+    /**
+     * Returns whether null values are supported by the map.
+     *
+     * @return {@code true} if null values are supported; {@code false} otherwise
+     */
+    public boolean isNullValues() {
+        return nullValues;
+    }
 }

@@ -20,5 +20,6 @@ import io.atomix.utils.Managed;
 /**
  * Managed broadcast service.
  */
+// TODO: 2018/7/31 by zmyer
 public interface ManagedBroadcastService extends BroadcastService, Managed<BroadcastService> {
 }

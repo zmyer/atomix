@@ -33,82 +33,84 @@ import static com.google.common.base.MoreObjects.toStringHelper;
 /**
  * Base class for {@link SessionClient}s that delegate to an underlying client.
  */
+// TODO: 2018/7/31 by zmyer
 public class DelegatingSessionClient implements SessionClient {
-  private final SessionClient session;
+    private final SessionClient session;
 
-  public DelegatingSessionClient(SessionClient session) {
-    this.session = session;
-  }
+    public DelegatingSessionClient(SessionClient session) {
+        this.session = session;
+    }
 
-  @Override
-  public SessionId sessionId() {
-    return session.sessionId();
-  }
+    @Override
+    public SessionId sessionId() {
+        return session.sessionId();
+    }
 
-  @Override
-  public PartitionId partitionId() {
-    return session.partitionId();
-  }
+    @Override
+    public PartitionId partitionId() {
+        return session.partitionId();
+    }
 
-  @Override
-  public ThreadContext context() {
-    return session.context();
-  }
+    @Override
+    public ThreadContext context() {
+        return session.context();
+    }
 
-  @Override
-  public String name() {
-    return session.name();
-  }
+    @Override
+    public String name() {
+        return session.name();
+    }
 
-  @Override
-  public PrimitiveType type() {
-    return session.type();
-  }
+    @Override
+    public PrimitiveType type() {
+        return session.type();
+    }
 
-  @Override
-  public PrimitiveState getState() {
-    return session.getState();
-  }
+    @Override
+    public PrimitiveState getState() {
+        return session.getState();
+    }
 
-  @Override
-  public void addStateChangeListener(Consumer<PrimitiveState> listener) {
-    session.addStateChangeListener(listener);
-  }
+    @Override
+    public void addStateChangeListener(Consumer<PrimitiveState> listener) {
+        session.addStateChangeListener(listener);
+    }
 
-  @Override
-  public void removeStateChangeListener(Consumer<PrimitiveState> listener) {
-    session.removeStateChangeListener(listener);
-  }
+    @Override
+    public void removeStateChangeListener(Consumer<PrimitiveState> listener) {
+        session.removeStateChangeListener(listener);
+    }
 
-  @Override
-  public CompletableFuture<byte[]> execute(PrimitiveOperation operation) {
-    return session.execute(operation);
-  }
+    @Override
+    public CompletableFuture<byte[]> execute(PrimitiveOperation operation) {
+        return session.execute(operation);
+    }
 
-  @Override
-  public void addEventListener(EventType eventType, Consumer<PrimitiveEvent> listener) {
-    session.addEventListener(eventType, listener);
-  }
+    @Override
+    public void addEventListener(EventType eventType, Consumer<PrimitiveEvent> listener) {
+        session.addEventListener(eventType, listener);
+    }
 
-  @Override
-  public void removeEventListener(EventType eventType, Consumer<PrimitiveEvent> listener) {
-    session.removeEventListener(eventType, listener);
-  }
+    @Override
+    public void removeEventListener(EventType eventType, Consumer<PrimitiveEvent> listener) {
+        session.removeEventListener(eventType, listener);
+    }
 
-  @Override
-  public CompletableFuture<SessionClient> connect() {
-    return session.connect().thenApply(c -> this);
-  }
+    // TODO: 2018/7/31 by zmyer
+    @Override
+    public CompletableFuture<SessionClient> connect() {
+        return session.connect().thenApply(c -> this);
+    }
 
-  @Override
-  public CompletableFuture<Void> close() {
-    return session.close();
-  }
+    @Override
+    public CompletableFuture<Void> close() {
+        return session.close();
+    }
 
-  @Override
-  public String toString() {
-    return toStringHelper(this)
-        .add("client", session)
-        .toString();
-  }
+    @Override
+    public String toString() {
+        return toStringHelper(this)
+                .add("client", session)
+                .toString();
+    }
 }

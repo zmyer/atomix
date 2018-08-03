@@ -20,19 +20,20 @@ import io.atomix.utils.AbstractIdentifier;
 /**
  * Transaction identifier.
  */
+// TODO: 2018/7/30 by zmyer
 public final class TransactionId extends AbstractIdentifier<String> {
 
-  /**
-   * Creates a new transaction identifier.
-   *
-   * @param id backing identifier value
-   * @return transaction identifier
-   */
-  public static TransactionId from(String id) {
-    return new TransactionId(id);
-  }
+    /**
+     * Creates a new transaction identifier.
+     *
+     * @param id backing identifier value
+     * @return transaction identifier
+     */
+    public static TransactionId from(String id) {
+        return new TransactionId(id);
+    }
 
-  private TransactionId(String id) {
-    super(id);
-  }
+    private TransactionId(String id) {
+        super(id);
+    }
 }

@@ -20,5 +20,6 @@ import io.atomix.utils.Managed;
 /**
  * Managed transaction service.
  */
+// TODO: 2018/7/30 by zmyer
 public interface ManagedTransactionService extends TransactionService, Managed<TransactionService> {
 }

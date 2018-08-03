@@ -45,93 +45,94 @@ import java.util.function.Consumer;
  * When the message is published, it will be queued to be sent to the other side of the connection. Raft guarantees
  * that the message will eventually be received by the client unless the session itself times out or is closed.
  */
+// TODO: 2018/8/1 by zmyer
 public interface Session<C> {
 
-  /**
-   * Returns the session identifier.
-   *
-   * @return The session identifier.
-   */
-  SessionId sessionId();
+    /**
+     * Returns the session identifier.
+     *
+     * @return The session identifier.
+     */
+    SessionId sessionId();
 
-  /**
-   * Returns the session's service name.
-   *
-   * @return The session's service name.
-   */
-  String primitiveName();
+    /**
+     * Returns the session's service name.
+     *
+     * @return The session's service name.
+     */
+    String primitiveName();
 
-  /**
-   * Returns the session's service type.
-   *
-   * @return The session's service type.
-   */
-  PrimitiveType primitiveType();
+    /**
+     * Returns the session's service type.
+     *
+     * @return The session's service type.
+     */
+    PrimitiveType primitiveType();
 
-  /**
-   * Returns the member identifier to which the session belongs.
-   *
-   * @return The member to which the session belongs.
-   */
-  MemberId memberId();
+    /**
+     * Returns the member identifier to which the session belongs.
+     *
+     * @return The member to which the session belongs.
+     */
+    MemberId memberId();
 
-  /**
-   * Returns the session state.
-   *
-   * @return The session state.
-   */
-  State getState();
+    /**
+     * Returns the session state.
+     *
+     * @return The session state.
+     */
+    State getState();
 
-  /**
-   * Publishes an empty event to the session.
-   *
-   * @param eventType the event type
-   */
-  default void publish(EventType eventType) {
-    publish(eventType, null);
-  }
-
-  /**
-   * Publishes an event to the session.
-   *
-   * @param eventType the event identifier
-   * @param event     the event value
-   * @param <T>       the event type
-   */
-  <T> void publish(EventType eventType, T event);
-
-  /**
-   * Publishes an event to the session.
-   *
-   * @param event the event to publish
-   */
-  void publish(PrimitiveEvent event);
-
-  /**
-   * Sends an event to the client via the client proxy.
-   *
-   * @param event the client proxy operation
-   */
-  void accept(Consumer<C> event);
-
-  /**
-   * Session state enums.
-   */
-  enum State {
-    OPEN(true),
-    SUSPICIOUS(true),
-    EXPIRED(false),
-    CLOSED(false);
-
-    private final boolean active;
-
-    State(boolean active) {
-      this.active = active;
+    /**
+     * Publishes an empty event to the session.
+     *
+     * @param eventType the event type
+     */
+    default void publish(EventType eventType) {
+        publish(eventType, null);
     }
 
-    public boolean active() {
-      return active;
+    /**
+     * Publishes an event to the session.
+     *
+     * @param eventType the event identifier
+     * @param event     the event value
+     * @param <T>       the event type
+     */
+    <T> void publish(EventType eventType, T event);
+
+    /**
+     * Publishes an event to the session.
+     *
+     * @param event the event to publish
+     */
+    void publish(PrimitiveEvent event);
+
+    /**
+     * Sends an event to the client via the client proxy.
+     *
+     * @param event the client proxy operation
+     */
+    void accept(Consumer<C> event);
+
+    /**
+     * Session state enums.
+     */
+    enum State {
+        OPEN(true),
+        SUSPICIOUS(true),
+        EXPIRED(false),
+        CLOSED(false);
+
+        private final boolean active;
+
+        State(boolean active) {
+            this.active = active;
+        }
+
+        public boolean active() {
+            return active;
+        }
     }
-  }
 
 }

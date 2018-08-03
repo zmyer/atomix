@@ -24,148 +24,150 @@ import io.atomix.utils.serializer.NamespaceConfig;
 /**
  * Primitive configuration.
  */
-public abstract class PrimitiveConfig<C extends PrimitiveConfig<C>> implements TypedConfig<C, PrimitiveType>, NamedConfig<C> {
-  private static final int DEFAULT_CACHE_SIZE = 1000;
+// TODO: 2018/7/30 by zmyer
+public abstract class PrimitiveConfig<C extends PrimitiveConfig<C>>
+        implements TypedConfig<C, PrimitiveType>, NamedConfig<C> {
+    private static final int DEFAULT_CACHE_SIZE = 1000;
 
-  private String name;
-  private NamespaceConfig namespaceConfig;
-  private PrimitiveProtocolConfig protocolConfig;
-  private boolean cacheEnabled = false;
-  private int cacheSize = DEFAULT_CACHE_SIZE;
-  private boolean readOnly = false;
+    private String name;
+    private NamespaceConfig namespaceConfig;
+    private PrimitiveProtocolConfig protocolConfig;
+    private boolean cacheEnabled = false;
+    private int cacheSize = DEFAULT_CACHE_SIZE;
+    private boolean readOnly = false;
 
-  @Override
-  public String getName() {
-    return name;
-  }
+    @Override
+    public String getName() {
+        return name;
+    }
 
-  @Override
-  @SuppressWarnings("unchecked")
-  public C setName(String name) {
-    this.name = name;
-    return (C) this;
-  }
+    @Override
+    @SuppressWarnings("unchecked")
+    public C setName(String name) {
+        this.name = name;
+        return (C) this;
+    }
 
-  /**
-   * Returns the serializer configuration.
-   *
-   * @return the serializer configuration
-   */
-  public NamespaceConfig getNamespaceConfig() {
-    return namespaceConfig;
-  }
+    /**
+     * Returns the serializer configuration.
+     *
+     * @return the serializer configuration
+     */
+    public NamespaceConfig getNamespaceConfig() {
+        return namespaceConfig;
+    }
 
-  /**
-   * Sets the serializer configuration.
-   *
-   * @param namespaceConfig the serializer configuration
-   * @return the primitive configuration
-   */
-  @SuppressWarnings("unchecked")
-  public C setNamespaceConfig(NamespaceConfig namespaceConfig) {
-    this.namespaceConfig = namespaceConfig;
-    return (C) this;
-  }
+    /**
+     * Sets the serializer configuration.
+     *
+     * @param namespaceConfig the serializer configuration
+     * @return the primitive configuration
+     */
+    @SuppressWarnings("unchecked")
+    public C setNamespaceConfig(NamespaceConfig namespaceConfig) {
+        this.namespaceConfig = namespaceConfig;
+        return (C) this;
+    }
 
-  /**
-   * Returns the protocol configuration.
-   *
-   * @return the protocol configuration
-   */
-  public PrimitiveProtocolConfig getProtocolConfig() {
-    return protocolConfig;
-  }
+    /**
+     * Returns the protocol configuration.
+     *
+     * @return the protocol configuration
+     */
+    public PrimitiveProtocolConfig getProtocolConfig() {
+        return protocolConfig;
+    }
 
-  /**
-   * Sets the protocol configuration.
-   *
-   * @param protocolConfig the protocol configuration
-   * @return the primitive configuration
-   */
-  @SuppressWarnings("unchecked")
-  public C setProtocolConfig(PrimitiveProtocolConfig protocolConfig) {
-    this.protocolConfig = protocolConfig;
-    return (C) this;
-  }
+    /**
+     * Sets the protocol configuration.
+     *
+     * @param protocolConfig the protocol configuration
+     * @return the primitive configuration
+     */
+    @SuppressWarnings("unchecked")
+    public C setProtocolConfig(PrimitiveProtocolConfig protocolConfig) {
+        this.protocolConfig = protocolConfig;
+        return (C) this;
+    }
 
-  /**
-   * Enables caching for the primitive.
-   *
-   * @return the primitive configuration
-   */
-  public C setCacheEnabled() {
-    return setCacheEnabled(true);
-  }
+    /**
+     * Enables caching for the primitive.
+     *
+     * @return the primitive configuration
+     */
+    public C setCacheEnabled() {
+        return setCacheEnabled(true);
+    }
 
-  /**
-   * Sets whether caching is enabled.
-   *
-   * @param cacheEnabled whether caching is enabled
-   * @return the primitive configuration
-   */
-  @SuppressWarnings("unchecked")
-  public C setCacheEnabled(boolean cacheEnabled) {
-    this.cacheEnabled = cacheEnabled;
-    return (C) this;
-  }
+    /**
+     * Sets whether caching is enabled.
+     *
+     * @param cacheEnabled whether caching is enabled
+     * @return the primitive configuration
+     */
+    @SuppressWarnings("unchecked")
+    public C setCacheEnabled(boolean cacheEnabled) {
+        this.cacheEnabled = cacheEnabled;
+        return (C) this;
+    }
 
-  /**
-   * Returns whether caching is enabled.
-   *
-   * @return whether caching is enabled
-   */
-  public boolean isCacheEnabled() {
-    return cacheEnabled;
-  }
+    /**
+     * Returns whether caching is enabled.
+     *
+     * @return whether caching is enabled
+     */
+    public boolean isCacheEnabled() {
+        return cacheEnabled;
+    }
 
-  /**
-   * Sets the cache size.
-   *
-   * @param cacheSize the cache size
-   * @return the primitive configuration
-   */
-  @SuppressWarnings("unchecked")
-  public C setCacheSize(int cacheSize) {
-    this.cacheSize = cacheSize;
-    return (C) this;
-  }
+    /**
+     * Sets the cache size.
+     *
+     * @param cacheSize the cache size
+     * @return the primitive configuration
+     */
+    @SuppressWarnings("unchecked")
+    public C setCacheSize(int cacheSize) {
+        this.cacheSize = cacheSize;
+        return (C) this;
+    }
 
-  /**
-   * Returns the cache size.
-   *
-   * @return the cache size
-   */
-  public int getCacheSize() {
-    return cacheSize;
-  }
+    /**
+     * Returns the cache size.
+     *
+     * @return the cache size
+     */
+    public int getCacheSize() {
+        return cacheSize;
+    }
 
-  /**
-   * Sets the primitive to read-only.
-   *
-   * @return the primitive configuration
-   */
-  public C setReadOnly() {
-    return setReadOnly(true);
-  }
+    /**
+     * Sets the primitive to read-only.
+     *
+     * @return the primitive configuration
+     */
+    public C setReadOnly() {
+        return setReadOnly(true);
+    }
 
-  /**
-   * Sets whether the primitive is read-only.
-   *
-   * @param readOnly whether the primitive is read-only
-   * @return the primitive configuration
-   */
-  @SuppressWarnings("unchecked")
-  public C setReadOnly(boolean readOnly) {
-    this.readOnly = readOnly;
-    return (C) this;
-  }
+    /**
+     * Sets whether the primitive is read-only.
+     *
+     * @param readOnly whether the primitive is read-only
+     * @return the primitive configuration
+     */
+    @SuppressWarnings("unchecked")
+    public C setReadOnly(boolean readOnly) {
+        this.readOnly = readOnly;
+        return (C) this;
+    }
 
-  /**
-   * Returns whether the primitive is read-only.
-   *
-   * @return whether the primitive is read-only
-   */
-  public boolean isReadOnly() {
-    return readOnly;
-  }
+    /**
+     * Returns whether the primitive is read-only.
+     *
+     * @return whether the primitive is read-only
+     */
+    public boolean isReadOnly() {
+        return readOnly;
+    }
 }

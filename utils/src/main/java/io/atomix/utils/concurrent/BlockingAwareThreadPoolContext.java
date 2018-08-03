@@ -20,17 +20,19 @@ import java.util.concurrent.ScheduledExecutorService;
 /**
  * Blocking aware thread pool context.
  */
+// TODO: 2018/8/1 by zmyer
 public class BlockingAwareThreadPoolContext extends ThreadPoolContext {
-  public BlockingAwareThreadPoolContext(ScheduledExecutorService parent) {
-    super(parent);
-  }
-
-  @Override
-  public void execute(Runnable command) {
-    if (isBlocked()) {
-      parent.execute(command);
-    } else {
-      super.execute(command);
+    public BlockingAwareThreadPoolContext(final ScheduledExecutorService parent) {
+        super(parent);
     }
-  }
+
+    // TODO: 2018/8/1 by zmyer
+    @Override
+    public void execute(final Runnable command) {
+        if (isBlocked()) {
+            parent.execute(command);
+        } else {
+            super.execute(command);
+        }
+    }
 }

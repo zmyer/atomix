@@ -19,40 +19,42 @@ import io.atomix.cluster.MemberId;
 import io.atomix.primitive.DistributedPrimitiveBuilder;
 import io.atomix.primitive.PrimitiveManagementService;
 import io.atomix.utils.serializer.Namespace;
+import io.atomix.utils.serializer.NamespaceConfig;
 import io.atomix.utils.serializer.Namespaces;
 import io.atomix.utils.serializer.Serializer;
-import io.atomix.utils.serializer.NamespaceConfig;
 
 /**
  * Builder for constructing new {@link AsyncLeaderElection} instances.
  */
+// TODO: 2018/8/1 by zmyer
 public abstract class LeaderElectionBuilder<T>
-    extends DistributedPrimitiveBuilder<LeaderElectionBuilder<T>, LeaderElectionConfig, LeaderElection<T>> {
+        extends DistributedPrimitiveBuilder<LeaderElectionBuilder<T>, LeaderElectionConfig, LeaderElection<T>> {
 
-  public LeaderElectionBuilder(String name, LeaderElectionConfig config, PrimitiveManagementService managementService) {
-    super(LeaderElectionType.instance(), name, config, managementService);
-  }
-
-  @Override
-  public Serializer serializer() {
-    Serializer serializer = this.serializer;
-    if (serializer == null) {
-      NamespaceConfig config = this.config.getNamespaceConfig();
-      if (config == null) {
-        serializer = Serializer.using(Namespace.builder()
-            .register(Namespaces.BASIC)
-            .register(MemberId.class)
-            .register(MemberId.Type.class)
-            .build());
-      } else {
-        serializer = Serializer.using(Namespace.builder()
-            .register(Namespaces.BASIC)
-            .register(MemberId.class)
-            .register(MemberId.Type.class)
-            .register(new Namespace(config))
-            .build());
-      }
+    public LeaderElectionBuilder(String name, LeaderElectionConfig config,
+            PrimitiveManagementService managementService) {
+        super(LeaderElectionType.instance(), name, config, managementService);
     }
-    return serializer;
-  }
+
+    @Override
+    public Serializer serializer() {
+        Serializer serializer = this.serializer;
+        if (serializer == null) {
+            NamespaceConfig config = this.config.getNamespaceConfig();
+            if (config == null) {
+                serializer = Serializer.using(Namespace.builder()
+                        .register(Namespaces.BASIC)
+                        .register(MemberId.class)
+                        .register(MemberId.Type.class)
+                        .build());
+            } else {
+                serializer = Serializer.using(Namespace.builder()
+                        .register(Namespaces.BASIC)
+                        .register(MemberId.class)
+                        .register(MemberId.Type.class)
+                        .register(new Namespace(config))
+                        .build());
+            }
+        }
+        return serializer;
+    }
 }

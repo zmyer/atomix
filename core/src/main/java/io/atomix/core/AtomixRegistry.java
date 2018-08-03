@@ -24,53 +24,55 @@ import io.atomix.primitive.protocol.PrimitiveProtocolTypeRegistry;
 /**
  * Atomix registry.
  */
+// TODO: 2018/7/30 by zmyer
 public interface AtomixRegistry {
 
-  /**
-   * Creates a new registry.
-   *
-   * @return the registry instance
-   */
-  static AtomixRegistry registry() {
-    return registry(Thread.currentThread().getContextClassLoader());
-  }
+    /**
+     * Creates a new registry.
+     *
+     * @return the registry instance
+     */
+    static AtomixRegistry registry() {
+        return registry(Thread.currentThread().getContextClassLoader());
+    }
 
-  /**
-   * Creates a new registry instance using the given class loader.
-   *
-   * @param classLoader the registry class loader
-   * @return the registry instance
-   */
-  static AtomixRegistry registry(ClassLoader classLoader) {
-    return new ClasspathScanningAtomixRegistry(classLoader);
-  }
+    /**
+     * Creates a new registry instance using the given class loader.
+     *
+     * @param classLoader the registry class loader
+     * @return the registry instance
+     */
+    // TODO: 2018/7/30 by zmyer
+    static AtomixRegistry registry(ClassLoader classLoader) {
+        return new ClasspathScanningAtomixRegistry(classLoader);
+    }
 
-  /**
-   * Returns the partition group types.
-   *
-   * @return the partition group types
-   */
-  PartitionGroupTypeRegistry partitionGroupTypes();
+    /**
+     * Returns the partition group types.
+     *
+     * @return the partition group types
+     */
+    PartitionGroupTypeRegistry partitionGroupTypes();
 
-  /**
-   * Returns the primitive types.
-   *
-   * @return the primitive types
-   */
-  PrimitiveTypeRegistry primitiveTypes();
+    /**
+     * Returns the primitive types.
+     *
+     * @return the primitive types
+     */
+    PrimitiveTypeRegistry primitiveTypes();
 
-  /**
-   * Returns the primitive protocol types.
-   *
-   * @return the primitive protocol types
-   */
-  PrimitiveProtocolTypeRegistry protocolTypes();
+    /**
+     * Returns the primitive protocol types.
+     *
+     * @return the primitive protocol types
+     */
+    PrimitiveProtocolTypeRegistry protocolTypes();
 
-  /**
-   * Returns the registered profile types.
-   *
-   * @return the registered profile types
-   */
-  ProfileRegistry profiles();
+    /**
+     * Returns the registered profile types.
+     *
+     * @return the registered profile types
+     */
+    ProfileRegistry profiles();
 
 }

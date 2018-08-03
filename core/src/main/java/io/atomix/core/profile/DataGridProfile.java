@@ -22,28 +22,29 @@ import io.atomix.protocols.backup.partition.PrimaryBackupPartitionGroupConfig;
 /**
  * In-memory data grid profile.
  */
+// TODO: 2018/7/30 by zmyer
 public class DataGridProfile implements Profile {
-  private static final String NAME = "data-grid";
-  private static final String SYSTEM_GROUP_NAME = "system";
-  private static final String GROUP_NAME = "data";
-  private static final int NUM_PARTITIONS = 71;
+    private static final String NAME = "data-grid";
+    private static final String SYSTEM_GROUP_NAME = "system";
+    private static final String GROUP_NAME = "data";
+    private static final int NUM_PARTITIONS = 71;
 
-  @Override
-  public String name() {
-    return NAME;
-  }
-
-  @Override
-  public void configure(AtomixConfig config) {
-    if (config.getManagementGroup() == null) {
-      config.setManagementGroup(new PrimaryBackupPartitionGroupConfig()
-          .setName(SYSTEM_GROUP_NAME)
-          .setPartitions(1)
-          .setMemberGroupStrategy(MemberGroupStrategy.RACK_AWARE));
+    @Override
+    public String name() {
+        return NAME;
     }
-    config.addPartitionGroup(new PrimaryBackupPartitionGroupConfig()
-        .setName(GROUP_NAME)
-        .setPartitions(NUM_PARTITIONS)
-        .setMemberGroupStrategy(MemberGroupStrategy.RACK_AWARE));
-  }
+
+    @Override
+    public void configure(AtomixConfig config) {
+        if (config.getManagementGroup() == null) {
+            config.setManagementGroup(new PrimaryBackupPartitionGroupConfig()
+                    .setName(SYSTEM_GROUP_NAME)
+                    .setPartitions(1)
+                    .setMemberGroupStrategy(MemberGroupStrategy.RACK_AWARE));
+        }
+        config.addPartitionGroup(new PrimaryBackupPartitionGroupConfig()
+                .setName(GROUP_NAME)
+                .setPartitions(NUM_PARTITIONS)
+                .setMemberGroupStrategy(MemberGroupStrategy.RACK_AWARE));
+    }
 }

@@ -27,45 +27,48 @@ import static com.google.common.base.MoreObjects.toStringHelper;
 /**
  * Atomic counter map primitive type.
  */
-public class AtomicCounterMapType<K> implements PrimitiveType<AtomicCounterMapBuilder<K>, AtomicCounterMapConfig, AtomicCounterMap<K>> {
-  private static final String NAME = "counter-map";
-  private static final AtomicCounterMapType INSTANCE = new AtomicCounterMapType();
+// TODO: 2018/8/1 by zmyer
+public class AtomicCounterMapType<K>
+        implements PrimitiveType<AtomicCounterMapBuilder<K>, AtomicCounterMapConfig, AtomicCounterMap<K>> {
+    private static final String NAME = "counter-map";
+    private static final AtomicCounterMapType INSTANCE = new AtomicCounterMapType();
 
-  /**
-   * Returns a new atomic counter map type.
-   *
-   * @param <K> the key type
-   * @return a new atomic counter map type
-   */
-  @SuppressWarnings("unchecked")
-  public static <K> AtomicCounterMapType<K> instance() {
-    return INSTANCE;
-  }
+    /**
+     * Returns a new atomic counter map type.
+     *
+     * @param <K> the key type
+     * @return a new atomic counter map type
+     */
+    @SuppressWarnings("unchecked")
+    public static <K> AtomicCounterMapType<K> instance() {
+        return INSTANCE;
+    }
 
-  @Override
-  public String name() {
-    return NAME;
-  }
+    @Override
+    public String name() {
+        return NAME;
+    }
 
-  @Override
-  public PrimitiveService newService(ServiceConfig config) {
-    return new DefaultAtomicCounterMapService();
-  }
+    @Override
+    public PrimitiveService newService(ServiceConfig config) {
+        return new DefaultAtomicCounterMapService();
+    }
 
-  @Override
-  public AtomicCounterMapConfig newConfig() {
-    return new AtomicCounterMapConfig();
-  }
+    @Override
+    public AtomicCounterMapConfig newConfig() {
+        return new AtomicCounterMapConfig();
+    }
 
-  @Override
-  public AtomicCounterMapBuilder<K> newBuilder(String name, AtomicCounterMapConfig config, PrimitiveManagementService managementService) {
-    return new AtomicCounterMapProxyBuilder<>(name, config, managementService);
-  }
+    @Override
+    public AtomicCounterMapBuilder<K> newBuilder(String name, AtomicCounterMapConfig config,
+            PrimitiveManagementService managementService) {
+        return new AtomicCounterMapProxyBuilder<>(name, config, managementService);
+    }
 
-  @Override
-  public String toString() {
-    return toStringHelper(this)
-        .add("name", name())
-        .toString();
-  }
+    @Override
+    public String toString() {
+        return toStringHelper(this)
+                .add("name", name())
+                .toString();
+    }
 }

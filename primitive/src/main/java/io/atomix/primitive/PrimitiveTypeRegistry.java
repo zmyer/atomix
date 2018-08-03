@@ -20,21 +20,22 @@ import java.util.Collection;
 /**
  * Primitive registry.
  */
+// TODO: 2018/7/30 by zmyer
 public interface PrimitiveTypeRegistry {
 
-  /**
-   * Returns the collection of registered primitive types.
-   *
-   * @return the collection of registered primitive types
-   */
-  Collection<PrimitiveType> getPrimitiveTypes();
+    /**
+     * Returns the collection of registered primitive types.
+     *
+     * @return the collection of registered primitive types
+     */
+    Collection<PrimitiveType> getPrimitiveTypes();
 
-  /**
-   * Returns the primitive type for the given name.
-   *
-   * @param typeName the primitive type name
-   * @return the primitive type
-   */
-  PrimitiveType getPrimitiveType(String typeName);
+    /**
+     * Returns the primitive type for the given name.
+     *
+     * @param typeName the primitive type name
+     * @return the primitive type
+     */
+    PrimitiveType getPrimitiveType(String typeName);
 
 }

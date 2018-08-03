@@ -17,6 +17,7 @@ package io.atomix.utils.serializer;
 
 import com.esotericsoftware.kryo.io.Input;
 
+// TODO: 2018/7/30 by zmyer
 class KryoInputPool extends KryoIOPool<Input> {
 
     static final int MAX_POOLED_BUFFER_SIZE = 512 * 1024;

@@ -18,13 +18,14 @@ package io.atomix.utils;
 /**
  * Identifier interface for types.
  */
+// TODO: 2018/7/30 by zmyer
 public interface Type {
 
-  /**
-   * Returns the type name.
-   *
-   * @return the type name
-   */
-  String name();
+    /**
+     * Returns the type name.
+     *
+     * @return the type name
+     */
+    String name();
 
 }

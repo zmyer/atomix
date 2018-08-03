@@ -21,41 +21,42 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Asynchronous primitive.
  */
+// TODO: 2018/7/30 by zmyer
 public interface AsyncPrimitive extends DistributedPrimitive {
 
-  /**
-   * Closes the primitive.
-   *
-   * @return a future to be completed once the primitive is closed
-   */
-  CompletableFuture<Void> close();
+    /**
+     * Closes the primitive.
+     *
+     * @return a future to be completed once the primitive is closed
+     */
+    CompletableFuture<Void> close();
 
-  /**
-   * Purges state associated with this primitive.
-   * <p>
-   * Implementations can override and provide appropriate clean up logic for purging
-   * any state state associated with the primitive. Whether modifications made within the
-   * destroy method have local or global visibility is left unspecified.
-   *
-   * @return {@code CompletableFuture} that is completed when the operation completes
-   */
-  default CompletableFuture<Void> delete() {
-    return CompletableFuture.completedFuture(null);
-  }
+    /**
+     * Purges state associated with this primitive.
+     * <p>
+     * Implementations can override and provide appropriate clean up logic for purging
+     * any state state associated with the primitive. Whether modifications made within the
+     * destroy method have local or global visibility is left unspecified.
+     *
+     * @return {@code CompletableFuture} that is completed when the operation completes
+     */
+    default CompletableFuture<Void> delete() {
+        return CompletableFuture.completedFuture(null);
+    }
 
-  /**
-   * Returns a synchronous wrapper around the asynchronous primitive.
-   *
-   * @return the synchronous primitive
-   */
-  SyncPrimitive sync();
+    /**
+     * Returns a synchronous wrapper around the asynchronous primitive.
+     *
+     * @return the synchronous primitive
+     */
+    SyncPrimitive sync();
 
-  /**
-   * Returns a synchronous wrapper around the asynchronous primitive.
-   *
-   * @param operationTimeout the synchronous operation timeout
-   * @return the synchronous primitive
-   */
-  SyncPrimitive sync(Duration operationTimeout);
+    /**
+     * Returns a synchronous wrapper around the asynchronous primitive.
+     *
+     * @param operationTimeout the synchronous operation timeout
+     * @return the synchronous primitive
+     */
+    SyncPrimitive sync(Duration operationTimeout);
 
 }

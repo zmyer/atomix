@@ -23,29 +23,30 @@ import java.nio.charset.StandardCharsets;
 /**
  * Snapshot identifier.
  */
+// TODO: 2018/8/1 by zmyer
 public class PrimitiveId extends AbstractIdentifier<Long> {
 
-  /**
-   * Creates a snapshot ID from the given number.
-   *
-   * @param id the number from which to create the identifier
-   * @return the snapshot identifier
-   */
-  public static PrimitiveId from(long id) {
-    return new PrimitiveId(id);
-  }
+    /**
+     * Creates a snapshot ID from the given number.
+     *
+     * @param id the number from which to create the identifier
+     * @return the snapshot identifier
+     */
+    public static PrimitiveId from(long id) {
+        return new PrimitiveId(id);
+    }
 
-  /**
-   * Creates a snapshot ID from the given string.
-   *
-   * @param id the string from which to create the identifier
-   * @return the snapshot identifier
-   */
-  public static PrimitiveId from(String id) {
-    return from(Hashing.sha256().hashString(id, StandardCharsets.UTF_8).asLong());
-  }
+    /**
+     * Creates a snapshot ID from the given string.
+     *
+     * @param id the string from which to create the identifier
+     * @return the snapshot identifier
+     */
+    public static PrimitiveId from(String id) {
+        return from(Hashing.sha256().hashString(id, StandardCharsets.UTF_8).asLong());
+    }
 
-  public PrimitiveId(Long value) {
-    super(value);
-  }
+    public PrimitiveId(Long value) {
+        super(value);
+    }
 }

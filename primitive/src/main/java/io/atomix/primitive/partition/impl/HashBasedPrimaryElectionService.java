@@ -39,53 +39,60 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * Hash-based primary election service.
  */
+// TODO: 2018/7/31 by zmyer
 public class HashBasedPrimaryElectionService
-    extends AbstractListenerManager<PrimaryElectionEvent, PrimaryElectionEventListener>
-    implements ManagedPrimaryElectionService {
+        extends AbstractListenerManager<PrimaryElectionEvent, PrimaryElectionEventListener>
+        implements ManagedPrimaryElectionService {
 
-  private final Logger log = LoggerFactory.getLogger(getClass());
-  private final ClusterMembershipService clusterMembershipService;
-  private final PartitionGroupMembershipService groupMembershipService;
-  private final ClusterCommunicationService messagingService;
-  private final Map<PartitionId, HashBasedPrimaryElection> elections = Maps.newConcurrentMap();
-  private final PrimaryElectionEventListener primaryElectionListener = this::post;
-  private final ScheduledExecutorService executor;
-  private final AtomicBoolean started = new AtomicBoolean();
+    private final Logger log = LoggerFactory.getLogger(getClass());
+    private final ClusterMembershipService clusterMembershipService;
+    private final PartitionGroupMembershipService groupMembershipService;
+    private final ClusterCommunicationService messagingService;
+    private final Map<PartitionId, HashBasedPrimaryElection> elections = Maps.newConcurrentMap();
+    private final PrimaryElectionEventListener primaryElectionListener = this::post;
+    private final ScheduledExecutorService executor;
+    private final AtomicBoolean started = new AtomicBoolean();
 
-  public HashBasedPrimaryElectionService(ClusterMembershipService clusterMembershipService, PartitionGroupMembershipService groupMembershipService, ClusterCommunicationService messagingService) {
-    this.clusterMembershipService = clusterMembershipService;
-    this.groupMembershipService = groupMembershipService;
-    this.messagingService = messagingService;
-    this.executor = Executors.newSingleThreadScheduledExecutor(Threads.namedThreads("primary-election-%d", log));
-  }
-
-  @Override
-  public PrimaryElection getElectionFor(PartitionId partitionId) {
-    return elections.computeIfAbsent(partitionId, id -> {
-      HashBasedPrimaryElection election = new HashBasedPrimaryElection(partitionId, clusterMembershipService, groupMembershipService, messagingService, executor);
-      election.addListener(primaryElectionListener);
-      return election;
-    });
-  }
-
-  @Override
-  public CompletableFuture<PrimaryElectionService> start() {
-    started.set(true);
-    log.info("Started");
-    return CompletableFuture.completedFuture(this);
-  }
-
-  @Override
-  public boolean isRunning() {
-    return started.get();
-  }
-
-  @Override
-  public CompletableFuture<Void> stop() {
-    if (started.compareAndSet(true, false)) {
-      elections.values().forEach(election -> election.close());
+    // TODO: 2018/7/31 by zmyer
+    public HashBasedPrimaryElectionService(ClusterMembershipService clusterMembershipService,
+            PartitionGroupMembershipService groupMembershipService, ClusterCommunicationService messagingService) {
+        this.clusterMembershipService = clusterMembershipService;
+        this.groupMembershipService = groupMembershipService;
+        this.messagingService = messagingService;
+        this.executor = Executors.newSingleThreadScheduledExecutor(Threads.namedThreads("primary-election-%d", log));
     }
-    executor.shutdownNow();
-    return CompletableFuture.completedFuture(null);
-  }
+
+    // TODO: 2018/7/31 by zmyer
+    @Override
+    public PrimaryElection getElectionFor(PartitionId partitionId) {
+        return elections.computeIfAbsent(partitionId, id -> {
+            HashBasedPrimaryElection election = new HashBasedPrimaryElection(partitionId, clusterMembershipService,
+                    groupMembershipService, messagingService, executor);
+            election.addListener(primaryElectionListener);
+            return election;
+        });
+    }
+
+    // TODO: 2018/8/1 by zmyer
+    @Override
+    public CompletableFuture<PrimaryElectionService> start() {
+        started.set(true);
+        log.info("Started");
+        return CompletableFuture.completedFuture(this);
+    }
+
+    @Override
+    public boolean isRunning() {
+        return started.get();
+    }
+
+    // TODO: 2018/8/1 by zmyer
+    @Override
+    public CompletableFuture<Void> stop() {
+        if (started.compareAndSet(true, false)) {
+            elections.values().forEach(election -> election.close());
+        }
+        executor.shutdownNow();
+        return CompletableFuture.completedFuture(null);
+    }
 }

@@ -20,21 +20,22 @@ import java.util.Collection;
 /**
  * Profile type registry.
  */
+// TODO: 2018/7/30 by zmyer
 public interface ProfileRegistry {
 
-  /**
-   * Returns the collection of all registered profiles.
-   *
-   * @return the collection of all registered profiles
-   */
-  Collection<Profile> getProfiles();
+    /**
+     * Returns the collection of all registered profiles.
+     *
+     * @return the collection of all registered profiles
+     */
+    Collection<Profile> getProfiles();
 
-  /**
-   * Returns the profile for the given name.
-   *
-   * @param name the profile name
-   * @return the profile
-   */
-  Profile getProfile(String name);
+    /**
+     * Returns the profile for the given name.
+     *
+     * @param name the profile name
+     * @return the profile
+     */
+    Profile getProfile(String name);
 
 }

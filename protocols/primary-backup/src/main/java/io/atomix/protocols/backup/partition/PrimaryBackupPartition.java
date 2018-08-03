@@ -35,124 +35,128 @@ import static com.google.common.base.MoreObjects.toStringHelper;
 /**
  * Primary-backup partition.
  */
+// TODO: 2018/7/31 by zmyer
 public class PrimaryBackupPartition implements Partition {
-  private final PartitionId partitionId;
-  private final MemberGroupProvider memberGroupProvider;
-  private PrimaryElection election;
-  private PrimaryBackupPartitionServer server;
-  private PrimaryBackupPartitionClient client;
+    private final PartitionId partitionId;
+    private final MemberGroupProvider memberGroupProvider;
+    private PrimaryElection election;
+    private PrimaryBackupPartitionServer server;
+    private PrimaryBackupPartitionClient client;
 
-  public PrimaryBackupPartition(
-      PartitionId partitionId,
-      MemberGroupProvider memberGroupProvider) {
-    this.partitionId = partitionId;
-    this.memberGroupProvider = memberGroupProvider;
-  }
-
-  @Override
-  public PartitionId id() {
-    return partitionId;
-  }
-
-  @Override
-  public long term() {
-    return election.getTerm().join().term();
-  }
-
-  @Override
-  public Collection<MemberId> members() {
-    return election.getTerm()
-        .join()
-        .candidates()
-        .stream()
-        .map(GroupMember::memberId)
-        .collect(Collectors.toList());
-  }
-
-  @Override
-  public MemberId primary() {
-    return election.getTerm()
-        .join()
-        .primary()
-        .memberId();
-  }
-
-  @Override
-  public Collection<MemberId> backups() {
-    return election.getTerm()
-        .join()
-        .candidates()
-        .stream()
-        .map(GroupMember::memberId)
-        .collect(Collectors.toList());
-  }
-
-  /**
-   * Returns the partition name.
-   *
-   * @return the partition name
-   */
-  public String name() {
-    return String.format("%s-partition-%d", partitionId.group(), partitionId.id());
-  }
-
-  @Override
-  public PrimaryBackupPartitionClient getClient() {
-    return client;
-  }
-
-  /**
-   * Joins the primary-backup partition.
-   */
-  CompletableFuture<Partition> join(
-      PartitionManagementService managementService,
-      ThreadContextFactory threadFactory) {
-    election = managementService.getElectionService().getElectionFor(partitionId);
-    server = new PrimaryBackupPartitionServer(
-        this,
-        managementService,
-        memberGroupProvider,
-        threadFactory);
-    client = new PrimaryBackupPartitionClient(this, managementService, threadFactory);
-    return server.start().thenCompose(v -> client.start()).thenApply(v -> this);
-  }
-
-  /**
-   * Connects to the primary-backup partition.
-   */
-  CompletableFuture<Partition> connect(
-      PartitionManagementService managementService,
-      ThreadContextFactory threadFactory) {
-    election = managementService.getElectionService().getElectionFor(partitionId);
-    client = new PrimaryBackupPartitionClient(this, managementService, threadFactory);
-    return client.start().thenApply(v -> this);
-  }
-
-  /**
-   * Closes the primary-backup partition.
-   */
-  public CompletableFuture<Void> close() {
-    if (client == null) {
-      return CompletableFuture.completedFuture(null);
+    public PrimaryBackupPartition(
+            PartitionId partitionId,
+            MemberGroupProvider memberGroupProvider) {
+        this.partitionId = partitionId;
+        this.memberGroupProvider = memberGroupProvider;
     }
 
-    CompletableFuture<Void> future = new CompletableFuture<>();
-    client.stop().whenComplete((clientResult, clientError) -> {
-      if (server != null) {
-        server.stop().whenComplete((serverResult, serverError) -> {
-          future.complete(null);
-        });
-      } else {
-        future.complete(null);
-      }
-    });
-    return future;
-  }
+    @Override
+    public PartitionId id() {
+        return partitionId;
+    }
 
-  @Override
-  public String toString() {
-    return toStringHelper(this)
-        .add("id", partitionId)
-        .toString();
-  }
+    @Override
+    public long term() {
+        return election.getTerm().join().term();
+    }
+
+    @Override
+    public Collection<MemberId> members() {
+        return election.getTerm()
+                .join()
+                .candidates()
+                .stream()
+                .map(GroupMember::memberId)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public MemberId primary() {
+        return election.getTerm()
+                .join()
+                .primary()
+                .memberId();
+    }
+
+    @Override
+    public Collection<MemberId> backups() {
+        return election.getTerm()
+                .join()
+                .candidates()
+                .stream()
+                .map(GroupMember::memberId)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Returns the partition name.
+     *
+     * @return the partition name
+     */
+    public String name() {
+        return String.format("%s-partition-%d", partitionId.group(), partitionId.id());
+    }
+
+    // TODO: 2018/8/1 by zmyer
+    @Override
+    public PrimaryBackupPartitionClient getClient() {
+        return client;
+    }
+
+    /**
+     * Joins the primary-backup partition.
+     */
+    // TODO: 2018/8/1 by zmyer
+    CompletableFuture<Partition> join(
+            final PartitionManagementService managementService,
+            final ThreadContextFactory threadFactory) {
+        election = managementService.getElectionService().getElectionFor(partitionId);
+        server = new PrimaryBackupPartitionServer(
+                this,
+                managementService,
+                memberGroupProvider,
+                threadFactory);
+        client = new PrimaryBackupPartitionClient(this, managementService, threadFactory);
+        return server.start().thenCompose(v -> client.start()).thenApply(v -> this);
+    }
+
+    /**
+     * Connects to the primary-backup partition.
+     */
+    // TODO: 2018/8/1 by zmyer
+    CompletableFuture<Partition> connect(
+            PartitionManagementService managementService,
+            ThreadContextFactory threadFactory) {
+        election = managementService.getElectionService().getElectionFor(partitionId);
+        client = new PrimaryBackupPartitionClient(this, managementService, threadFactory);
+        return client.start().thenApply(v -> this);
+    }
+
+    /**
+     * Closes the primary-backup partition.
+     */
+    public CompletableFuture<Void> close() {
+        if (client == null) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        client.stop().whenComplete((clientResult, clientError) -> {
+            if (server != null) {
+                server.stop().whenComplete((serverResult, serverError) -> {
+                    future.complete(null);
+                });
+            } else {
+                future.complete(null);
+            }
+        });
+        return future;
+    }
+
+    @Override
+    public String toString() {
+        return toStringHelper(this)
+                .add("id", partitionId)
+                .toString();
+    }
 }

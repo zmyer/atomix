@@ -20,21 +20,22 @@ import java.util.Collection;
 /**
  * Partition group type registry.
  */
+// TODO: 2018/7/30 by zmyer
 public interface PartitionGroupTypeRegistry {
 
-  /**
-   * Returns the collection of partition group type configurations.
-   *
-   * @return the collection of partition group type configurations
-   */
-  Collection<PartitionGroup.Type> getGroupTypes();
+    /**
+     * Returns the collection of partition group type configurations.
+     *
+     * @return the collection of partition group type configurations
+     */
+    Collection<PartitionGroup.Type> getGroupTypes();
 
-  /**
-   * Returns the partition group type with the given name.
-   *
-   * @param name the partition group type name
-   * @return the group type
-   */
-  PartitionGroup.Type getGroupType(String name);
+    /**
+     * Returns the partition group type with the given name.
+     *
+     * @param name the partition group type name
+     * @return the group type
+     */
+    PartitionGroup.Type getGroupType(String name);
 
 }

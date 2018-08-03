@@ -20,5 +20,6 @@ import io.atomix.utils.Managed;
 /**
  * Managed messaging service.
  */
+// TODO: 2018/7/30 by zmyer
 public interface ManagedMessagingService extends MessagingService, Managed<MessagingService> {
 }

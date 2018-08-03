@@ -20,72 +20,73 @@ import io.atomix.utils.config.Config;
 /**
  * Group membership protocol configuration.
  */
+// TODO: 2018/7/30 by zmyer
 public class GroupMembershipConfig implements Config {
-  private static final int DEFAULT_HEARTBEAT_INTERVAL = 100;
-  private static final int DEFAULT_FAILURE_TIMEOUT = 10000;
-  private static final int DEFAULT_PHI_FAILURE_THRESHOLD = 10;
+    private static final int DEFAULT_HEARTBEAT_INTERVAL = 100;
+    private static final int DEFAULT_FAILURE_TIMEOUT = 10000;
+    private static final int DEFAULT_PHI_FAILURE_THRESHOLD = 10;
 
-  private int heartbeatInterval = DEFAULT_HEARTBEAT_INTERVAL;
-  private int phiFailureThreshold = DEFAULT_PHI_FAILURE_THRESHOLD;
-  private int failureTimeout = DEFAULT_FAILURE_TIMEOUT;
+    private int heartbeatInterval = DEFAULT_HEARTBEAT_INTERVAL;
+    private int phiFailureThreshold = DEFAULT_PHI_FAILURE_THRESHOLD;
+    private int failureTimeout = DEFAULT_FAILURE_TIMEOUT;
 
-  /**
-   * Returns the failure detector heartbeat interval.
-   *
-   * @return the failure detector heartbeat interval
-   */
-  public int getHeartbeatInterval() {
-    return heartbeatInterval;
-  }
+    /**
+     * Returns the failure detector heartbeat interval.
+     *
+     * @return the failure detector heartbeat interval
+     */
+    public int getHeartbeatInterval() {
+        return heartbeatInterval;
+    }
 
-  /**
-   * Sets the failure detector heartbeat interval.
-   *
-   * @param heartbeatInterval the failure detector heartbeat interval
-   * @return the group membership configuration
-   */
-  public GroupMembershipConfig setHeartbeatInterval(int heartbeatInterval) {
-    this.heartbeatInterval = heartbeatInterval;
-    return this;
-  }
+    /**
+     * Sets the failure detector heartbeat interval.
+     *
+     * @param heartbeatInterval the failure detector heartbeat interval
+     * @return the group membership configuration
+     */
+    public GroupMembershipConfig setHeartbeatInterval(int heartbeatInterval) {
+        this.heartbeatInterval = heartbeatInterval;
+        return this;
+    }
 
-  /**
-   * Returns the failure detector threshold.
-   *
-   * @return the failure detector threshold
-   */
-  public int getPhiFailureThreshold() {
-    return phiFailureThreshold;
-  }
+    /**
+     * Returns the failure detector threshold.
+     *
+     * @return the failure detector threshold
+     */
+    public int getPhiFailureThreshold() {
+        return phiFailureThreshold;
+    }
 
-  /**
-   * Sets the failure detector threshold.
-   *
-   * @param phiFailureThreshold the failure detector threshold
-   * @return the group membership configuration
-   */
-  public GroupMembershipConfig setPhiFailureThreshold(int phiFailureThreshold) {
-    this.phiFailureThreshold = phiFailureThreshold;
-    return this;
-  }
+    /**
+     * Sets the failure detector threshold.
+     *
+     * @param phiFailureThreshold the failure detector threshold
+     * @return the group membership configuration
+     */
+    public GroupMembershipConfig setPhiFailureThreshold(int phiFailureThreshold) {
+        this.phiFailureThreshold = phiFailureThreshold;
+        return this;
+    }
 
-  /**
-   * Returns the base failure timeout.
-   *
-   * @return the base failure timeout
-   */
-  public int getFailureTimeout() {
-    return failureTimeout;
-  }
+    /**
+     * Returns the base failure timeout.
+     *
+     * @return the base failure timeout
+     */
+    public int getFailureTimeout() {
+        return failureTimeout;
+    }
 
-  /**
-   * Sets the base failure timeout.
-   *
-   * @param failureTimeout the base failure timeout
-   * @return the group membership configuration
-   */
-  public GroupMembershipConfig setFailureTimeout(int failureTimeout) {
-    this.failureTimeout = failureTimeout;
-    return this;
-  }
+    /**
+     * Sets the base failure timeout.
+     *
+     * @param failureTimeout the base failure timeout
+     * @return the group membership configuration
+     */
+    public GroupMembershipConfig setFailureTimeout(int failureTimeout) {
+        this.failureTimeout = failureTimeout;
+        return this;
+    }
 }

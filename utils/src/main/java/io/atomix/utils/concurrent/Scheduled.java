@@ -21,11 +21,12 @@ package io.atomix.utils.concurrent;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
+// TODO: 2018/7/31 by zmyer
 public interface Scheduled {
 
-  /**
-   * Cancels the scheduled task.
-   */
-  void cancel();
+    /**
+     * Cancels the scheduled task.
+     */
+    void cancel();
 
 }

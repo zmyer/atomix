@@ -18,21 +18,22 @@ package io.atomix.utils.concurrent;
 /**
  * Abstract thread context.
  */
+// TODO: 2018/8/1 by zmyer
 public abstract class AbstractThreadContext implements ThreadContext {
-  private volatile boolean blocked;
+    private volatile boolean blocked;
 
-  @Override
-  public boolean isBlocked() {
-    return blocked;
-  }
+    @Override
+    public boolean isBlocked() {
+        return blocked;
+    }
 
-  @Override
-  public void block() {
-    blocked = true;
-  }
+    @Override
+    public void block() {
+        blocked = true;
+    }
 
-  @Override
-  public void unblock() {
-    blocked = false;
-  }
+    @Override
+    public void unblock() {
+        blocked = false;
+    }
 }

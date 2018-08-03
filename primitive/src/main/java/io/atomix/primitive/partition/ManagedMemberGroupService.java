@@ -20,5 +20,6 @@ import io.atomix.utils.Managed;
 /**
  * Manage member group service.
  */
+// TODO: 2018/8/1 by zmyer
 public interface ManagedMemberGroupService extends MemberGroupService, Managed<MemberGroupService> {
 }

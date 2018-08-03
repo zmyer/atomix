@@ -18,13 +18,14 @@ package io.atomix.utils.config;
 /**
  * Interface for objects configured via a configuration object.
  */
+// TODO: 2018/7/30 by zmyer
 public interface Configured<T extends Config> {
 
-  /**
-   * Returns the object configuration.
-   *
-   * @return the object configuration
-   */
-  T config();
+    /**
+     * Returns the object configuration.
+     *
+     * @return the object configuration
+     */
+    T config();
 
 }

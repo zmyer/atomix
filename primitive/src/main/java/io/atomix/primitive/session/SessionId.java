@@ -20,22 +20,23 @@ import io.atomix.utils.AbstractIdentifier;
 /**
  * Session identifier.
  */
+// TODO: 2018/8/1 by zmyer
 public class SessionId extends AbstractIdentifier<Long> {
 
-  /**
-   * Returns a new session ID from the given identifier.
-   *
-   * @param id the identifier from which to create a session ID
-   * @return a new session identifier
-   */
-  public static SessionId from(long id) {
-    return new SessionId(id);
-  }
+    /**
+     * Returns a new session ID from the given identifier.
+     *
+     * @param id the identifier from which to create a session ID
+     * @return a new session identifier
+     */
+    public static SessionId from(long id) {
+        return new SessionId(id);
+    }
 
-  protected SessionId() {
-  }
+    protected SessionId() {
+    }
 
-  public SessionId(Long value) {
-    super(value);
-  }
+    public SessionId(Long value) {
+        super(value);
+    }
 }

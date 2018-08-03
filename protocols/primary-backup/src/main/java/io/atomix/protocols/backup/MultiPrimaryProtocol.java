@@ -38,204 +38,208 @@ import static com.google.common.base.MoreObjects.toStringHelper;
 /**
  * Multi-primary protocol.
  */
+// TODO: 2018/8/1 by zmyer
 public class MultiPrimaryProtocol implements PrimitiveProtocol {
-  public static final Type TYPE = new Type();
+    public static final Type TYPE = new Type();
 
-  /**
-   * Returns a new multi-primary protocol builder.
-   *
-   * @return a new multi-primary protocol builder
-   */
-  public static Builder builder() {
-    return new Builder(new MultiPrimaryProtocolConfig());
-  }
-
-  /**
-   * Returns a new multi-primary protocol builder for the given group.
-   *
-   * @param group the partition group
-   * @return a new multi-primary protocol builder for the given group
-   */
-  public static Builder builder(String group) {
-    return new Builder(new MultiPrimaryProtocolConfig().setGroup(group));
-  }
-
-  /**
-   * Multi-primary protocol type.
-   */
-  public static final class Type implements PrimitiveProtocol.Type<MultiPrimaryProtocolConfig> {
-    private static final String NAME = "multi-primary";
-
-    @Override
-    public String name() {
-      return NAME;
-    }
-
-    @Override
-    public MultiPrimaryProtocolConfig newConfig() {
-      return new MultiPrimaryProtocolConfig();
-    }
-
-    @Override
-    public PrimitiveProtocol newProtocol(MultiPrimaryProtocolConfig config) {
-      return new MultiPrimaryProtocol(config);
-    }
-  }
-
-  protected final MultiPrimaryProtocolConfig config;
-
-  protected MultiPrimaryProtocol(MultiPrimaryProtocolConfig config) {
-    this.config = config;
-  }
-
-  @Override
-  public PrimitiveProtocol.Type type() {
-    return TYPE;
-  }
-
-  @Override
-  public String group() {
-    return config.getGroup();
-  }
-
-  @Override
-  public <S> ProxyClient<S> newProxy(String primitiveName, PrimitiveType primitiveType, Class<S> serviceType, ServiceConfig serviceConfig, PartitionService partitionService) {
-    Collection<SessionClient> partitions = partitionService.getPartitionGroup(this)
-        .getPartitions()
-        .stream()
-        .map(partition -> ((PrimaryBackupPartition) partition).getClient()
-            .sessionBuilder(primitiveName, primitiveType, serviceConfig)
-            .withConsistency(config.getConsistency())
-            .withReplication(config.getReplication())
-            .withRecovery(config.getRecovery())
-            .withNumBackups(config.getBackups())
-            .withMaxRetries(config.getMaxRetries())
-            .withRetryDelay(config.getRetryDelay())
-            .build())
-        .collect(Collectors.toList());
-    return new DefaultProxyClient<>(primitiveName, primitiveType, this, serviceType, partitions, config.getPartitioner());
-  }
-
-  @Override
-  public String toString() {
-    return toStringHelper(this)
-        .add("type", type())
-        .add("group", group())
-        .toString();
-  }
-
-  /**
-   * Multi-primary protocol builder.
-   */
-  public static class Builder extends PrimitiveProtocol.Builder<MultiPrimaryProtocolConfig, MultiPrimaryProtocol> {
-    protected Builder(MultiPrimaryProtocolConfig config) {
-      super(config);
+    /**
+     * Returns a new multi-primary protocol builder.
+     *
+     * @return a new multi-primary protocol builder
+     */
+    public static Builder builder() {
+        return new Builder(new MultiPrimaryProtocolConfig());
     }
 
     /**
-     * Sets the protocol partitioner.
+     * Returns a new multi-primary protocol builder for the given group.
      *
-     * @param partitioner the protocol partitioner
-     * @return the protocol builder
+     * @param group the partition group
+     * @return a new multi-primary protocol builder for the given group
      */
-    public Builder withPartitioner(Partitioner<String> partitioner) {
-      config.setPartitioner(partitioner);
-      return this;
+    public static Builder builder(String group) {
+        return new Builder(new MultiPrimaryProtocolConfig().setGroup(group));
     }
 
     /**
-     * Sets the protocol consistency model.
-     *
-     * @param consistency the protocol consistency model
-     * @return the protocol builder
+     * Multi-primary protocol type.
      */
-    public Builder withConsistency(Consistency consistency) {
-      config.setConsistency(consistency);
-      return this;
+    public static final class Type implements PrimitiveProtocol.Type<MultiPrimaryProtocolConfig> {
+        private static final String NAME = "multi-primary";
+
+        @Override
+        public String name() {
+            return NAME;
+        }
+
+        @Override
+        public MultiPrimaryProtocolConfig newConfig() {
+            return new MultiPrimaryProtocolConfig();
+        }
+
+        @Override
+        public PrimitiveProtocol newProtocol(MultiPrimaryProtocolConfig config) {
+            return new MultiPrimaryProtocol(config);
+        }
     }
 
-    /**
-     * Sets the protocol replication strategy.
-     *
-     * @param replication the protocol replication strategy
-     * @return the protocol builder
-     */
-    public Builder withReplication(Replication replication) {
-      config.setReplication(replication);
-      return this;
-    }
+    protected final MultiPrimaryProtocolConfig config;
 
-    /**
-     * Sets the protocol recovery strategy.
-     *
-     * @param recovery the protocol recovery strategy
-     * @return the protocol builder
-     */
-    public Builder withRecovery(Recovery recovery) {
-      config.setRecovery(recovery);
-      return this;
-    }
-
-    /**
-     * Sets the number of backups.
-     *
-     * @param numBackups the number of backups
-     * @return the protocol builder
-     */
-    public Builder withBackups(int numBackups) {
-      config.setBackups(numBackups);
-      return this;
-    }
-
-    /**
-     * Sets the maximum number of retries before an operation can be failed.
-     *
-     * @param maxRetries the maximum number of retries before an operation can be failed
-     * @return the proxy builder
-     */
-    public Builder withMaxRetries(int maxRetries) {
-      config.setMaxRetries(maxRetries);
-      return this;
-    }
-
-    /**
-     * Sets the operation retry delay.
-     *
-     * @param retryDelayMillis the delay between operation retries in milliseconds
-     * @return the proxy builder
-     */
-    public Builder withRetryDelayMillis(long retryDelayMillis) {
-      config.setRetryDelayMillis(retryDelayMillis);
-      return this;
-    }
-
-    /**
-     * Sets the operation retry delay.
-     *
-     * @param retryDelay the delay between operation retries
-     * @param timeUnit   the delay time unit
-     * @return the proxy builder
-     * @throws NullPointerException if the time unit is null
-     */
-    public Builder withRetryDelay(long retryDelay, TimeUnit timeUnit) {
-      return withRetryDelay(Duration.ofMillis(timeUnit.toMillis(retryDelay)));
-    }
-
-    /**
-     * Sets the operation retry delay.
-     *
-     * @param retryDelay the delay between operation retries
-     * @return the proxy builder
-     * @throws NullPointerException if the delay is null
-     */
-    public Builder withRetryDelay(Duration retryDelay) {
-      config.setRetryDelay(retryDelay);
-      return this;
+    protected MultiPrimaryProtocol(MultiPrimaryProtocolConfig config) {
+        this.config = config;
     }
 
     @Override
-    public MultiPrimaryProtocol build() {
-      return new MultiPrimaryProtocol(config);
+    public PrimitiveProtocol.Type type() {
+        return TYPE;
     }
-  }
+
+    @Override
+    public String group() {
+        return config.getGroup();
+    }
+
+    // TODO: 2018/8/1 by zmyer
+    @Override
+    public <S> ProxyClient<S> newProxy(String primitiveName, PrimitiveType primitiveType, Class<S> serviceType,
+            ServiceConfig serviceConfig, PartitionService partitionService) {
+        final Collection<SessionClient> partitions = partitionService.getPartitionGroup(this)
+                .getPartitions()
+                .stream()
+                .map(partition -> ((PrimaryBackupPartition) partition).getClient()
+                        .sessionBuilder(primitiveName, primitiveType, serviceConfig)
+                        .withConsistency(config.getConsistency())
+                        .withReplication(config.getReplication())
+                        .withRecovery(config.getRecovery())
+                        .withNumBackups(config.getBackups())
+                        .withMaxRetries(config.getMaxRetries())
+                        .withRetryDelay(config.getRetryDelay())
+                        .build())
+                .collect(Collectors.toList());
+        return new DefaultProxyClient<>(primitiveName, primitiveType, this, serviceType, partitions,
+                config.getPartitioner());
+    }
+
+    @Override
+    public String toString() {
+        return toStringHelper(this)
+                .add("type", type())
+                .add("group", group())
+                .toString();
+    }
+
+    /**
+     * Multi-primary protocol builder.
+     */
+    public static class Builder extends PrimitiveProtocol.Builder<MultiPrimaryProtocolConfig, MultiPrimaryProtocol> {
+        protected Builder(MultiPrimaryProtocolConfig config) {
+            super(config);
+        }
+
+        /**
+         * Sets the protocol partitioner.
+         *
+         * @param partitioner the protocol partitioner
+         * @return the protocol builder
+         */
+        public Builder withPartitioner(Partitioner<String> partitioner) {
+            config.setPartitioner(partitioner);
+            return this;
+        }
+
+        /**
+         * Sets the protocol consistency model.
+         *
+         * @param consistency the protocol consistency model
+         * @return the protocol builder
+         */
+        public Builder withConsistency(Consistency consistency) {
+            config.setConsistency(consistency);
+            return this;
+        }
+
+        /**
+         * Sets the protocol replication strategy.
+         *
+         * @param replication the protocol replication strategy
+         * @return the protocol builder
+         */
+        public Builder withReplication(Replication replication) {
+            config.setReplication(replication);
+            return this;
+        }
+
+        /**
+         * Sets the protocol recovery strategy.
+         *
+         * @param recovery the protocol recovery strategy
+         * @return the protocol builder
+         */
+        public Builder withRecovery(Recovery recovery) {
+            config.setRecovery(recovery);
+            return this;
+        }
+
+        /**
+         * Sets the number of backups.
+         *
+         * @param numBackups the number of backups
+         * @return the protocol builder
+         */
+        public Builder withBackups(int numBackups) {
+            config.setBackups(numBackups);
+            return this;
+        }
+
+        /**
+         * Sets the maximum number of retries before an operation can be failed.
+         *
+         * @param maxRetries the maximum number of retries before an operation can be failed
+         * @return the proxy builder
+         */
+        public Builder withMaxRetries(int maxRetries) {
+            config.setMaxRetries(maxRetries);
+            return this;
+        }
+
+        /**
+         * Sets the operation retry delay.
+         *
+         * @param retryDelayMillis the delay between operation retries in milliseconds
+         * @return the proxy builder
+         */
+        public Builder withRetryDelayMillis(long retryDelayMillis) {
+            config.setRetryDelayMillis(retryDelayMillis);
+            return this;
+        }
+
+        /**
+         * Sets the operation retry delay.
+         *
+         * @param retryDelay the delay between operation retries
+         * @param timeUnit   the delay time unit
+         * @return the proxy builder
+         * @throws NullPointerException if the time unit is null
+         */
+        public Builder withRetryDelay(long retryDelay, TimeUnit timeUnit) {
+            return withRetryDelay(Duration.ofMillis(timeUnit.toMillis(retryDelay)));
+        }
+
+        /**
+         * Sets the operation retry delay.
+         *
+         * @param retryDelay the delay between operation retries
+         * @return the proxy builder
+         * @throws NullPointerException if the delay is null
+         */
+        public Builder withRetryDelay(Duration retryDelay) {
+            config.setRetryDelay(retryDelay);
+            return this;
+        }
+
+        @Override
+        public MultiPrimaryProtocol build() {
+            return new MultiPrimaryProtocol(config);
+        }
+    }
 }

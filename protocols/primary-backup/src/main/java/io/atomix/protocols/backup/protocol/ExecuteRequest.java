@@ -23,42 +23,45 @@ import static com.google.common.base.MoreObjects.toStringHelper;
 /**
  * Operation request.
  */
+// TODO: 2018/7/31 by zmyer
 public class ExecuteRequest extends PrimitiveRequest {
 
-  public static ExecuteRequest request(PrimitiveDescriptor primitive, long session, MemberId node, PrimitiveOperation operation) {
-    return new ExecuteRequest(primitive, session, node, operation);
-  }
+    // TODO: 2018/8/1 by zmyer
+    public static ExecuteRequest request(PrimitiveDescriptor primitive, long session, MemberId node,
+            PrimitiveOperation operation) {
+        return new ExecuteRequest(primitive, session, node, operation);
+    }
 
-  private final long session;
-  private final MemberId node;
-  private final PrimitiveOperation operation;
+    private final long session;
+    private final MemberId node;
+    private final PrimitiveOperation operation;
 
-  public ExecuteRequest(PrimitiveDescriptor primitive, long session, MemberId node, PrimitiveOperation operation) {
-    super(primitive);
-    this.session = session;
-    this.node = node;
-    this.operation = operation;
-  }
+    public ExecuteRequest(PrimitiveDescriptor primitive, long session, MemberId node, PrimitiveOperation operation) {
+        super(primitive);
+        this.session = session;
+        this.node = node;
+        this.operation = operation;
+    }
 
-  public long session() {
-    return session;
-  }
+    public long session() {
+        return session;
+    }
 
-  public MemberId node() {
-    return node;
-  }
+    public MemberId node() {
+        return node;
+    }
 
-  public PrimitiveOperation operation() {
-    return operation;
-  }
+    public PrimitiveOperation operation() {
+        return operation;
+    }
 
-  @Override
-  public String toString() {
-    return toStringHelper(this)
-        .add("session", session())
-        .add("node", node())
-        .add("primitive", primitive())
-        .add("operation", operation())
-        .toString();
-  }
+    @Override
+    public String toString() {
+        return toStringHelper(this)
+                .add("session", session())
+                .add("node", node())
+                .add("primitive", primitive())
+                .add("operation", operation())
+                .toString();
+    }
 }

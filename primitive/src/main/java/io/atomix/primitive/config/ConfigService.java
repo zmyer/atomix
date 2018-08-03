@@ -18,26 +18,27 @@ package io.atomix.primitive.config;
 /**
  * Configuration service.
  */
+// TODO: 2018/7/30 by zmyer
 public interface ConfigService {
 
-  /**
-   * Returns the registered configuration for the given primitive.
-   *
-   * @param primitiveName the primitive name
-   * @param <C>           the configuration type
-   * @return the primitive configuration
-   */
-  <C extends PrimitiveConfig<C>> C getConfig(String primitiveName);
+    /**
+     * Returns the registered configuration for the given primitive.
+     *
+     * @param primitiveName the primitive name
+     * @param <C>           the configuration type
+     * @return the primitive configuration
+     */
+    <C extends PrimitiveConfig<C>> C getConfig(String primitiveName);
 
-  /**
-   * Adds a primitive configuration.
-   * <p>
-   * If a configuration is already registered it will not be overridden. The returned configuration represents the
-   * configuration that will be used when constructing a new primitive with the given name.
-   *
-   * @param config the configuration to add
-   * @return the registered primitive configuration
-   */
-  PrimitiveConfig addConfig(PrimitiveConfig config);
+    /**
+     * Adds a primitive configuration.
+     * <p>
+     * If a configuration is already registered it will not be overridden. The returned configuration represents the
+     * configuration that will be used when constructing a new primitive with the given name.
+     *
+     * @param config the configuration to add
+     * @return the registered primitive configuration
+     */
+    PrimitiveConfig addConfig(PrimitiveConfig config);
 
 }

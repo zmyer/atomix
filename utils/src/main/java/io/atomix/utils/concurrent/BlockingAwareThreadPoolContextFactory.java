@@ -26,28 +26,32 @@ import static io.atomix.utils.concurrent.Threads.namedThreads;
 /**
  * Thread pool context factory.
  */
+// TODO: 2018/8/1 by zmyer
 public class BlockingAwareThreadPoolContextFactory implements ThreadContextFactory {
-  private final ScheduledExecutorService executor;
+    private final ScheduledExecutorService executor;
 
-  public BlockingAwareThreadPoolContextFactory(String name, int threadPoolSize, Logger logger) {
-    this(threadPoolSize, namedThreads(name, logger));
-  }
+    // TODO: 2018/8/1 by zmyer
+    public BlockingAwareThreadPoolContextFactory(final String name, final int threadPoolSize, final Logger logger) {
+        this(threadPoolSize, namedThreads(name, logger));
+    }
 
-  public BlockingAwareThreadPoolContextFactory(int threadPoolSize, ThreadFactory threadFactory) {
-    this(Executors.newScheduledThreadPool(threadPoolSize, threadFactory));
-  }
+    // TODO: 2018/8/1 by zmyer
+    public BlockingAwareThreadPoolContextFactory(final int threadPoolSize, final ThreadFactory threadFactory) {
+        this(Executors.newScheduledThreadPool(threadPoolSize, threadFactory));
+    }
 
-  public BlockingAwareThreadPoolContextFactory(ScheduledExecutorService executor) {
-    this.executor = executor;
-  }
+    // TODO: 2018/8/1 by zmyer
+    public BlockingAwareThreadPoolContextFactory(final ScheduledExecutorService executor) {
+        this.executor = executor;
+    }
 
-  @Override
-  public ThreadContext createContext() {
-    return new BlockingAwareThreadPoolContext(executor);
-  }
+    @Override
+    public ThreadContext createContext() {
+        return new BlockingAwareThreadPoolContext(executor);
+    }
 
-  @Override
-  public void close() {
-    executor.shutdownNow();
-  }
+    @Override
+    public void close() {
+        executor.shutdownNow();
+    }
 }

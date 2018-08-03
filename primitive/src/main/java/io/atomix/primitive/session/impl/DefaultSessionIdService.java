@@ -26,29 +26,30 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * Default session ID service.
  */
+// TODO: 2018/8/1 by zmyer
 public class DefaultSessionIdService implements ManagedSessionIdService {
-  private final Random random = new Random();
-  private final AtomicBoolean started = new AtomicBoolean();
+    private final Random random = new Random();
+    private final AtomicBoolean started = new AtomicBoolean();
 
-  @Override
-  public CompletableFuture<SessionId> nextSessionId() {
-    return CompletableFuture.completedFuture(SessionId.from(random.nextLong()));
-  }
+    @Override
+    public CompletableFuture<SessionId> nextSessionId() {
+        return CompletableFuture.completedFuture(SessionId.from(random.nextLong()));
+    }
 
-  @Override
-  public CompletableFuture<SessionIdService> start() {
-    started.set(true);
-    return CompletableFuture.completedFuture(this);
-  }
+    @Override
+    public CompletableFuture<SessionIdService> start() {
+        started.set(true);
+        return CompletableFuture.completedFuture(this);
+    }
 
-  @Override
-  public boolean isRunning() {
-    return started.get();
-  }
+    @Override
+    public boolean isRunning() {
+        return started.get();
+    }
 
-  @Override
-  public CompletableFuture<Void> stop() {
-    started.set(false);
-    return CompletableFuture.completedFuture(null);
-  }
+    @Override
+    public CompletableFuture<Void> stop() {
+        started.set(false);
+        return CompletableFuture.completedFuture(null);
+    }
 }

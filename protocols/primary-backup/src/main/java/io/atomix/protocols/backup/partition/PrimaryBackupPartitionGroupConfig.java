@@ -22,38 +22,39 @@ import io.atomix.primitive.partition.PartitionGroupConfig;
 /**
  * Primary-backup partition group configuration.
  */
+// TODO: 2018/7/30 by zmyer
 public class PrimaryBackupPartitionGroupConfig extends PartitionGroupConfig<PrimaryBackupPartitionGroupConfig> {
-  private static final int DEFAULT_PARTITIONS = 71;
+    private static final int DEFAULT_PARTITIONS = 71;
 
-  private String memberGroupStrategy = MemberGroupStrategy.NODE_AWARE.name();
+    private String memberGroupStrategy = MemberGroupStrategy.NODE_AWARE.name();
 
-  @Override
-  public PartitionGroup.Type getType() {
-    return PrimaryBackupPartitionGroup.TYPE;
-  }
+    @Override
+    public PartitionGroup.Type getType() {
+        return PrimaryBackupPartitionGroup.TYPE;
+    }
 
-  @Override
-  protected int getDefaultPartitions() {
-    return DEFAULT_PARTITIONS;
-  }
+    @Override
+    protected int getDefaultPartitions() {
+        return DEFAULT_PARTITIONS;
+    }
 
-  /**
-   * Returns the member group provider.
-   *
-   * @return the member group provider
-   */
-  public MemberGroupStrategy getMemberGroupProvider() {
-    return MemberGroupStrategy.valueOf(memberGroupStrategy);
-  }
+    /**
+     * Returns the member group provider.
+     *
+     * @return the member group provider
+     */
+    public MemberGroupStrategy getMemberGroupProvider() {
+        return MemberGroupStrategy.valueOf(memberGroupStrategy);
+    }
 
-  /**
-   * Sets the member group strategy.
-   *
-   * @param memberGroupStrategy the member group strategy
-   * @return the partition group configuration
-   */
-  public PrimaryBackupPartitionGroupConfig setMemberGroupStrategy(MemberGroupStrategy memberGroupStrategy) {
-    this.memberGroupStrategy = memberGroupStrategy.name();
-    return this;
-  }
+    /**
+     * Sets the member group strategy.
+     *
+     * @param memberGroupStrategy the member group strategy
+     * @return the partition group configuration
+     */
+    public PrimaryBackupPartitionGroupConfig setMemberGroupStrategy(MemberGroupStrategy memberGroupStrategy) {
+        this.memberGroupStrategy = memberGroupStrategy.name();
+        return this;
+    }
 }

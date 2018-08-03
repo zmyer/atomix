@@ -20,27 +20,29 @@ import io.atomix.utils.config.TypedConfig;
 /**
  * Primitive protocol configuration.
  */
-public abstract class PrimitiveProtocolConfig<C extends PrimitiveProtocolConfig<C>> implements TypedConfig<C, PrimitiveProtocol.Type> {
-  private String group;
+// TODO: 2018/7/30 by zmyer
+public abstract class PrimitiveProtocolConfig<C extends PrimitiveProtocolConfig<C>>
+        implements TypedConfig<C, PrimitiveProtocol.Type> {
+    private String group;
 
-  /**
-   * Returns the protocol group.
-   *
-   * @return the protocol group
-   */
-  public String getGroup() {
-    return group;
-  }
+    /**
+     * Returns the protocol group.
+     *
+     * @return the protocol group
+     */
+    public String getGroup() {
+        return group;
+    }
 
-  /**
-   * Sets the protocol group.
-   *
-   * @param group the protocol group
-   * @return the protocol configuration
-   */
-  @SuppressWarnings("unchecked")
-  public C setGroup(String group) {
-    this.group = group;
-    return (C) this;
-  }
+    /**
+     * Sets the protocol group.
+     *
+     * @param group the protocol group
+     * @return the protocol configuration
+     */
+    @SuppressWarnings("unchecked")
+    public C setGroup(String group) {
+        this.group = group;
+        return (C) this;
+    }
 }

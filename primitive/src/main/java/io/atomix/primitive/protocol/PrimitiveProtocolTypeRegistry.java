@@ -20,21 +20,22 @@ import java.util.Collection;
 /**
  * Primitive protocol type registry.
  */
+// TODO: 2018/7/30 by zmyer
 public interface PrimitiveProtocolTypeRegistry {
 
-  /**
-   * Returns the collection of registered protocol types.
-   *
-   * @return the collection of registered protocol types
-   */
-  Collection<PrimitiveProtocol.Type> getProtocolTypes();
+    /**
+     * Returns the collection of registered protocol types.
+     *
+     * @return the collection of registered protocol types
+     */
+    Collection<PrimitiveProtocol.Type> getProtocolTypes();
 
-  /**
-   * Returns the protocol type for the given configuration.
-   *
-   * @param type the type name for which to return the protocol type
-   * @return the protocol type for the given configuration
-   */
-  PrimitiveProtocol.Type getProtocolType(String type);
+    /**
+     * Returns the protocol type for the given configuration.
+     *
+     * @param type the type name for which to return the protocol type
+     * @return the protocol type for the given configuration
+     */
+    PrimitiveProtocol.Type getProtocolType(String type);
 
 }

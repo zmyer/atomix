@@ -18,22 +18,23 @@ package io.atomix.primitive;
 /**
  * State of distributed primitive.
  */
+// TODO: 2018/7/30 by zmyer
 public enum PrimitiveState {
 
-  /**
-   * Signifies a state wherein the primitive is operating correctly and is capable of meeting the advertised
-   * consistency and reliability guarantees.
-   */
-  CONNECTED,
+    /**
+     * Signifies a state wherein the primitive is operating correctly and is capable of meeting the advertised
+     * consistency and reliability guarantees.
+     */
+    CONNECTED,
 
-  /**
-   * Signifies a state wherein the primitive is temporarily incapable of providing the advertised
-   * consistency properties.
-   */
-  SUSPENDED,
+    /**
+     * Signifies a state wherein the primitive is temporarily incapable of providing the advertised
+     * consistency properties.
+     */
+    SUSPENDED,
 
-  /**
-   * Signifies a state wherein the primitive has been shutdown and therefore cannot perform its functions.
-   */
-  CLOSED
+    /**
+     * Signifies a state wherein the primitive has been shutdown and therefore cannot perform its functions.
+     */
+    CLOSED
 }

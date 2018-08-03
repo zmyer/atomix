@@ -18,13 +18,14 @@ package io.atomix.utils;
 /**
  * Named object.
  */
+// TODO: 2018/7/30 by zmyer
 public interface Named {
 
-  /**
-   * Returns the object name.
-   *
-   * @return the object name
-   */
-  String name();
+    /**
+     * Returns the object name.
+     *
+     * @return the object name
+     */
+    String name();
 
 }

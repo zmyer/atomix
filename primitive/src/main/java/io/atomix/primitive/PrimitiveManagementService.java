@@ -27,69 +27,70 @@ import java.util.concurrent.ScheduledExecutorService;
 /**
  * Primitive management service.
  */
+// TODO: 2018/7/30 by zmyer
 public interface PrimitiveManagementService {
 
-  /**
-   * Returns the primitive thread pool.
-   *
-   * @return the primitive thread pool
-   */
-  ScheduledExecutorService getExecutorService();
+    /**
+     * Returns the primitive thread pool.
+     *
+     * @return the primitive thread pool
+     */
+    ScheduledExecutorService getExecutorService();
 
-  /**
-   * Returns the cluster service.
-   *
-   * @return the cluster service
-   */
-  ClusterMembershipService getMembershipService();
+    /**
+     * Returns the cluster service.
+     *
+     * @return the cluster service
+     */
+    ClusterMembershipService getMembershipService();
 
-  /**
-   * Returns the cluster communication service.
-   *
-   * @return the cluster communication service
-   */
-  ClusterCommunicationService getCommunicationService();
+    /**
+     * Returns the cluster communication service.
+     *
+     * @return the cluster communication service
+     */
+    ClusterCommunicationService getCommunicationService();
 
-  /**
-   * Returns the cluster event service.
-   *
-   * @return the cluster event service
-   */
-  ClusterEventService getEventService();
+    /**
+     * Returns the cluster event service.
+     *
+     * @return the cluster event service
+     */
+    ClusterEventService getEventService();
 
-  /**
-   * Returns the partition service.
-   *
-   * @return the partition service
-   */
-  PartitionService getPartitionService();
+    /**
+     * Returns the partition service.
+     *
+     * @return the partition service
+     */
+    PartitionService getPartitionService();
 
-  /**
-   * Returns the primitive registry.
-   *
-   * @return the primitive registry
-   */
-  PrimitiveRegistry getPrimitiveRegistry();
+    /**
+     * Returns the primitive registry.
+     *
+     * @return the primitive registry
+     */
+    PrimitiveRegistry getPrimitiveRegistry();
 
-  /**
-   * Returns the primitive type registry.
-   *
-   * @return the primitive type registry
-   */
-  PrimitiveTypeRegistry getPrimitiveTypeRegistry();
+    /**
+     * Returns the primitive type registry.
+     *
+     * @return the primitive type registry
+     */
+    PrimitiveTypeRegistry getPrimitiveTypeRegistry();
 
-  /**
-   * Returns the primitive protocol type registry.
-   *
-   * @return the primitive protocol type registry
-   */
-  PrimitiveProtocolTypeRegistry getProtocolTypeRegistry();
+    /**
+     * Returns the primitive protocol type registry.
+     *
+     * @return the primitive protocol type registry
+     */
+    PrimitiveProtocolTypeRegistry getProtocolTypeRegistry();
 
-  /**
-   * Returns the partition group type registry.
-   *
-   * @return the partition group type registry
-   */
-  PartitionGroupTypeRegistry getPartitionGroupTypeRegistry();
+    /**
+     * Returns the partition group type registry.
+     *
+     * @return the partition group type registry
+     */
+    PartitionGroupTypeRegistry getPartitionGroupTypeRegistry();
 
 }

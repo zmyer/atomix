@@ -24,20 +24,21 @@ import java.util.Map;
 /**
  * Partition group type registry.
  */
+// TODO: 2018/8/1 by zmyer
 public class DefaultPartitionGroupTypeRegistry implements PartitionGroupTypeRegistry {
-  private final Map<String, PartitionGroup.Type> partitionGroupTypes;
+    private final Map<String, PartitionGroup.Type> partitionGroupTypes;
 
-  public DefaultPartitionGroupTypeRegistry(Map<String, PartitionGroup.Type> partitionGroupTypes) {
-    this.partitionGroupTypes = partitionGroupTypes;
-  }
+    public DefaultPartitionGroupTypeRegistry(Map<String, PartitionGroup.Type> partitionGroupTypes) {
+        this.partitionGroupTypes = partitionGroupTypes;
+    }
 
-  @Override
-  public Collection<PartitionGroup.Type> getGroupTypes() {
-    return partitionGroupTypes.values();
-  }
+    @Override
+    public Collection<PartitionGroup.Type> getGroupTypes() {
+        return partitionGroupTypes.values();
+    }
 
-  @Override
-  public PartitionGroup.Type getGroupType(String name) {
-    return partitionGroupTypes.get(name);
-  }
+    @Override
+    public PartitionGroup.Type getGroupType(String name) {
+        return partitionGroupTypes.get(name);
+    }
 }

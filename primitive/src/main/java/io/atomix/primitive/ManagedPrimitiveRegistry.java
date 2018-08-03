@@ -20,5 +20,6 @@ import io.atomix.utils.Managed;
 /**
  * Managed primitive registry.
  */
+// TODO: 2018/8/1 by zmyer
 public interface ManagedPrimitiveRegistry extends PrimitiveRegistry, Managed<PrimitiveRegistry> {
 }

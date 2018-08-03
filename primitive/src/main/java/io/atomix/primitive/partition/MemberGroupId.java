@@ -20,22 +20,23 @@ import io.atomix.utils.AbstractIdentifier;
 /**
  * Member group identifier.
  */
+// TODO: 2018/7/31 by zmyer
 public class MemberGroupId extends AbstractIdentifier<String> {
 
-  /**
-   * Creates a new member group identifier.
-   *
-   * @param id the group ID
-   * @return the new member group identifier
-   */
-  public static MemberGroupId from(String id) {
-    return new MemberGroupId(id);
-  }
+    /**
+     * Creates a new member group identifier.
+     *
+     * @param id the group ID
+     * @return the new member group identifier
+     */
+    public static MemberGroupId from(String id) {
+        return new MemberGroupId(id);
+    }
 
-  private MemberGroupId() {
-  }
+    private MemberGroupId() {
+    }
 
-  public MemberGroupId(String value) {
-    super(value);
-  }
+    public MemberGroupId(String value) {
+        super(value);
+    }
 }

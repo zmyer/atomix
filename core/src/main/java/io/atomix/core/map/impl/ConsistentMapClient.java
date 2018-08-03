@@ -21,14 +21,15 @@ import io.atomix.primitive.event.Event;
 /**
  * Consistent map client interface.
  */
+// TODO: 2018/8/1 by zmyer
 public interface ConsistentMapClient {
 
-  /**
-   * Called when a map change event occurs.
-   *
-   * @param event the change event
-   */
-  @Event("change")
-  void change(MapEvent<String, byte[]> event);
+    /**
+     * Called when a map change event occurs.
+     *
+     * @param event the change event
+     */
+    @Event("change")
+    void change(MapEvent<String, byte[]> event);
 
 }

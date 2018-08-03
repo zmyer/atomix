@@ -16,7 +16,6 @@
 package io.atomix.utils.concurrent;
 
 import java.util.concurrent.Executor;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadFactory;
 
 import static io.atomix.utils.concurrent.Threads.namedThreads;
@@ -24,24 +23,25 @@ import static io.atomix.utils.concurrent.Threads.namedThreads;
 /**
  * Blocking aware single thread context.
  */
+// TODO: 2018/8/1 by zmyer
 public class BlockingAwareSingleThreadContext extends SingleThreadContext {
-  private final Executor threadPoolExecutor;
+    private final Executor threadPoolExecutor;
 
-  public BlockingAwareSingleThreadContext(String nameFormat, Executor threadPoolExecutor) {
-    this(namedThreads(nameFormat, LOGGER), threadPoolExecutor);
-  }
-
-  public BlockingAwareSingleThreadContext(ThreadFactory factory, Executor threadPoolExecutor) {
-    super(factory);
-    this.threadPoolExecutor = threadPoolExecutor;
-  }
-
-  @Override
-  public void execute(Runnable command) {
-    if (isBlocked()) {
-      threadPoolExecutor.execute(command);
-    } else {
-      super.execute(command);
+    public BlockingAwareSingleThreadContext(String nameFormat, Executor threadPoolExecutor) {
+        this(namedThreads(nameFormat, LOGGER), threadPoolExecutor);
     }
-  }
+
+    public BlockingAwareSingleThreadContext(ThreadFactory factory, Executor threadPoolExecutor) {
+        super(factory);
+        this.threadPoolExecutor = threadPoolExecutor;
+    }
+
+    @Override
+    public void execute(Runnable command) {
+        if (isBlocked()) {
+            threadPoolExecutor.execute(command);
+        } else {
+            super.execute(command);
+        }
+    }
 }

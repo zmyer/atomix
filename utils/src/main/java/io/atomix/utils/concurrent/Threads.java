@@ -23,20 +23,22 @@ import java.util.concurrent.ThreadFactory;
 /**
  * Thread utilities.
  */
+// TODO: 2018/7/31 by zmyer
 public final class Threads {
 
-  /**
-   * Returns a thread factory that produces threads named according to the
-   * supplied name pattern.
-   *
-   * @param pattern name pattern
-   * @return thread factory
-   */
-  public static ThreadFactory namedThreads(String pattern, Logger log) {
-    return new ThreadFactoryBuilder()
-        .setNameFormat(pattern)
-        .setThreadFactory(new AtomixThreadFactory())
-        .setUncaughtExceptionHandler((t, e) -> log.error("Uncaught exception on " + t.getName(), e))
-        .build();
-  }
+    /**
+     * Returns a thread factory that produces threads named according to the
+     * supplied name pattern.
+     *
+     * @param pattern name pattern
+     * @return thread factory
+     */
+    // TODO: 2018/8/1 by zmyer
+    public static ThreadFactory namedThreads(String pattern, Logger log) {
+        return new ThreadFactoryBuilder()
+                .setNameFormat(pattern)
+                .setThreadFactory(new AtomixThreadFactory())
+                .setUncaughtExceptionHandler((t, e) -> log.error("Uncaught exception on " + t.getName(), e))
+                .build();
+    }
 }

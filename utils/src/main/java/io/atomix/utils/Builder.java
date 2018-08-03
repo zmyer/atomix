@@ -22,16 +22,17 @@ package io.atomix.utils;
  *
  * @param <T> type to build
  */
+// TODO: 2018/7/30 by zmyer
 public interface Builder<T> {
 
-  /**
-   * Builds the object.
-   * <p>
-   * The returned object may be a new instance of the built class or a recycled instance, depending on the semantics
-   * of the builder implementation. Users should never assume that a builder allocates a new instance.
-   *
-   * @return The built object.
-   */
-  T build();
+    /**
+     * Builds the object.
+     * <p>
+     * The returned object may be a new instance of the built class or a recycled instance, depending on the semantics
+     * of the builder implementation. Users should never assume that a builder allocates a new instance.
+     *
+     * @return The built object.
+     */
+    T build();
 
 }

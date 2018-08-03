@@ -32,68 +32,72 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * Primary-backup partition server.
  */
+// TODO: 2018/7/31 by zmyer
 public class PrimaryBackupPartitionServer implements Managed<PrimaryBackupPartitionServer> {
-  private final Logger log = LoggerFactory.getLogger(getClass());
-  private final PrimaryBackupPartition partition;
-  private final PartitionManagementService managementService;
-  private final MemberGroupProvider memberGroupProvider;
-  private final ThreadContextFactory threadFactory;
-  private PrimaryBackupServer server;
-  private final AtomicBoolean started = new AtomicBoolean();
+    private final Logger log = LoggerFactory.getLogger(getClass());
+    private final PrimaryBackupPartition partition;
+    private final PartitionManagementService managementService;
+    private final MemberGroupProvider memberGroupProvider;
+    private final ThreadContextFactory threadFactory;
+    private PrimaryBackupServer server;
+    private final AtomicBoolean started = new AtomicBoolean();
 
-  public PrimaryBackupPartitionServer(
-      PrimaryBackupPartition partition,
-      PartitionManagementService managementService,
-      MemberGroupProvider memberGroupProvider,
-      ThreadContextFactory threadFactory) {
-    this.partition = partition;
-    this.managementService = managementService;
-    this.memberGroupProvider = memberGroupProvider;
-    this.threadFactory = threadFactory;
-  }
-
-  @Override
-  public CompletableFuture<PrimaryBackupPartitionServer> start() {
-    synchronized (this) {
-      server = buildServer();
+    // TODO: 2018/8/1 by zmyer
+    public PrimaryBackupPartitionServer(
+            PrimaryBackupPartition partition,
+            PartitionManagementService managementService,
+            MemberGroupProvider memberGroupProvider,
+            ThreadContextFactory threadFactory) {
+        this.partition = partition;
+        this.managementService = managementService;
+        this.memberGroupProvider = memberGroupProvider;
+        this.threadFactory = threadFactory;
     }
-    return server.start().thenApply(s -> {
-      log.debug("Successfully started server for {}", partition.id());
-      started.set(true);
-      return this;
-    });
-  }
 
-  @Override
-  public boolean isRunning() {
-    return started.get();
-  }
-
-  private PrimaryBackupServer buildServer() {
-    return PrimaryBackupServer.builder()
-        .withServerName(partition.name())
-        .withMembershipService(managementService.getMembershipService())
-        .withMemberGroupProvider(memberGroupProvider)
-        .withProtocol(new PrimaryBackupServerCommunicator(
-            partition.name(),
-            Serializer.using(PrimaryBackupNamespaces.PROTOCOL),
-            managementService.getMessagingService()))
-        .withPrimaryElection(managementService.getElectionService().getElectionFor(partition.id()))
-        .withPrimitiveTypes(managementService.getPrimitiveTypes())
-        .withThreadContextFactory(threadFactory)
-        .build();
-  }
-
-  @Override
-  public CompletableFuture<Void> stop() {
-    PrimaryBackupServer server = this.server;
-    if (server != null) {
-      return server.stop().exceptionally(throwable -> {
-        log.error("Failed stopping server for {}", partition.id(), throwable);
-        return null;
-      }).thenRun(() -> started.set(false));
+    // TODO: 2018/8/1 by zmyer
+    @Override
+    public CompletableFuture<PrimaryBackupPartitionServer> start() {
+        synchronized (this) {
+            server = buildServer();
+        }
+        return server.start().thenApply(s -> {
+            log.debug("Successfully started server for {}", partition.id());
+            started.set(true);
+            return this;
+        });
     }
-    started.set(false);
-    return CompletableFuture.completedFuture(null);
-  }
+
+    @Override
+    public boolean isRunning() {
+        return started.get();
+    }
+
+    // TODO: 2018/8/1 by zmyer
+    private PrimaryBackupServer buildServer() {
+        return PrimaryBackupServer.builder()
+                .withServerName(partition.name())
+                .withMembershipService(managementService.getMembershipService())
+                .withMemberGroupProvider(memberGroupProvider)
+                .withProtocol(new PrimaryBackupServerCommunicator(
+                        partition.name(),
+                        Serializer.using(PrimaryBackupNamespaces.PROTOCOL),
+                        managementService.getMessagingService()))
+                .withPrimaryElection(managementService.getElectionService().getElectionFor(partition.id()))
+                .withPrimitiveTypes(managementService.getPrimitiveTypes())
+                .withThreadContextFactory(threadFactory)
+                .build();
+    }
+
+    @Override
+    public CompletableFuture<Void> stop() {
+        PrimaryBackupServer server = this.server;
+        if (server != null) {
+            return server.stop().exceptionally(throwable -> {
+                log.error("Failed stopping server for {}", partition.id(), throwable);
+                return null;
+            }).thenRun(() -> started.set(false));
+        }
+        started.set(false);
+        return CompletableFuture.completedFuture(null);
+    }
 }

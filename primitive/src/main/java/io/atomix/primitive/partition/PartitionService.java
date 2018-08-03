@@ -22,69 +22,71 @@ import java.util.Collection;
 /**
  * Partition service.
  */
+// TODO: 2018/7/30 by zmyer
 public interface PartitionService {
 
-  /**
-   * Returns the system partition group.
-   *
-   * @return the system partition group
-   */
-  PartitionGroup getSystemPartitionGroup();
+    /**
+     * Returns the system partition group.
+     *
+     * @return the system partition group
+     */
+    PartitionGroup getSystemPartitionGroup();
 
-  /**
-   * Returns a partition group by name.
-   *
-   * @param name the name of the partition group
-   * @return the partition group
-   */
-  PartitionGroup getPartitionGroup(String name);
+    /**
+     * Returns a partition group by name.
+     *
+     * @param name the name of the partition group
+     * @return the partition group
+     */
+    PartitionGroup getPartitionGroup(String name);
 
-  /**
-   * Returns the first partition group that matches the given primitive type.
-   *
-   * @param type the primitive type
-   * @return the first partition group that matches the given primitive type
-   */
-  @SuppressWarnings("unchecked")
-  default PartitionGroup getPartitionGroup(PrimitiveProtocol.Type type) {
-    return getPartitionGroups().stream()
-        .filter(group -> group.protocol().name().equals(type.name()))
-        .findFirst()
-        .orElse(null);
-  }
-
-  /**
-   * Returns the first partition group that matches the given primitive protocol.
-   *
-   * @param protocol the primitive protocol
-   * @return the first partition group that matches the given primitive protocol
-   */
-  @SuppressWarnings("unchecked")
-  default PartitionGroup getPartitionGroup(PrimitiveProtocol protocol) {
-    if (protocol.group() != null) {
-      PartitionGroup group = getPartitionGroup(protocol.group());
-      if (group != null) {
-        return group;
-      }
-      PartitionGroup systemGroup = getSystemPartitionGroup();
-      if (systemGroup != null && systemGroup.name().equals(protocol.group())) {
-        return systemGroup;
-      }
+    /**
+     * Returns the first partition group that matches the given primitive type.
+     *
+     * @param type the primitive type
+     * @return the first partition group that matches the given primitive type
+     */
+    @SuppressWarnings("unchecked")
+    default PartitionGroup getPartitionGroup(PrimitiveProtocol.Type type) {
+        return getPartitionGroups().stream()
+                .filter(group -> group.protocol().name().equals(type.name()))
+                .findFirst()
+                .orElse(null);
     }
 
-    for (PartitionGroup partitionGroup : getPartitionGroups()) {
-      if (partitionGroup.protocol().name().equals(protocol.type().name())) {
-        return partitionGroup;
-      }
-    }
-    return null;
-  }
+    /**
+     * Returns the first partition group that matches the given primitive protocol.
+     *
+     * @param protocol the primitive protocol
+     * @return the first partition group that matches the given primitive protocol
+     */
+    // TODO: 2018/8/1 by zmyer
+    @SuppressWarnings("unchecked")
+    default PartitionGroup getPartitionGroup(PrimitiveProtocol protocol) {
+        if (protocol.group() != null) {
+            final PartitionGroup group = getPartitionGroup(protocol.group());
+            if (group != null) {
+                return group;
+            }
+            final PartitionGroup systemGroup = getSystemPartitionGroup();
+            if (systemGroup != null && systemGroup.name().equals(protocol.group())) {
+                return systemGroup;
+            }
+        }
 
-  /**
-   * Returns a collection of all partition groups.
-   *
-   * @return a collection of all partition groups
-   */
-  Collection<PartitionGroup> getPartitionGroups();
+        for (final PartitionGroup partitionGroup : getPartitionGroups()) {
+            if (partitionGroup.protocol().name().equals(protocol.type().name())) {
+                return partitionGroup;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Returns a collection of all partition groups.
+     *
+     * @return a collection of all partition groups
+     */
+    Collection<PartitionGroup> getPartitionGroups();
 
 }

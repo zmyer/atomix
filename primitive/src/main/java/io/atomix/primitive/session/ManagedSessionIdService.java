@@ -20,5 +20,6 @@ import io.atomix.utils.Managed;
 /**
  * Managed session ID service.
  */
+// TODO: 2018/7/31 by zmyer
 public interface ManagedSessionIdService extends SessionIdService, Managed<SessionIdService> {
 }

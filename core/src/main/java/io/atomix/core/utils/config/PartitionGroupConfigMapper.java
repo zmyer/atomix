@@ -21,14 +21,16 @@ import io.atomix.primitive.partition.PartitionGroupConfig;
 /**
  * Partition group mapper.
  */
+// TODO: 2018/8/1 by zmyer
 public class PartitionGroupConfigMapper extends PolymorphicTypeMapper<PartitionGroupConfig<?>> {
-  public PartitionGroupConfigMapper() {
-    super(PartitionGroupConfig.class);
-  }
+    public PartitionGroupConfigMapper() {
+        super(PartitionGroupConfig.class);
+    }
 
-  @Override
-  @SuppressWarnings("unchecked")
-  public Class<? extends PartitionGroupConfig<?>> getConcreteClass(AtomixRegistry registry, String type) {
-    return (Class<? extends PartitionGroupConfig<?>>) registry.partitionGroupTypes().getGroupType(type).newConfig().getClass();
-  }
+    @Override
+    @SuppressWarnings("unchecked")
+    public Class<? extends PartitionGroupConfig<?>> getConcreteClass(AtomixRegistry registry, String type) {
+        return (Class<? extends PartitionGroupConfig<?>>) registry.partitionGroupTypes().getGroupType(type).newConfig()
+                .getClass();
+    }
 }

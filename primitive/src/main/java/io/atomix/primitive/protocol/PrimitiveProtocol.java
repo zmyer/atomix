@@ -24,73 +24,77 @@ import io.atomix.utils.NamedType;
 /**
  * Primitive protocol.
  */
+// TODO: 2018/7/30 by zmyer
 public interface PrimitiveProtocol {
 
-  /**
-   * Distributed primitive protocol type.
-   */
-  interface Type<C extends PrimitiveProtocolConfig<C>> extends NamedType, Comparable<Type<C>> {
+    /**
+     * Distributed primitive protocol type.
+     */
+    interface Type<C extends PrimitiveProtocolConfig<C>> extends NamedType, Comparable<Type<C>> {
+
+        /**
+         * Returns a new protocol configuration.
+         *
+         * @return a new protocol configuration
+         */
+        C newConfig();
+
+        /**
+         * Creates a new protocol instance.
+         *
+         * @param config the protocol configuration
+         * @return the protocol instance
+         */
+        PrimitiveProtocol newProtocol(C config);
+
+        @Override
+        default int compareTo(Type<C> o) {
+            return name().compareTo(o.name());
+        }
+    }
 
     /**
-     * Returns a new protocol configuration.
+     * Returns the protocol type.
      *
-     * @return a new protocol configuration
+     * @return the protocol type
      */
-    C newConfig();
+    Type type();
 
     /**
-     * Creates a new protocol instance.
+     * Returns the protocol group name.
      *
-     * @param config the protocol configuration
-     * @return the protocol instance
+     * @return the protocol group name
      */
-    PrimitiveProtocol newProtocol(C config);
+    String group();
 
-    @Override
-    default int compareTo(Type<C> o) {
-      return name().compareTo(o.name());
+    /**
+     * Returns a new primitive proxy for the given partition group.
+     *
+     * @param primitiveName    the primitive name
+     * @param primitiveType    the primitive type
+     * @param serviceType      the primitive service type
+     * @param serviceConfig    the service configuration
+     * @param partitionService the partition service
+     * @return the proxy for the given partition group
+     */
+    // TODO: 2018/8/1 by zmyer
+    <S> ProxyClient<S> newProxy(
+            String primitiveName,
+            PrimitiveType primitiveType,
+            Class<S> serviceType,
+            ServiceConfig serviceConfig,
+            PartitionService partitionService);
+
+    /**
+     * Primitive protocol.
+     */
+    // TODO: 2018/8/1 by zmyer
+    abstract class Builder<C extends PrimitiveProtocolConfig<C>, P extends PrimitiveProtocol>
+            implements io.atomix.utils.Builder<P> {
+        protected final C config;
+
+        protected Builder(C config) {
+            this.config = config;
+        }
     }
-  }
-
-  /**
-   * Returns the protocol type.
-   *
-   * @return the protocol type
-   */
-  Type type();
-
-  /**
-   * Returns the protocol group name.
-   *
-   * @return the protocol group name
-   */
-  String group();
-
-  /**
-   * Returns a new primitive proxy for the given partition group.
-   *
-   * @param primitiveName    the primitive name
-   * @param primitiveType    the primitive type
-   * @param serviceType      the primitive service type
-   * @param serviceConfig    the service configuration
-   * @param partitionService the partition service
-   * @return the proxy for the given partition group
-   */
-  <S> ProxyClient<S> newProxy(
-      String primitiveName,
-      PrimitiveType primitiveType,
-      Class<S> serviceType,
-      ServiceConfig serviceConfig,
-      PartitionService partitionService);
-
-  /**
-   * Primitive protocol.
-   */
-  abstract class Builder<C extends PrimitiveProtocolConfig<C>, P extends PrimitiveProtocol> implements io.atomix.utils.Builder<P> {
-    protected final C config;
-
-    protected Builder(C config) {
-      this.config = config;
-    }
-  }
 }

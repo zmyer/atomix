@@ -20,5 +20,6 @@ import io.atomix.utils.event.EventListener;
 /**
  * Primary election event listener.
  */
+// TODO: 2018/7/31 by zmyer
 public interface PrimaryElectionEventListener extends EventListener<PrimaryElectionEvent> {
 }

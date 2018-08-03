@@ -18,5 +18,6 @@ package io.atomix.utils.config;
 /**
  * Atomix configuration.
  */
+// TODO: 2018/7/30 by zmyer
 public interface Config {
 }

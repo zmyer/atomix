@@ -55,175 +55,182 @@ import java.util.stream.Collectors;
 /**
  * Primary-backup server context.
  */
+// TODO: 2018/7/31 by zmyer
 public class PrimaryBackupServerContext implements Managed<Void> {
-  private final Logger log = LoggerFactory.getLogger(getClass());
-  private final String serverName;
-  private final ClusterMembershipService clusterMembershipService;
-  private final ManagedMemberGroupService memberGroupService;
-  private final PrimaryBackupServerProtocol protocol;
-  private final ThreadContextFactory threadContextFactory;
-  private final boolean closeOnStop;
-  private final PrimitiveTypeRegistry primitiveTypes;
-  private final PrimaryElection primaryElection;
-  private final Map<String, CompletableFuture<PrimaryBackupServiceContext>> services = Maps.newConcurrentMap();
-  private final AtomicBoolean started = new AtomicBoolean();
+    private final Logger log = LoggerFactory.getLogger(getClass());
+    private final String serverName;
+    private final ClusterMembershipService clusterMembershipService;
+    private final ManagedMemberGroupService memberGroupService;
+    private final PrimaryBackupServerProtocol protocol;
+    private final ThreadContextFactory threadContextFactory;
+    private final boolean closeOnStop;
+    private final PrimitiveTypeRegistry primitiveTypes;
+    private final PrimaryElection primaryElection;
+    private final Map<String, CompletableFuture<PrimaryBackupServiceContext>> services = Maps.newConcurrentMap();
+    private final AtomicBoolean started = new AtomicBoolean();
 
-  public PrimaryBackupServerContext(
-      String serverName,
-      ClusterMembershipService clusterMembershipService,
-      ManagedMemberGroupService memberGroupService,
-      PrimaryBackupServerProtocol protocol,
-      PrimitiveTypeRegistry primitiveTypes,
-      PrimaryElection primaryElection,
-      ThreadContextFactory threadContextFactory,
-      boolean closeOnStop) {
-    this.serverName = serverName;
-    this.clusterMembershipService = clusterMembershipService;
-    this.memberGroupService = memberGroupService;
-    this.protocol = protocol;
-    this.threadContextFactory = threadContextFactory;
-    this.closeOnStop = closeOnStop;
-    this.primitiveTypes = primitiveTypes;
-    this.primaryElection = primaryElection;
-  }
+    public PrimaryBackupServerContext(
+            String serverName,
+            ClusterMembershipService clusterMembershipService,
+            ManagedMemberGroupService memberGroupService,
+            PrimaryBackupServerProtocol protocol,
+            PrimitiveTypeRegistry primitiveTypes,
+            PrimaryElection primaryElection,
+            ThreadContextFactory threadContextFactory,
+            boolean closeOnStop) {
+        this.serverName = serverName;
+        this.clusterMembershipService = clusterMembershipService;
+        this.memberGroupService = memberGroupService;
+        this.protocol = protocol;
+        this.threadContextFactory = threadContextFactory;
+        this.closeOnStop = closeOnStop;
+        this.primitiveTypes = primitiveTypes;
+        this.primaryElection = primaryElection;
+    }
 
-  /**
-   * Returns the current server role.
-   *
-   * @return the current server role
-   */
-  public Role getRole() {
-    return Objects.equals(primaryElection.getTerm().join().primary().memberId(), clusterMembershipService.getLocalMember().id())
-        ? Role.PRIMARY
-        : Role.BACKUP;
-  }
+    /**
+     * Returns the current server role.
+     *
+     * @return the current server role
+     */
+    public Role getRole() {
+        return Objects.equals(primaryElection.getTerm().join().primary().memberId(),
+                clusterMembershipService.getLocalMember().id())
+                ? Role.PRIMARY
+                : Role.BACKUP;
+    }
 
-  @Override
-  public CompletableFuture<Void> start() {
-    registerListeners();
-    return memberGroupService.start().thenCompose(v -> {
-      MemberGroup group = memberGroupService.getMemberGroup(clusterMembershipService.getLocalMember());
-      if (group != null) {
-        return primaryElection.enter(new GroupMember(clusterMembershipService.getLocalMember().id(), group.id()));
-      }
-      return CompletableFuture.completedFuture(null);
-    }).thenApply(v -> {
-      started.set(true);
-      return null;
-    });
-  }
+    // TODO: 2018/8/1 by zmyer
+    @Override
+    public CompletableFuture<Void> start() {
+        registerListeners();
+        return memberGroupService.start().thenCompose(v -> {
+            MemberGroup group = memberGroupService.getMemberGroup(clusterMembershipService.getLocalMember());
+            if (group != null) {
+                return primaryElection.enter(
+                        new GroupMember(clusterMembershipService.getLocalMember().id(), group.id()));
+            }
+            return CompletableFuture.completedFuture(null);
+        }).thenApply(v -> {
+            started.set(true);
+            return null;
+        });
+    }
 
-  /**
-   * Handles an execute request.
-   */
-  private CompletableFuture<ExecuteResponse> execute(ExecuteRequest request) {
-    return getService(request).thenCompose(service -> service.execute(request));
-  }
+    /**
+     * Handles an execute request.
+     */
+    // TODO: 2018/8/1 by zmyer
+    private CompletableFuture<ExecuteResponse> execute(ExecuteRequest request) {
+        return getService(request).thenCompose(service -> service.execute(request));
+    }
 
-  /**
-   * Handles a backup request.
-   */
-  private CompletableFuture<BackupResponse> backup(BackupRequest request) {
-    return getService(request).thenCompose(service -> service.backup(request));
-  }
+    /**
+     * Handles a backup request.
+     */
+    private CompletableFuture<BackupResponse> backup(BackupRequest request) {
+        return getService(request).thenCompose(service -> service.backup(request));
+    }
 
-  /**
-   * Handles a restore request.
-   */
-  private CompletableFuture<RestoreResponse> restore(RestoreRequest request) {
-    return getService(request).thenCompose(service -> service.restore(request));
-  }
+    /**
+     * Handles a restore request.
+     */
+    private CompletableFuture<RestoreResponse> restore(RestoreRequest request) {
+        return getService(request).thenCompose(service -> service.restore(request));
+    }
 
-  /**
-   * Handles a close request.
-   */
-  private CompletableFuture<CloseResponse> close(CloseRequest request) {
-    return getService(request).thenCompose(service -> service.close(request));
-  }
+    /**
+     * Handles a close request.
+     */
+    private CompletableFuture<CloseResponse> close(CloseRequest request) {
+        return getService(request).thenCompose(service -> service.close(request));
+    }
 
-  /**
-   * Returns the service context for the given request.
-   */
-  private CompletableFuture<PrimaryBackupServiceContext> getService(PrimitiveRequest request) {
-    return services.computeIfAbsent(request.primitive().name(), n -> {
-      PrimitiveType primitiveType = primitiveTypes.getPrimitiveType(request.primitive().type());
-      PrimaryBackupServiceContext service = new PrimaryBackupServiceContext(
-          serverName,
-          PrimitiveId.from(request.primitive().name()),
-          primitiveType,
-          request.primitive(),
-          threadContextFactory.createContext(),
-          clusterMembershipService,
-          memberGroupService,
-          protocol,
-          primaryElection);
+    /**
+     * Returns the service context for the given request.
+     */
+    // TODO: 2018/8/1 by zmyer
+    private CompletableFuture<PrimaryBackupServiceContext> getService(PrimitiveRequest request) {
+        return services.computeIfAbsent(request.primitive().name(), n -> {
+            final PrimitiveType primitiveType = primitiveTypes.getPrimitiveType(request.primitive().type());
+            final PrimaryBackupServiceContext service = new PrimaryBackupServiceContext(
+                    serverName,
+                    PrimitiveId.from(request.primitive().name()),
+                    primitiveType,
+                    request.primitive(),
+                    threadContextFactory.createContext(),
+                    clusterMembershipService,
+                    memberGroupService,
+                    protocol,
+                    primaryElection);
 
-      OrderedFuture<PrimaryBackupServiceContext> newOrderFuture = new OrderedFuture<>();
-      service.open().whenComplete((v, e) -> {
-        if (e != null) {
-          newOrderFuture.completeExceptionally(e);
-        } else {
-          newOrderFuture.complete(service);
-        }
-      });
-      return newOrderFuture;
-    });
-  }
+            final OrderedFuture<PrimaryBackupServiceContext> newOrderFuture = new OrderedFuture<>();
+            service.open().whenComplete((v, e) -> {
+                if (e != null) {
+                    newOrderFuture.completeExceptionally(e);
+                } else {
+                    newOrderFuture.complete(service);
+                }
+            });
+            return newOrderFuture;
+        });
+    }
 
-  /**
-   * Handles a metadata request.
-   */
-  private CompletableFuture<MetadataResponse> metadata(MetadataRequest request) {
-    return CompletableFuture.completedFuture(MetadataResponse.ok(services.entrySet().stream()
-        .filter(entry -> entry.getValue().join().serviceType().name().equals(request.primitiveType()))
-        .map(entry -> entry.getKey())
-        .collect(Collectors.toSet())));
-  }
+    /**
+     * Handles a metadata request.
+     */
+    private CompletableFuture<MetadataResponse> metadata(MetadataRequest request) {
+        return CompletableFuture.completedFuture(MetadataResponse.ok(services.entrySet().stream()
+                .filter(entry -> entry.getValue().join().serviceType().name().equals(request.primitiveType()))
+                .map(entry -> entry.getKey())
+                .collect(Collectors.toSet())));
+    }
 
-  /**
-   * Registers message listeners.
-   */
-  private void registerListeners() {
-    protocol.registerExecuteHandler(this::execute);
-    protocol.registerBackupHandler(this::backup);
-    protocol.registerRestoreHandler(this::restore);
-    protocol.registerCloseHandler(this::close);
-    protocol.registerMetadataHandler(this::metadata);
-  }
+    /**
+     * Registers message listeners.
+     */
+    // TODO: 2018/8/1 by zmyer
+    private void registerListeners() {
+        protocol.registerExecuteHandler(this::execute);
+        protocol.registerBackupHandler(this::backup);
+        protocol.registerRestoreHandler(this::restore);
+        protocol.registerCloseHandler(this::close);
+        protocol.registerMetadataHandler(this::metadata);
+    }
 
-  /**
-   * Unregisters message listeners.
-   */
-  private void unregisterListeners() {
-    protocol.unregisterExecuteHandler();
-    protocol.unregisterBackupHandler();
-    protocol.unregisterRestoreHandler();
-    protocol.unregisterCloseHandler();
-    protocol.unregisterMetadataHandler();
-  }
+    /**
+     * Unregisters message listeners.
+     */
+    private void unregisterListeners() {
+        protocol.unregisterExecuteHandler();
+        protocol.unregisterBackupHandler();
+        protocol.unregisterRestoreHandler();
+        protocol.unregisterCloseHandler();
+        protocol.unregisterMetadataHandler();
+    }
 
-  @Override
-  public boolean isRunning() {
-    return started.get();
-  }
+    @Override
+    public boolean isRunning() {
+        return started.get();
+    }
 
-  @Override
-  public CompletableFuture<Void> stop() {
-    unregisterListeners();
-    started.set(false);
-    List<CompletableFuture<Void>> futures = services.values().stream()
-        .map(future -> future.thenCompose(service -> service.close()))
-        .collect(Collectors.toList());
-    return Futures.allOf(futures).exceptionally(throwable -> {
-      log.error("Failed closing services", throwable);
-      return null;
-    }).thenCompose(v -> memberGroupService.stop()).exceptionally(throwable -> {
-      log.error("Failed stopping member group service", throwable);
-      return null;
-    }).thenRunAsync(() -> {
-      if (closeOnStop) {
-        threadContextFactory.close();
-      }
-    });
-  }
+    @Override
+    public CompletableFuture<Void> stop() {
+        unregisterListeners();
+        started.set(false);
+        List<CompletableFuture<Void>> futures = services.values().stream()
+                .map(future -> future.thenCompose(service -> service.close()))
+                .collect(Collectors.toList());
+        return Futures.allOf(futures).exceptionally(throwable -> {
+            log.error("Failed closing services", throwable);
+            return null;
+        }).thenCompose(v -> memberGroupService.stop()).exceptionally(throwable -> {
+            log.error("Failed stopping member group service", throwable);
+            return null;
+        }).thenRunAsync(() -> {
+            if (closeOnStop) {
+                threadContextFactory.close();
+            }
+        });
+    }
 }

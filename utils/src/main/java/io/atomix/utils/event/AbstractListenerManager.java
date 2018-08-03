@@ -18,27 +18,31 @@ package io.atomix.utils.event;
 /**
  * Basis for components which need to export listener mechanism.
  */
-public abstract class AbstractListenerManager<E extends Event, L extends EventListener<E>> implements ListenerService<E, L> {
+// TODO: 2018/7/31 by zmyer
+public abstract class AbstractListenerManager<E extends Event, L extends EventListener<E>>
+        implements ListenerService<E, L> {
 
-  protected final ListenerRegistry<E, L> listenerRegistry = new ListenerRegistry<>();
+    protected final ListenerRegistry<E, L> listenerRegistry = new ListenerRegistry<>();
 
-  @Override
-  public void addListener(L listener) {
-    listenerRegistry.addListener(listener);
-  }
+    // TODO: 2018/7/31 by zmyer
+    @Override
+    public void addListener(L listener) {
+        listenerRegistry.addListener(listener);
+    }
 
-  @Override
-  public void removeListener(L listener) {
-    listenerRegistry.removeListener(listener);
-  }
+    @Override
+    public void removeListener(L listener) {
+        listenerRegistry.removeListener(listener);
+    }
 
-  /**
-   * Posts the specified event to the local event dispatcher.
-   *
-   * @param event event to be posted; may be null
-   */
-  protected void post(E event) {
-    listenerRegistry.process(event);
-  }
+    /**
+     * Posts the specified event to the local event dispatcher.
+     *
+     * @param event event to be posted; may be null
+     */
+    // TODO: 2018/7/31 by zmyer
+    protected void post(E event) {
+        listenerRegistry.process(event);
+    }
 
 }

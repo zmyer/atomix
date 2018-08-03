@@ -32,49 +32,52 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * Default member group service.
  */
+// TODO: 2018/8/1 by zmyer
 public class DefaultMemberGroupService
-    extends AbstractListenerManager<MemberGroupEvent, MemberGroupEventListener>
-    implements ManagedMemberGroupService {
+        extends AbstractListenerManager<MemberGroupEvent, MemberGroupEventListener>
+        implements ManagedMemberGroupService {
 
-  private final AtomicBoolean started = new AtomicBoolean();
-  private final ClusterMembershipService membershipService;
-  private final MemberGroupProvider memberGroupProvider;
-  private final ClusterMembershipEventListener membershipEventListener = event -> recomputeGroups();
-  private volatile Collection<MemberGroup> memberGroups;
+    private final AtomicBoolean started = new AtomicBoolean();
+    private final ClusterMembershipService membershipService;
+    private final MemberGroupProvider memberGroupProvider;
+    private final ClusterMembershipEventListener membershipEventListener = event -> recomputeGroups();
+    private volatile Collection<MemberGroup> memberGroups;
 
-  public DefaultMemberGroupService(ClusterMembershipService membershipService, MemberGroupProvider memberGroupProvider) {
-    this.membershipService = membershipService;
-    this.memberGroupProvider = memberGroupProvider;
-  }
-
-  @Override
-  public Collection<MemberGroup> getMemberGroups() {
-    return memberGroups;
-  }
-
-  private void recomputeGroups() {
-    memberGroups = memberGroupProvider.getMemberGroups(membershipService.getMembers());
-  }
-
-  @Override
-  public CompletableFuture<MemberGroupService> start() {
-    if (started.compareAndSet(false, true)) {
-      memberGroups = memberGroupProvider.getMemberGroups(membershipService.getMembers());
-      membershipService.addListener(membershipEventListener);
+    public DefaultMemberGroupService(ClusterMembershipService membershipService,
+            MemberGroupProvider memberGroupProvider) {
+        this.membershipService = membershipService;
+        this.memberGroupProvider = memberGroupProvider;
     }
-    return CompletableFuture.completedFuture(this);
-  }
 
-  @Override
-  public boolean isRunning() {
-    return started.get();
-  }
-
-  @Override
-  public CompletableFuture<Void> stop() {
-    if (started.compareAndSet(true, false)) {
-      membershipService.removeListener(membershipEventListener);
+    @Override
+    public Collection<MemberGroup> getMemberGroups() {
+        return memberGroups;
     }
-    return CompletableFuture.completedFuture(null);
-  }
+
+    private void recomputeGroups() {
+        memberGroups = memberGroupProvider.getMemberGroups(membershipService.getMembers());
+    }
+
+    // TODO: 2018/8/1 by zmyer
+    @Override
+    public CompletableFuture<MemberGroupService> start() {
+        if (started.compareAndSet(false, true)) {
+            memberGroups = memberGroupProvider.getMemberGroups(membershipService.getMembers());
+            membershipService.addListener(membershipEventListener);
+        }
+        return CompletableFuture.completedFuture(this);
+    }
+
+    @Override
+    public boolean isRunning() {
+        return started.get();
+    }
+
+    @Override
+    public CompletableFuture<Void> stop() {
+        if (started.compareAndSet(true, false)) {
+            membershipService.removeListener(membershipEventListener);
+        }
+        return CompletableFuture.completedFuture(null);
+    }
 }

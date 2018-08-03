@@ -15,15 +15,16 @@
  */
 package io.atomix.core.election;
 
-import io.atomix.primitive.config.PrimitiveConfig;
 import io.atomix.primitive.PrimitiveType;
+import io.atomix.primitive.config.PrimitiveConfig;
 
 /**
  * Leader election configuration.
  */
+// TODO: 2018/8/1 by zmyer
 public class LeaderElectionConfig extends PrimitiveConfig<LeaderElectionConfig> {
-  @Override
-  public PrimitiveType getType() {
-    return LeaderElectionType.instance();
-  }
+    @Override
+    public PrimitiveType getType() {
+        return LeaderElectionType.instance();
+    }
 }

@@ -28,29 +28,31 @@ import java.lang.ref.WeakReference;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
+// TODO: 2018/7/31 by zmyer
 public class AtomixThread extends Thread {
-  private WeakReference<ThreadContext> context;
+    private WeakReference<ThreadContext> context;
 
-  public AtomixThread(Runnable target) {
-    super(target);
-  }
+    // TODO: 2018/8/1 by zmyer
+    public AtomixThread(Runnable target) {
+        super(target);
+    }
 
-  /**
-   * Sets the thread context.
-   *
-   * @param context The thread context.
-   */
-  public void setContext(ThreadContext context) {
-    this.context = new WeakReference<>(context);
-  }
+    /**
+     * Sets the thread context.
+     *
+     * @param context The thread context.
+     */
+    public void setContext(ThreadContext context) {
+        this.context = new WeakReference<>(context);
+    }
 
-  /**
-   * Returns the thread context.
-   *
-   * @return The thread {@link ThreadContext} or {@code null} if no context has been configured.
-   */
-  public ThreadContext getContext() {
-    return context != null ? context.get() : null;
-  }
+    /**
+     * Returns the thread context.
+     *
+     * @return The thread {@link ThreadContext} or {@code null} if no context has been configured.
+     */
+    public ThreadContext getContext() {
+        return context != null ? context.get() : null;
+    }
 
 }

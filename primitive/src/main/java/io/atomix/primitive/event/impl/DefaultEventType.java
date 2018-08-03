@@ -21,11 +21,12 @@ import io.atomix.utils.AbstractIdentifier;
 /**
  * Default Raft event identifier.
  */
+// TODO: 2018/7/31 by zmyer
 public class DefaultEventType extends AbstractIdentifier<String> implements EventType {
-  private DefaultEventType() {
-  }
+    private DefaultEventType() {
+    }
 
-  public DefaultEventType(String value) {
-    super(value);
-  }
+    public DefaultEventType(String value) {
+        super(value);
+    }
 }

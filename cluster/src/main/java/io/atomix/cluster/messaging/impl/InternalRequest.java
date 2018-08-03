@@ -16,22 +16,23 @@
 package io.atomix.cluster.messaging.impl;
 
 import com.google.common.base.MoreObjects;
-import io.atomix.utils.net.Address;
 import io.atomix.utils.misc.ArraySizeHashPrinter;
+import io.atomix.utils.net.Address;
 
 /**
  * Internal request message.
  */
+// TODO: 2018/7/30 by zmyer
 public final class InternalRequest extends InternalMessage {
     private final Address sender;
     private final String subject;
 
     public InternalRequest(
-        int preamble,
-        long id,
-        Address sender,
-        String subject,
-        byte[] payload) {
+            int preamble,
+            long id,
+            Address sender,
+            String subject,
+            byte[] payload) {
         super(preamble, id, payload);
         this.sender = sender;
         this.subject = subject;
