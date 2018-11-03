@@ -174,21 +174,21 @@ public class DefaultServiceExecutor implements ServiceExecutor {
         // Look up the registered callback for the operation.
         Function<Commit<byte[]>, byte[]> operation = operations.get(commit.operation().id());
 
-        if (operation == null) {
-            throw new IllegalStateException("Unknown state machine operation: " + commit.operation());
-        } else {
-            // Execute the operation. If the operation return value is a Future, await the result,
-            // otherwise immediately complete the execution future.
-            try {
-                return operation.apply(commit);
-            } catch (Exception e) {
-                log.warn("State machine operation failed: {}", e.getMessage());
-                throw new PrimitiveException.ServiceException();
-            } finally {
-                runTasks();
-            }
-        }
+    if (operation == null) {
+      throw new IllegalStateException("Unknown state machine operation: " + commit.operation());
+    } else {
+      // Execute the operation. If the operation return value is a Future, await the result,
+      // otherwise immediately complete the execution future.
+      try {
+        return operation.apply(commit);
+      } catch (Exception e) {
+        log.warn("State machine operation failed: {}", e.getMessage());
+        throw new PrimitiveException.ServiceException(e);
+      } finally {
+        runTasks();
+      }
     }
+  }
 
     /**
      * Executes tasks after an operation.

@@ -15,16 +15,24 @@
  */
 package io.atomix.protocols.raft.test;
 
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import io.atomix.cluster.GroupMembershipConfig;
+import io.atomix.cluster.BootstrapService;
 import io.atomix.cluster.Member;
 import io.atomix.cluster.MemberId;
+import io.atomix.cluster.Node;
+import io.atomix.cluster.discovery.BootstrapDiscoveryProvider;
 import io.atomix.cluster.impl.DefaultClusterMembershipService;
+import io.atomix.cluster.impl.DefaultNodeDiscoveryService;
 import io.atomix.cluster.messaging.BroadcastService;
 import io.atomix.cluster.messaging.ManagedMessagingService;
+import io.atomix.cluster.messaging.MessagingConfig;
 import io.atomix.cluster.messaging.MessagingService;
+import io.atomix.cluster.messaging.UnicastService;
 import io.atomix.cluster.messaging.impl.NettyMessagingService;
-import io.atomix.primitive.DistributedPrimitiveBuilder;
+import io.atomix.cluster.protocol.PhiMembershipProtocol;
+import io.atomix.cluster.protocol.PhiMembershipProtocolConfig;
+import io.atomix.primitive.PrimitiveBuilder;
 import io.atomix.primitive.PrimitiveManagementService;
 import io.atomix.primitive.PrimitiveType;
 import io.atomix.primitive.config.PrimitiveConfig;
@@ -32,6 +40,7 @@ import io.atomix.primitive.operation.OperationId;
 import io.atomix.primitive.operation.OperationType;
 import io.atomix.primitive.operation.PrimitiveOperation;
 import io.atomix.primitive.operation.impl.DefaultOperationId;
+import io.atomix.primitive.partition.PartitionId;
 import io.atomix.primitive.service.AbstractPrimitiveService;
 import io.atomix.primitive.service.BackupInput;
 import io.atomix.primitive.service.BackupOutput;
@@ -97,6 +106,7 @@ import io.atomix.protocols.raft.test.protocol.LocalRaftProtocolFactory;
 import io.atomix.protocols.raft.test.protocol.RaftClientMessagingProtocol;
 import io.atomix.protocols.raft.test.protocol.RaftServerMessagingProtocol;
 import io.atomix.storage.StorageLevel;
+import io.atomix.utils.Version;
 import io.atomix.utils.concurrent.ThreadModel;
 import io.atomix.utils.net.Address;
 import io.atomix.utils.serializer.Namespace;
@@ -104,7 +114,6 @@ import io.atomix.utils.serializer.Serializer;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.UnknownHostException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -123,8 +132,10 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -156,94 +167,92 @@ public class RaftPerformanceTest implements Runnable {
         new RaftPerformanceTest().run();
     }
 
-    private static final Serializer protocolSerializer = Serializer.using(Namespace.builder()
-            .register(HeartbeatRequest.class)
-            .register(HeartbeatResponse.class)
-            .register(OpenSessionRequest.class)
-            .register(OpenSessionResponse.class)
-            .register(CloseSessionRequest.class)
-            .register(CloseSessionResponse.class)
-            .register(KeepAliveRequest.class)
-            .register(KeepAliveResponse.class)
-            .register(QueryRequest.class)
-            .register(QueryResponse.class)
-            .register(CommandRequest.class)
-            .register(CommandResponse.class)
-            .register(MetadataRequest.class)
-            .register(MetadataResponse.class)
-            .register(JoinRequest.class)
-            .register(JoinResponse.class)
-            .register(LeaveRequest.class)
-            .register(LeaveResponse.class)
-            .register(ConfigureRequest.class)
-            .register(ConfigureResponse.class)
-            .register(ReconfigureRequest.class)
-            .register(ReconfigureResponse.class)
-            .register(InstallRequest.class)
-            .register(InstallResponse.class)
-            .register(PollRequest.class)
-            .register(PollResponse.class)
-            .register(VoteRequest.class)
-            .register(VoteResponse.class)
-            .register(AppendRequest.class)
-            .register(AppendResponse.class)
-            .register(PublishRequest.class)
-            .register(ResetRequest.class)
-            .register(RaftResponse.Status.class)
-            .register(RaftError.class)
-            .register(RaftError.Type.class)
-            .register(PrimitiveOperation.class)
-            .register(ReadConsistency.class)
-            .register(byte[].class)
-            .register(long[].class)
-            .register(CloseSessionEntry.class)
-            .register(CommandEntry.class)
-            .register(ConfigurationEntry.class)
-            .register(InitializeEntry.class)
-            .register(KeepAliveEntry.class)
-            .register(MetadataEntry.class)
-            .register(OpenSessionEntry.class)
-            .register(QueryEntry.class)
-            .register(PrimitiveOperation.class)
-            .register(DefaultOperationId.class)
-            .register(OperationType.class)
-            .register(ReadConsistency.class)
-            .register(ArrayList.class)
-            .register(Collections.emptyList().getClass())
-            .register(HashSet.class)
-            .register(DefaultRaftMember.class)
-            .register(MemberId.class)
-            .register(MemberId.Type.class)
-            .register(SessionId.class)
-            .register(RaftMember.Type.class)
-            .register(Instant.class)
-            .register(Configuration.class)
-            .build());
+  private static final Serializer protocolSerializer = Serializer.using(Namespace.builder()
+      .register(HeartbeatRequest.class)
+      .register(HeartbeatResponse.class)
+      .register(OpenSessionRequest.class)
+      .register(OpenSessionResponse.class)
+      .register(CloseSessionRequest.class)
+      .register(CloseSessionResponse.class)
+      .register(KeepAliveRequest.class)
+      .register(KeepAliveResponse.class)
+      .register(QueryRequest.class)
+      .register(QueryResponse.class)
+      .register(CommandRequest.class)
+      .register(CommandResponse.class)
+      .register(MetadataRequest.class)
+      .register(MetadataResponse.class)
+      .register(JoinRequest.class)
+      .register(JoinResponse.class)
+      .register(LeaveRequest.class)
+      .register(LeaveResponse.class)
+      .register(ConfigureRequest.class)
+      .register(ConfigureResponse.class)
+      .register(ReconfigureRequest.class)
+      .register(ReconfigureResponse.class)
+      .register(InstallRequest.class)
+      .register(InstallResponse.class)
+      .register(PollRequest.class)
+      .register(PollResponse.class)
+      .register(VoteRequest.class)
+      .register(VoteResponse.class)
+      .register(AppendRequest.class)
+      .register(AppendResponse.class)
+      .register(PublishRequest.class)
+      .register(ResetRequest.class)
+      .register(RaftResponse.Status.class)
+      .register(RaftError.class)
+      .register(RaftError.Type.class)
+      .register(PrimitiveOperation.class)
+      .register(ReadConsistency.class)
+      .register(byte[].class)
+      .register(long[].class)
+      .register(CloseSessionEntry.class)
+      .register(CommandEntry.class)
+      .register(ConfigurationEntry.class)
+      .register(InitializeEntry.class)
+      .register(KeepAliveEntry.class)
+      .register(MetadataEntry.class)
+      .register(OpenSessionEntry.class)
+      .register(QueryEntry.class)
+      .register(PrimitiveOperation.class)
+      .register(DefaultOperationId.class)
+      .register(OperationType.class)
+      .register(ReadConsistency.class)
+      .register(ArrayList.class)
+      .register(Collections.emptyList().getClass())
+      .register(HashSet.class)
+      .register(DefaultRaftMember.class)
+      .register(MemberId.class)
+      .register(SessionId.class)
+      .register(RaftMember.Type.class)
+      .register(Instant.class)
+      .register(Configuration.class)
+      .build());
 
-    private static final Serializer storageSerializer = Serializer.using(Namespace.builder()
-            .register(CloseSessionEntry.class)
-            .register(CommandEntry.class)
-            .register(ConfigurationEntry.class)
-            .register(InitializeEntry.class)
-            .register(KeepAliveEntry.class)
-            .register(MetadataEntry.class)
-            .register(OpenSessionEntry.class)
-            .register(QueryEntry.class)
-            .register(PrimitiveOperation.class)
-            .register(DefaultOperationId.class)
-            .register(OperationType.class)
-            .register(ReadConsistency.class)
-            .register(ArrayList.class)
-            .register(HashSet.class)
-            .register(DefaultRaftMember.class)
-            .register(MemberId.class)
-            .register(MemberId.Type.class)
-            .register(RaftMember.Type.class)
-            .register(Instant.class)
-            .register(Configuration.class)
-            .register(byte[].class)
-            .register(long[].class)
-            .build());
+  private static final Namespace storageNamespace = Namespace.builder()
+      .register(CloseSessionEntry.class)
+      .register(CommandEntry.class)
+      .register(ConfigurationEntry.class)
+      .register(InitializeEntry.class)
+      .register(KeepAliveEntry.class)
+      .register(MetadataEntry.class)
+      .register(OpenSessionEntry.class)
+      .register(QueryEntry.class)
+      .register(PrimitiveOperation.class)
+      .register(DefaultOperationId.class)
+      .register(OperationType.class)
+      .register(ReadConsistency.class)
+      .register(ArrayList.class)
+      .register(HashSet.class)
+      .register(DefaultRaftMember.class)
+      .register(MemberId.class)
+      .register(RaftMember.Type.class)
+      .register(Instant.class)
+      .register(Configuration.class)
+      .register(byte[].class)
+      .register(long[].class)
+      .build();
 
     private static final Serializer clientSerializer = Serializer.using(Namespace.builder()
             .register(ReadConsistency.class)
@@ -455,52 +464,68 @@ public class RaftPerformanceTest implements Runnable {
             members.add(nextNode());
         }
 
-        CountDownLatch latch = new CountDownLatch(nodes);
-        for (int i = 0; i < nodes; i++) {
-            RaftServer server = createServer(members.get(i), members);
-            server.bootstrap(members.stream().map(Member::id).collect(Collectors.toList())).thenRun(latch::countDown);
-            servers.add(server);
-        }
+    CountDownLatch latch = new CountDownLatch(nodes);
+    for (int i = 0; i < nodes; i++) {
+      RaftServer server = createServer(members.get(i), Lists.newArrayList(members));
+      server.bootstrap(members.stream().map(Member::id).collect(Collectors.toList())).thenRun(latch::countDown);
+      servers.add(server);
+    }
 
         latch.await(30000, TimeUnit.MILLISECONDS);
 
         return servers;
     }
 
-    /**
-     * Creates a Raft server.
-     */
-    private RaftServer createServer(Member member, List<Member> members) throws UnknownHostException {
-        RaftServerProtocol protocol;
-        ManagedMessagingService messagingService;
-        if (USE_NETTY) {
-            messagingService = (ManagedMessagingService) NettyMessagingService.builder()
-                    .withAddress(member.address())
-                    .build()
-                    .start()
-                    .join();
-            messagingServices.add(messagingService);
-            protocol = new RaftServerMessagingProtocol(messagingService, protocolSerializer, addressMap::get);
-        } else {
-            protocol = protocolFactory.newServerProtocol(member.id());
-        }
+  /**
+   * Creates a Raft server.
+   */
+  private RaftServer createServer(Member member, List<Node> members) {
+    RaftServerProtocol protocol;
+    ManagedMessagingService messagingService;
+    if (USE_NETTY) {
+      messagingService = (ManagedMessagingService) new NettyMessagingService("test", member.address(), new MessagingConfig())
+          .start()
+          .join();
+      messagingServices.add(messagingService);
+      protocol = new RaftServerMessagingProtocol(messagingService, protocolSerializer, addressMap::get);
+    } else {
+      protocol = protocolFactory.newServerProtocol(member.id());
+    }
 
-        RaftServer.Builder builder = RaftServer.builder(member.id())
-                .withProtocol(protocol)
-                .withThreadModel(ThreadModel.THREAD_PER_SERVICE)
-                .withMembershipService(new DefaultClusterMembershipService(
-                        member,
-                        members,
-                        messagingService,
-                        new BroadcastServiceAdapter(),
-                        new GroupMembershipConfig()))
-                .withStorage(RaftStorage.builder()
-                        .withStorageLevel(StorageLevel.MAPPED)
-                        .withDirectory(new File(String.format("target/perf-logs/%s", member.id())))
-                        .withSerializer(storageSerializer)
-                        .withMaxEntriesPerSegment(32768)
-                        .withMaxSegmentSize(1024 * 1024)
-                        .build());
+    BootstrapService bootstrapService = new BootstrapService() {
+      @Override
+      public MessagingService getMessagingService() {
+        return messagingService;
+      }
+
+      @Override
+      public UnicastService getUnicastService() {
+        return new UnicastServiceAdapter();
+      }
+
+      @Override
+      public BroadcastService getBroadcastService() {
+        return new BroadcastServiceAdapter();
+      }
+    };
+
+    RaftServer.Builder builder = RaftServer.builder(member.id())
+        .withProtocol(protocol)
+        .withThreadModel(ThreadModel.SHARED_THREAD_POOL)
+        .withMembershipService(new DefaultClusterMembershipService(
+            member,
+            Version.from("1.0.0"),
+            new DefaultNodeDiscoveryService(bootstrapService, member, new BootstrapDiscoveryProvider(members)),
+            bootstrapService,
+            new PhiMembershipProtocol(new PhiMembershipProtocolConfig())))
+        .withStorage(RaftStorage.builder()
+            .withStorageLevel(StorageLevel.DISK)
+            .withDirectory(new File(String.format("target/perf-logs/%s", member.id())))
+            .withNamespace(storageNamespace)
+            .withMaxSegmentSize(1024 * 1024 * 64)
+            .withDynamicCompaction()
+            .withFlushOnCommit(false)
+            .build());
 
         RaftServer server = builder.build();
         servers.add(server);
@@ -513,20 +538,20 @@ public class RaftPerformanceTest implements Runnable {
     private RaftClient createClient() throws Exception {
         Member member = nextNode();
 
-        RaftClientProtocol protocol;
-        if (USE_NETTY) {
-            MessagingService messagingService = NettyMessagingService.builder().withAddress(member.address()).build()
-                    .start().join();
-            protocol = new RaftClientMessagingProtocol(messagingService, protocolSerializer, addressMap::get);
-        } else {
-            protocol = protocolFactory.newClientProtocol(member.id());
-        }
+    RaftClientProtocol protocol;
+    if (USE_NETTY) {
+      MessagingService messagingService = new NettyMessagingService("test", member.address(), new MessagingConfig()).start().join();
+      protocol = new RaftClientMessagingProtocol(messagingService, protocolSerializer, addressMap::get);
+    } else {
+      protocol = protocolFactory.newClientProtocol(member.id());
+    }
 
-        RaftClient client = RaftClient.builder()
-                .withMemberId(member.id())
-                .withProtocol(protocol)
-                .withThreadModel(ThreadModel.SHARED_THREAD_POOL)
-                .build();
+    RaftClient client = RaftClient.builder()
+        .withMemberId(member.id())
+        .withPartitionId(PartitionId.from("test", 1))
+        .withProtocol(protocol)
+        .withThreadModel(ThreadModel.SHARED_THREAD_POOL)
+        .build();
 
         client.connect(members.stream().map(Member::id).collect(Collectors.toList())).join();
         clients.add(client);
@@ -561,11 +586,10 @@ public class RaftPerformanceTest implements Runnable {
             throw new UnsupportedOperationException();
         }
 
-        @Override
-        public DistributedPrimitiveBuilder newBuilder(String primitiveName, PrimitiveConfig config,
-                PrimitiveManagementService managementService) {
-            throw new UnsupportedOperationException();
-        }
+    @Override
+    public PrimitiveBuilder newBuilder(String primitiveName, PrimitiveConfig config, PrimitiveManagementService managementService) {
+      throw new UnsupportedOperationException();
+    }
 
         @Override
         public PrimitiveService newService(ServiceConfig config) {
@@ -703,19 +727,36 @@ public class RaftPerformanceTest implements Runnable {
         }
     }
 
-    private static class BroadcastServiceAdapter implements BroadcastService {
-        @Override
-        public void broadcast(byte[] message) {
+  private static class UnicastServiceAdapter implements UnicastService {
+    @Override
+    public void unicast(Address address, String subject, byte[] message) {
+
+    }
+
+    @Override
+    public void addListener(String subject, BiConsumer<Address, byte[]> listener, Executor executor) {
+
+    }
+
+    @Override
+    public void removeListener(String subject, BiConsumer<Address, byte[]> listener) {
+
+    }
+  }
+
+  private static class BroadcastServiceAdapter implements BroadcastService {
+    @Override
+    public void broadcast(String subject, byte[] message) {
 
         }
 
-        @Override
-        public void addListener(Consumer<byte[]> listener) {
+    @Override
+    public void addListener(String subject, Consumer<byte[]> listener) {
 
         }
 
-        @Override
-        public void removeListener(Consumer<byte[]> listener) {
+    @Override
+    public void removeListener(String subject, Consumer<byte[]> listener) {
 
         }
     }

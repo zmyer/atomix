@@ -29,27 +29,48 @@ import java.time.Duration;
  */
 // TODO: 2018/8/1 by zmyer
 public class MultiPrimaryProtocolConfig extends PrimitiveProtocolConfig<MultiPrimaryProtocolConfig> {
-    private Partitioner<String> partitioner = Partitioner.MURMUR3;
-    private Consistency consistency = Consistency.SEQUENTIAL;
-    private Replication replication = Replication.ASYNCHRONOUS;
-    private Recovery recovery = Recovery.RECOVER;
-    private int backups = 1;
-    private int maxRetries = 0;
-    private Duration retryDelay = Duration.ofMillis(100);
+  private String group;
+  private Partitioner<String> partitioner = Partitioner.MURMUR3;
+  private Consistency consistency = Consistency.SEQUENTIAL;
+  private Replication replication = Replication.ASYNCHRONOUS;
+  private Recovery recovery = Recovery.RECOVER;
+  private int backups = 1;
+  private int maxRetries = 0;
+  private Duration retryDelay = Duration.ofMillis(100);
 
     @Override
     public PrimitiveProtocol.Type getType() {
         return MultiPrimaryProtocol.TYPE;
     }
 
-    /**
-     * Returns the protocol partitioner.
-     *
-     * @return the protocol partitioner
-     */
-    public Partitioner<String> getPartitioner() {
-        return partitioner;
-    }
+  /**
+   * Returns the partition group.
+   *
+   * @return the partition group
+   */
+  public String getGroup() {
+    return group;
+  }
+
+  /**
+   * Sets the partition group.
+   *
+   * @param group the partition group
+   * @return the protocol configuration
+   */
+  public MultiPrimaryProtocolConfig setGroup(String group) {
+    this.group = group;
+    return this;
+  }
+
+  /**
+   * Returns the protocol partitioner.
+   *
+   * @return the protocol partitioner
+   */
+  public Partitioner<String> getPartitioner() {
+    return partitioner;
+  }
 
     /**
      * Sets the protocol partitioner.

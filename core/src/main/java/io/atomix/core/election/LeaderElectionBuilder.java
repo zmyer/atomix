@@ -15,46 +15,26 @@
  */
 package io.atomix.core.election;
 
-import io.atomix.cluster.MemberId;
-import io.atomix.primitive.DistributedPrimitiveBuilder;
+import io.atomix.primitive.PrimitiveBuilder;
 import io.atomix.primitive.PrimitiveManagementService;
-import io.atomix.utils.serializer.Namespace;
-import io.atomix.utils.serializer.NamespaceConfig;
-import io.atomix.utils.serializer.Namespaces;
-import io.atomix.utils.serializer.Serializer;
+import io.atomix.primitive.protocol.PrimitiveProtocol;
+import io.atomix.primitive.protocol.ProxyCompatibleBuilder;
+import io.atomix.primitive.protocol.ProxyProtocol;
 
 /**
  * Builder for constructing new {@link AsyncLeaderElection} instances.
  */
 // TODO: 2018/8/1 by zmyer
 public abstract class LeaderElectionBuilder<T>
-        extends DistributedPrimitiveBuilder<LeaderElectionBuilder<T>, LeaderElectionConfig, LeaderElection<T>> {
+    extends PrimitiveBuilder<LeaderElectionBuilder<T>, LeaderElectionConfig, LeaderElection<T>>
+    implements ProxyCompatibleBuilder<LeaderElectionBuilder<T>> {
 
-    public LeaderElectionBuilder(String name, LeaderElectionConfig config,
-            PrimitiveManagementService managementService) {
-        super(LeaderElectionType.instance(), name, config, managementService);
-    }
+  protected LeaderElectionBuilder(String name, LeaderElectionConfig config, PrimitiveManagementService managementService) {
+    super(LeaderElectionType.instance(), name, config, managementService);
+  }
 
-    @Override
-    public Serializer serializer() {
-        Serializer serializer = this.serializer;
-        if (serializer == null) {
-            NamespaceConfig config = this.config.getNamespaceConfig();
-            if (config == null) {
-                serializer = Serializer.using(Namespace.builder()
-                        .register(Namespaces.BASIC)
-                        .register(MemberId.class)
-                        .register(MemberId.Type.class)
-                        .build());
-            } else {
-                serializer = Serializer.using(Namespace.builder()
-                        .register(Namespaces.BASIC)
-                        .register(MemberId.class)
-                        .register(MemberId.Type.class)
-                        .register(new Namespace(config))
-                        .build());
-            }
-        }
-        return serializer;
-    }
+  @Override
+  public LeaderElectionBuilder<T> withProtocol(ProxyProtocol protocol) {
+    return withProtocol((PrimitiveProtocol) protocol);
+  }
 }

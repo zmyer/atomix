@@ -15,8 +15,8 @@
  */
 package io.atomix.utils.memory;
 
-import sun.misc.Cleaner;
-import sun.nio.ch.DirectBuffer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.nio.MappedByteBuffer;
@@ -32,8 +32,10 @@ import java.nio.channels.FileChannel;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-public class MappedMemory extends NativeMemory {
-  public static final long MAX_SIZE = Integer.MAX_VALUE;
+public class MappedMemory implements Memory {
+  private static final long MAX_SIZE = Integer.MAX_VALUE - 5;
+
+  private static final Logger LOGGER = LoggerFactory.getLogger(MappedMemory.class);
 
   /**
    * Allocates memory mapped to a file on disk.
@@ -41,7 +43,7 @@ public class MappedMemory extends NativeMemory {
    * @param file The file to which to map memory.
    * @param size The count of the memory to map.
    * @return The mapped memory.
-   * @throws IllegalArgumentException If {@code count} is greater than {@link Integer#MAX_VALUE}
+   * @throws IllegalArgumentException If {@code count} is greater than {@link MappedMemory#MAX_SIZE}
    */
   public static MappedMemory allocate(File file, int size) {
     return new MappedMemoryAllocator(file).allocate(size);
@@ -54,19 +56,23 @@ public class MappedMemory extends NativeMemory {
    * @param mode The mode with which to map memory.
    * @param size The count of the memory to map.
    * @return The mapped memory.
-   * @throws IllegalArgumentException If {@code count} is greater than {@link Integer#MAX_VALUE}
+   * @throws IllegalArgumentException If {@code count} is greater than {@link MappedMemory#MAX_SIZE}
    */
   public static MappedMemory allocate(File file, FileChannel.MapMode mode, int size) {
-    if (size > MAX_SIZE)
-      throw new IllegalArgumentException("size cannot be greater than " + MAX_SIZE);
+    if (size > MAX_SIZE) {
+        throw new IllegalArgumentException("size cannot be greater than " + MAX_SIZE);
+    }
     return new MappedMemoryAllocator(file, mode).allocate(size);
   }
 
   private final MappedByteBuffer buffer;
+  private final MappedMemoryAllocator allocator;
+  private final int size;
 
   public MappedMemory(MappedByteBuffer buffer, MappedMemoryAllocator allocator) {
-    super(((DirectBuffer) buffer).address(), buffer.capacity(), allocator);
     this.buffer = buffer;
+    this.allocator = allocator;
+    this.size = buffer.capacity();
   }
 
   /**
@@ -77,16 +83,24 @@ public class MappedMemory extends NativeMemory {
   }
 
   @Override
+  public int size() {
+    return size;
+  }
+
+  @Override
   public void free() {
-    Cleaner cleaner = ((DirectBuffer) buffer).cleaner();
-    if (cleaner != null)
-      cleaner.clean();
-    ((MappedMemoryAllocator) allocator).release();
+    try {
+      BufferCleaner.freeBuffer(buffer);
+    } catch (Exception e) {
+      if (LOGGER.isDebugEnabled()) {
+        LOGGER.debug("Failed to unmap direct buffer", e);
+      }
+    }
+    allocator.release();
   }
 
   public void close() {
     free();
-    ((MappedMemoryAllocator) allocator).close();
+    allocator.close();
   }
-
 }

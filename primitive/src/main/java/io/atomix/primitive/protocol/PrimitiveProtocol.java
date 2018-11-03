@@ -15,11 +15,7 @@
  */
 package io.atomix.primitive.protocol;
 
-import io.atomix.primitive.PrimitiveType;
-import io.atomix.primitive.partition.PartitionService;
-import io.atomix.primitive.proxy.ProxyClient;
-import io.atomix.primitive.service.ServiceConfig;
-import io.atomix.utils.NamedType;
+import io.atomix.utils.ConfiguredType;
 
 /**
  * Primitive protocol.
@@ -27,17 +23,10 @@ import io.atomix.utils.NamedType;
 // TODO: 2018/7/30 by zmyer
 public interface PrimitiveProtocol {
 
-    /**
-     * Distributed primitive protocol type.
-     */
-    interface Type<C extends PrimitiveProtocolConfig<C>> extends NamedType, Comparable<Type<C>> {
-
-        /**
-         * Returns a new protocol configuration.
-         *
-         * @return a new protocol configuration
-         */
-        C newConfig();
+  /**
+   * Distributed primitive protocol type.
+   */
+  interface Type<C extends PrimitiveProtocolConfig<C>> extends ConfiguredType<C>, Comparable<Type<C>> {
 
         /**
          * Creates a new protocol instance.
@@ -60,41 +49,4 @@ public interface PrimitiveProtocol {
      */
     Type type();
 
-    /**
-     * Returns the protocol group name.
-     *
-     * @return the protocol group name
-     */
-    String group();
-
-    /**
-     * Returns a new primitive proxy for the given partition group.
-     *
-     * @param primitiveName    the primitive name
-     * @param primitiveType    the primitive type
-     * @param serviceType      the primitive service type
-     * @param serviceConfig    the service configuration
-     * @param partitionService the partition service
-     * @return the proxy for the given partition group
-     */
-    // TODO: 2018/8/1 by zmyer
-    <S> ProxyClient<S> newProxy(
-            String primitiveName,
-            PrimitiveType primitiveType,
-            Class<S> serviceType,
-            ServiceConfig serviceConfig,
-            PartitionService partitionService);
-
-    /**
-     * Primitive protocol.
-     */
-    // TODO: 2018/8/1 by zmyer
-    abstract class Builder<C extends PrimitiveProtocolConfig<C>, P extends PrimitiveProtocol>
-            implements io.atomix.utils.Builder<P> {
-        protected final C config;
-
-        protected Builder(C config) {
-            this.config = config;
-        }
-    }
 }

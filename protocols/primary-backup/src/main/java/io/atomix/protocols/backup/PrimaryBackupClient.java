@@ -29,6 +29,7 @@ import io.atomix.primitive.session.impl.RetryingSessionClient;
 import io.atomix.protocols.backup.protocol.PrimaryBackupClientProtocol;
 import io.atomix.protocols.backup.protocol.PrimitiveDescriptor;
 import io.atomix.protocols.backup.session.PrimaryBackupSessionClient;
+import io.atomix.utils.concurrent.Futures;
 import io.atomix.utils.concurrent.ThreadContext;
 import io.atomix.utils.concurrent.ThreadContextFactory;
 import io.atomix.utils.concurrent.ThreadModel;
@@ -88,50 +89,49 @@ public class PrimaryBackupClient {
         this.closeOnStop = closeOnStop;
     }
 
-    /**
-     * Creates a new primary backup proxy session builder.
-     *
-     * @param primitiveName the primitive name
-     * @param primitiveType the primitive type
-     * @param serviceConfig the service configuration
-     * @return a new primary-backup proxy session builder
-     */
-    // TODO: 2018/7/31 by zmyer
-    public PrimaryBackupSessionClient.Builder sessionBuilder(String primitiveName, PrimitiveType primitiveType,
-            ServiceConfig serviceConfig) {
-        final byte[] configBytes = Serializer.using(primitiveType.namespace()).encode(serviceConfig);
-        return new PrimaryBackupSessionClient.Builder() {
-            @Override
-            public SessionClient build() {
-                final Supplier<SessionClient> proxyBuilder = () -> new PrimaryBackupSessionClient(
-                        clientName,
-                        partitionId,
-                        sessionIdService.nextSessionId().join(),
-                        primitiveType,
-                        new PrimitiveDescriptor(
-                                primitiveName,
-                                primitiveType.name(),
-                                configBytes,
-                                numBackups,
-                                replication),
-                        clusterMembershipService,
-                        PrimaryBackupClient.this.protocol,
-                        primaryElection,
-                        threadContextFactory.createContext());
+  /**
+   * Creates a new primary backup proxy session builder.
+   *
+   * @param primitiveName the primitive name
+   * @param primitiveType the primitive type
+   * @param serviceConfig the service configuration
+   * @return a new primary-backup proxy session builder
+   */
+  public PrimaryBackupSessionClient.Builder sessionBuilder(String primitiveName, PrimitiveType primitiveType, ServiceConfig serviceConfig) {
+    byte[] configBytes = Serializer.using(primitiveType.namespace()).encode(serviceConfig);
+    return new PrimaryBackupSessionClient.Builder() {
+      @Override
+      public SessionClient build() {
+        Supplier<CompletableFuture<SessionClient>> proxyBuilder = () -> sessionIdService.nextSessionId()
+            .thenApply(sessionId -> new PrimaryBackupSessionClient(
+                clientName,
+                partitionId,
+                sessionId,
+                primitiveType,
+                new PrimitiveDescriptor(
+                    primitiveName,
+                    primitiveType.name(),
+                    configBytes,
+                    numBackups,
+                    replication),
+                clusterMembershipService,
+                PrimaryBackupClient.this.protocol,
+                primaryElection,
+                threadContextFactory.createContext()));
 
-                SessionClient proxy;
-                ThreadContext context = threadContextFactory.createContext();
-                if (recovery == Recovery.RECOVER) {
-                    proxy = new RecoveringSessionClient(
-                            clientName,
-                            partitionId,
-                            primitiveName,
-                            primitiveType,
-                            proxyBuilder,
-                            context);
-                } else {
-                    proxy = proxyBuilder.get();
-                }
+        SessionClient proxy;
+        ThreadContext context = threadContextFactory.createContext();
+        if (recovery == Recovery.RECOVER) {
+          proxy = new RecoveringSessionClient(
+              clientName,
+              partitionId,
+              primitiveName,
+              primitiveType,
+              proxyBuilder,
+              context);
+        } else {
+          proxy = Futures.get(proxyBuilder.get());
+        }
 
                 // If max retries is set, wrap the client in a retrying proxy client.
                 if (maxRetries > 0) {
@@ -159,19 +159,19 @@ public class PrimaryBackupClient {
         return CompletableFuture.completedFuture(null);
     }
 
-    /**
-     * Primary-backup client builder.
-     */
-    public static class Builder implements io.atomix.utils.Builder<PrimaryBackupClient> {
-        protected String clientName = "atomix";
-        protected PartitionId partitionId;
-        protected ClusterMembershipService clusterMembershipService;
-        protected PrimaryBackupClientProtocol protocol;
-        protected PrimaryElection primaryElection;
-        protected SessionIdService sessionIdService;
-        protected ThreadModel threadModel = ThreadModel.SHARED_THREAD_POOL;
-        protected int threadPoolSize = Runtime.getRuntime().availableProcessors();
-        protected ThreadContextFactory threadContextFactory;
+  /**
+   * Primary-backup client builder.
+   */
+  public static class Builder implements io.atomix.utils.Builder<PrimaryBackupClient> {
+    protected String clientName = "atomix";
+    protected PartitionId partitionId;
+    protected ClusterMembershipService clusterMembershipService;
+    protected PrimaryBackupClientProtocol protocol;
+    protected PrimaryElection primaryElection;
+    protected SessionIdService sessionIdService;
+    protected ThreadModel threadModel = ThreadModel.SHARED_THREAD_POOL;
+    protected int threadPoolSize = Math.max(Math.min(Runtime.getRuntime().availableProcessors() * 2, 16), 4);
+    protected ThreadContextFactory threadContextFactory;
 
         /**
          * Sets the client name.

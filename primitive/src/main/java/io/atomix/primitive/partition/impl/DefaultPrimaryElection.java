@@ -55,17 +55,16 @@ public class DefaultPrimaryElection implements ManagedPrimaryElection {
     private final PrimaryElectionEventListener eventListener;
     private final AtomicBoolean started = new AtomicBoolean();
 
-    // TODO: 2018/7/31 by zmyer
-    public DefaultPrimaryElection(PartitionId partitionId, SessionClient proxy, PrimaryElectionService service) {
-        this.partitionId = checkNotNull(partitionId);
-        this.proxy = proxy;
-        this.service = service;
-        this.eventListener = event -> {
-            if (event.partitionId().equals(partitionId)) {
-                listeners.forEach(l -> l.onEvent(event));
-            }
-        };
-    }
+  public DefaultPrimaryElection(PartitionId partitionId, SessionClient proxy, PrimaryElectionService service) {
+    this.partitionId = checkNotNull(partitionId);
+    this.proxy = proxy;
+    this.service = service;
+    this.eventListener = event -> {
+      if (event.partitionId().equals(partitionId)) {
+        listeners.forEach(l -> l.event(event));
+      }
+    };
+  }
 
     // TODO: 2018/7/31 by zmyer
     @Override

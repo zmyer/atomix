@@ -68,10 +68,11 @@ import static io.atomix.utils.concurrent.Threads.namedThreads;
  */
 // TODO: 2018/7/31 by zmyer
 public class DefaultPartitionGroupMembershipService
-        extends AbstractListenerManager<PartitionGroupMembershipEvent, PartitionGroupMembershipEventListener>
-        implements ManagedPartitionGroupMembershipService {
-    private static final Logger LOGGER = LoggerFactory.getLogger(DefaultPartitionGroupMembershipService.class);
-    private static final String BOOTSTRAP_SUBJECT = "partition-group-bootstrap";
+    extends AbstractListenerManager<PartitionGroupMembershipEvent, PartitionGroupMembershipEventListener>
+    implements ManagedPartitionGroupMembershipService {
+  private static final Logger LOGGER = LoggerFactory.getLogger(DefaultPartitionGroupMembershipService.class);
+  private static final String BOOTSTRAP_SUBJECT = "partition-group-bootstrap";
+  private static final int[] FIBONACCI_NUMBERS = new int[]{1, 1, 2, 3, 5};
 
     private final ClusterMembershipService membershipService;
     private final ClusterCommunicationService messagingService;
@@ -105,21 +106,20 @@ public class DefaultPartitionGroupMembershipService
                     ImmutableSet.of(membershipService.getLocalMember().id()), false));
         });
 
-        Namespace.Builder namespaceBuilder = Namespace.builder()
-                .register(Namespaces.BASIC)
-                .register(MemberId.class)
-                .register(MemberId.Type.class)
-                .register(PartitionGroupMembership.class)
-                .register(PartitionGroupInfo.class)
-                .register(PartitionGroupConfig.class)
-                .register(MemberGroupStrategy.class);
 
-        List<PartitionGroup.Type> groupTypes = Lists.newArrayList(groupTypeRegistry.getGroupTypes());
-        groupTypes.sort(Comparator.comparing(PartitionGroup.Type::name));
-        for (PartitionGroup.Type groupType : groupTypes) {
-            namespaceBuilder.register(groupType.getClass());
-            namespaceBuilder.register(groupType.newConfig().getClass());
-        }
+    Namespace.Builder namespaceBuilder = Namespace.builder()
+        .register(Namespaces.BASIC)
+        .register(MemberId.class)
+        .register(PartitionGroupMembership.class)
+        .register(PartitionGroupInfo.class)
+        .register(PartitionGroupConfig.class)
+        .register(MemberGroupStrategy.class);
+
+    List<PartitionGroup.Type> groupTypes = Lists.newArrayList(groupTypeRegistry.getGroupTypes());
+    groupTypes.sort(Comparator.comparing(PartitionGroup.Type::name));
+    for (PartitionGroup.Type groupType : groupTypes) {
+      namespaceBuilder.register(groupType.namespace());
+    }
 
         serializer = Serializer.using(namespaceBuilder.build());
     }
@@ -175,33 +175,38 @@ public class DefaultPartitionGroupMembershipService
         }
     }
 
-    /**
-     * Bootstraps the service.
-     */
-    // TODO: 2018/7/31 by zmyer
-    private CompletableFuture<Void> bootstrap() {
-        CompletableFuture<Void> future = new CompletableFuture<>();
-        Futures.allOf(membershipService.getMembers().stream()
-                .filter(node -> !node.id().equals(membershipService.getLocalMember().id()))
-                .map(node -> bootstrap(node))
-                .collect(Collectors.toList()))
-                .whenComplete((result, error) -> {
-                    if (error == null) {
-                        if (systemGroup == null) {
-                            future.completeExceptionally(
-                                    new ConfigurationException("Failed to locate system partition group"));
-                        } else if (groups.isEmpty()) {
-                            future.completeExceptionally(
-                                    new ConfigurationException("Failed to locate partition groups"));
-                        } else {
-                            future.complete(null);
-                        }
-                    } else {
-                        future.completeExceptionally(error);
-                    }
-                });
-        return future;
-    }
+  /**
+   * Bootstraps the service.
+   */
+  private CompletableFuture<Void> bootstrap() {
+    return bootstrap(0, new CompletableFuture<>());
+  }
+
+  /**
+   * Recursively bootstraps the service, retrying if necessary until a system partition group is found.
+   */
+  private CompletableFuture<Void> bootstrap(int attempt, CompletableFuture<Void> future) {
+    Futures.allOf(membershipService.getMembers().stream()
+        .filter(node -> !node.id().equals(membershipService.getLocalMember().id()))
+        .map(node -> bootstrap(node))
+        .collect(Collectors.toList()))
+        .whenComplete((result, error) -> {
+          if (error == null) {
+            if (systemGroup == null) {
+              LOGGER.warn("Failed to locate system partition group. Retrying...");
+              threadContext.schedule(Duration.ofSeconds(FIBONACCI_NUMBERS[Math.min(attempt, 4)]), () -> bootstrap(attempt + 1, future));
+            } else if (groups.isEmpty()) {
+              LOGGER.warn("Failed to locate primitive partition group(s). Retrying...");
+              threadContext.schedule(Duration.ofSeconds(FIBONACCI_NUMBERS[Math.min(attempt, 4)]), () -> bootstrap(attempt + 1, future));
+            } else {
+              future.complete(null);
+            }
+          } else {
+            future.completeExceptionally(error);
+          }
+        });
+    return future;
+  }
 
     /**
      * Bootstraps the service from the given node.

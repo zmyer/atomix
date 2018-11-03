@@ -88,17 +88,16 @@ public class PrimaryBackupServerContext implements Managed<Void> {
         this.primaryElection = primaryElection;
     }
 
-    /**
-     * Returns the current server role.
-     *
-     * @return the current server role
-     */
-    public Role getRole() {
-        return Objects.equals(primaryElection.getTerm().join().primary().memberId(),
-                clusterMembershipService.getLocalMember().id())
-                ? Role.PRIMARY
-                : Role.BACKUP;
-    }
+  /**
+   * Returns the current server role.
+   *
+   * @return the current server role
+   */
+  public Role getRole() {
+    return Objects.equals(Futures.get(primaryElection.getTerm()).primary().memberId(), clusterMembershipService.getLocalMember().id())
+        ? Role.PRIMARY
+        : Role.BACKUP;
+  }
 
     // TODO: 2018/8/1 by zmyer
     @Override
@@ -176,15 +175,15 @@ public class PrimaryBackupServerContext implements Managed<Void> {
         });
     }
 
-    /**
-     * Handles a metadata request.
-     */
-    private CompletableFuture<MetadataResponse> metadata(MetadataRequest request) {
-        return CompletableFuture.completedFuture(MetadataResponse.ok(services.entrySet().stream()
-                .filter(entry -> entry.getValue().join().serviceType().name().equals(request.primitiveType()))
-                .map(entry -> entry.getKey())
-                .collect(Collectors.toSet())));
-    }
+  /**
+   * Handles a metadata request.
+   */
+  private CompletableFuture<MetadataResponse> metadata(MetadataRequest request) {
+    return CompletableFuture.completedFuture(MetadataResponse.ok(services.entrySet().stream()
+        .filter(entry -> Futures.get(entry.getValue()).serviceType().name().equals(request.primitiveType()))
+        .map(entry -> entry.getKey())
+        .collect(Collectors.toSet())));
+  }
 
     /**
      * Registers message listeners.

@@ -15,60 +15,83 @@
  */
 package io.atomix.core.semaphore.impl;
 
+import com.google.common.base.Throwables;
 import io.atomix.core.semaphore.AsyncDistributedSemaphore;
 import io.atomix.core.semaphore.DistributedSemaphore;
-import io.atomix.core.semaphore.QueueStatus;
 import io.atomix.primitive.PrimitiveException;
-import io.atomix.primitive.Synchronous;
-import io.atomix.utils.time.Version;
+import io.atomix.primitive.PrimitiveType;
+import io.atomix.primitive.protocol.PrimitiveProtocol;
 
 import java.time.Duration;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class BlockingDistributedSemaphore extends Synchronous<AsyncDistributedSemaphore> implements DistributedSemaphore {
+public class BlockingDistributedSemaphore extends DistributedSemaphore {
 
   private final AsyncDistributedSemaphore asyncSemaphore;
   private final Duration timeout;
 
-  public BlockingDistributedSemaphore(AsyncDistributedSemaphore asyncDistributedSemaphore, Duration timeout) {
-    super(asyncDistributedSemaphore);
-    this.asyncSemaphore = asyncDistributedSemaphore;
+  public BlockingDistributedSemaphore(AsyncDistributedSemaphore asyncSemaphore, Duration timeout) {
+    this.asyncSemaphore = asyncSemaphore;
     this.timeout = timeout;
   }
 
   @Override
-  public Version acquire() {
-    return complete(asyncSemaphore.acquire(), 1);
+  public String name() {
+    return asyncSemaphore.name();
   }
 
   @Override
-  public Version acquire(int permits) {
-    return complete(asyncSemaphore.acquire(permits), permits);
+  public PrimitiveType type() {
+    return asyncSemaphore.type();
   }
 
   @Override
-  public Optional<Version> tryAcquire() {
-    return complete(asyncSemaphore.tryAcquire(), 1);
+  public PrimitiveProtocol protocol() {
+    return asyncSemaphore.protocol();
   }
 
   @Override
-  public Optional<Version> tryAcquire(int permits) {
+  public void acquire() throws InterruptedException {
+    completeInterruptibly(asyncSemaphore.acquire(), 1);
+  }
+
+  @Override
+  public void acquireUninterruptibly() {
+    complete(asyncSemaphore.acquire(), 1);
+  }
+
+  @Override
+  public void acquire(int permits) throws InterruptedException {
+    completeInterruptibly(asyncSemaphore.acquire(permits), permits);
+  }
+
+  @Override
+  public void acquireUninterruptibly(int permits) {
+    complete(asyncSemaphore.acquire(permits), permits);
+  }
+
+  @Override
+  public boolean tryAcquire(int permits) {
     return complete(asyncSemaphore.tryAcquire(permits), permits);
   }
 
   @Override
-  public Optional<Version> tryAcquire(Duration timeout) {
-    return complete(asyncSemaphore.tryAcquire(timeout), 1);
+  public boolean tryAcquire(int permits, Duration timeout) throws InterruptedException {
+    return complete(asyncSemaphore.tryAcquire(permits, timeout), permits);
   }
 
   @Override
-  public Optional<Version> tryAcquire(int permits, Duration timeout) {
-    return complete(asyncSemaphore.tryAcquire(permits, timeout), permits);
+  public boolean tryAcquire() {
+    return complete(asyncSemaphore.tryAcquire(), 1);
+  }
+
+  @Override
+  public boolean tryAcquire(Duration timeout) throws InterruptedException {
+    return complete(asyncSemaphore.tryAcquire(timeout), 1);
   }
 
   @Override
@@ -92,23 +115,33 @@ public class BlockingDistributedSemaphore extends Synchronous<AsyncDistributedSe
   }
 
   @Override
-  public int increase(int permits) {
-    return complete(asyncSemaphore.increase(permits));
+  protected void increasePermits(int increase) {
+    complete(asyncSemaphore.increasePermits(increase));
   }
 
   @Override
-  public int reduce(int permits) {
-    return complete(asyncSemaphore.reduce(permits));
+  protected void reducePermits(int reduction) {
+    complete(asyncSemaphore.reducePermits(reduction));
   }
 
   @Override
-  public QueueStatus queueStatus() {
-    return complete(asyncSemaphore.queueStatus());
+  public boolean isFair() {
+    return true;
   }
 
   @Override
   public AsyncDistributedSemaphore async() {
     return asyncSemaphore;
+  }
+
+  @Override
+  public void close() {
+    complete(asyncSemaphore.close());
+  }
+
+  @Override
+  public void delete() {
+    complete(asyncSemaphore.delete());
   }
 
   private <T> T complete(CompletableFuture<T> future) {
@@ -123,24 +156,62 @@ public class BlockingDistributedSemaphore extends Synchronous<AsyncDistributedSe
   private <T> T complete(CompletableFuture<T> future, int acquirePermits) {
     AtomicBoolean needRelease = new AtomicBoolean(false);
     try {
-      return future.thenApply(version -> {
-        if (needRelease.get() && version != null) {
+      return future.thenApply(value -> {
+        if (needRelease.get()) {
           if (acquirePermits > 0) {
             asyncSemaphore.release(acquirePermits);
           }
         }
-        return version;
+        return value;
       }).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-    } catch (InterruptedException e) {
+    } catch (InterruptedException | PrimitiveException.Interrupted e) {
       needRelease.set(acquirePermits > 0);
       Thread.currentThread().interrupt();
       throw new PrimitiveException.Interrupted();
-    } catch (TimeoutException e) {
+    } catch (TimeoutException | PrimitiveException.Timeout e) {
       needRelease.set(acquirePermits > 0);
       throw new PrimitiveException.Timeout();
     } catch (ExecutionException e) {
       needRelease.set(acquirePermits > 0);
-      throw new PrimitiveException(e.getCause());
+      Throwable cause = Throwables.getRootCause(e);
+      if (cause instanceof PrimitiveException) {
+        throw (PrimitiveException) cause;
+      } else {
+        throw new PrimitiveException(cause);
+      }
+    }
+  }
+
+  /**
+   * Use for complete acquire or tryAcquire.
+   * If interrupt or timeout before the future completed, set needRelease to true.
+   * When the future completes, release these permits.
+   */
+  private <T> T completeInterruptibly(CompletableFuture<T> future, int acquirePermits) throws InterruptedException {
+    AtomicBoolean needRelease = new AtomicBoolean(false);
+    try {
+      return future.thenApply(value -> {
+        if (needRelease.get()) {
+          if (acquirePermits > 0) {
+            asyncSemaphore.release(acquirePermits);
+          }
+        }
+        return value;
+      }).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+    } catch (InterruptedException | PrimitiveException.Interrupted e) {
+      needRelease.set(acquirePermits > 0);
+      throw e;
+    } catch (TimeoutException | PrimitiveException.Timeout e) {
+      needRelease.set(acquirePermits > 0);
+      throw new PrimitiveException.Timeout();
+    } catch (ExecutionException e) {
+      needRelease.set(acquirePermits > 0);
+      Throwable cause = Throwables.getRootCause(e);
+      if (cause instanceof PrimitiveException) {
+        throw (PrimitiveException) cause;
+      } else {
+        throw new PrimitiveException(cause);
+      }
     }
   }
 }

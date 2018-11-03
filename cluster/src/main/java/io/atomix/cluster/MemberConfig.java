@@ -15,176 +15,188 @@
  */
 package io.atomix.cluster;
 
-import io.atomix.utils.config.Config;
 import io.atomix.utils.net.Address;
 
-import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 
 /**
- * Node configuration.
+ * Member configuration.
  */
-// TODO: 2018/7/30 by zmyer
-public class MemberConfig implements Config {
-    private MemberId id = MemberId.anonymous();
-    private Address address;
-    private String zone;
-    private String rack;
-    private String host;
-    private Map<String, String> metadata = new HashMap<>();
+public class MemberConfig extends NodeConfig {
+  private MemberId id = MemberId.anonymous();
+  private String zone;
+  private String rack;
+  private String host;
+  private Properties properties = new Properties();
 
-    /**
-     * Returns the node identifier.
-     *
-     * @return the node identifier
-     */
-    public MemberId getId() {
-        if (id == null) {
-            id = MemberId.from(address.address().getHostName());
-        }
-        return id;
-    }
+  /**
+   * Returns the member identifier.
+   *
+   * @return the member identifier
+   */
+  public MemberId getId() {
+    return id;
+  }
 
-    /**
-     * Sets the node identifier.
-     *
-     * @param id the node identifier
-     * @return the node configuration
-     */
-    public MemberConfig setId(String id) {
-        return setId(MemberId.from(id));
-    }
+  /**
+   * Sets the member identifier.
+   *
+   * @param id the member identifier
+   * @return the member configuration
+   */
+  public MemberConfig setId(String id) {
+    return setId(id != null ? MemberId.from(id) : null);
+  }
 
-    /**
-     * Sets the node identifier.
-     *
-     * @param id the node identifier
-     * @return the node configuration
-     */
-    public MemberConfig setId(MemberId id) {
-        this.id = id != null ? id : MemberId.anonymous();
-        return this;
-    }
+  @Override
+  public MemberConfig setId(NodeId id) {
+    return setId(id != null ? MemberId.from(id.id()) : null);
+  }
 
-    /**
-     * Returns the node address.
-     *
-     * @return the node address
-     */
-    public Address getAddress() {
-        return address;
-    }
+  /**
+   * Sets the member identifier.
+   *
+   * @param id the member identifier
+   * @return the member configuration
+   */
+  public MemberConfig setId(MemberId id) {
+    this.id = id != null ? id : MemberId.anonymous();
+    return this;
+  }
 
-    /**
-     * Sets the node address.
-     *
-     * @param address the node address
-     * @return the node configuration
-     */
-    public MemberConfig setAddress(String address) {
-        return setAddress(Address.from(address));
-    }
+  /**
+   * Returns the member address.
+   *
+   * @return the member address
+   */
+  public Address getAddress() {
+    return super.getAddress();
+  }
 
-    /**
-     * Sets the node address.
-     *
-     * @param address the node address
-     * @return the node configuration
-     */
-    public MemberConfig setAddress(Address address) {
-        this.address = address;
-        return this;
-    }
+  /**
+   * Sets the member address.
+   *
+   * @param address the member address
+   * @return the member configuration
+   */
+  public MemberConfig setAddress(String address) {
+    super.setAddress(address);
+    return this;
+  }
 
-    /**
-     * Returns the node zone.
-     *
-     * @return the node zone
-     */
-    public String getZone() {
-        return zone;
-    }
+  /**
+   * Sets the member address.
+   *
+   * @param address the member address
+   * @return the member configuration
+   */
+  public MemberConfig setAddress(Address address) {
+    super.setAddress(address);
+    return this;
+  }
 
-    /**
-     * Sets the node zone.
-     *
-     * @param zone the node zone
-     * @return the node configuration
-     */
-    public MemberConfig setZone(String zone) {
-        this.zone = zone;
-        return this;
-    }
+  /**
+   * Returns the member zone.
+   *
+   * @return the member zone
+   */
+  public String getZone() {
+    return zone;
+  }
 
-    /**
-     * Returns the node rack.
-     *
-     * @return the node rack
-     */
-    public String getRack() {
-        return rack;
-    }
+  /**
+   * Sets the member zone.
+   *
+   * @param zone the member zone
+   * @return the member configuration
+   */
+  public MemberConfig setZone(String zone) {
+    this.zone = zone;
+    return this;
+  }
 
-    /**
-     * Sets the node rack.
-     *
-     * @param rack the node rack
-     * @return the node configuration
-     */
-    public MemberConfig setRack(String rack) {
-        this.rack = rack;
-        return this;
-    }
+  /**
+   * Returns the member rack.
+   *
+   * @return the member rack
+   */
+  public String getRack() {
+    return rack;
+  }
 
-    /**
-     * Returns the node host.
-     *
-     * @return the node host
-     */
-    public String getHost() {
-        return host;
-    }
+  /**
+   * Sets the member rack.
+   *
+   * @param rack the member rack
+   * @return the member configuration
+   */
+  public MemberConfig setRack(String rack) {
+    this.rack = rack;
+    return this;
+  }
 
-    /**
-     * Sets the node host.
-     *
-     * @param host the node host
-     * @return the node configuration
-     */
-    public MemberConfig setHost(String host) {
-        this.host = host;
-        return this;
-    }
+  /**
+   * Returns the member host.
+   *
+   * @return the member host
+   */
+  public String getHost() {
+    return host;
+  }
 
-    /**
-     * Returns the node metadata.
-     *
-     * @return the node metadata
-     */
-    public Map<String, String> getMetadata() {
-        return metadata;
-    }
+  /**
+   * Sets the member host.
+   *
+   * @param host the member host
+   * @return the member configuration
+   */
+  public MemberConfig setHost(String host) {
+    this.host = host;
+    return this;
+  }
 
-    /**
-     * Sets the node metadata.
-     *
-     * @param metadata the node metadata
-     * @return the node configuration
-     */
-    public MemberConfig setMetadata(Map<String, String> metadata) {
-        this.metadata = metadata;
-        return this;
-    }
+  /**
+   * Returns the member properties.
+   *
+   * @return the member properties
+   */
+  public Properties getProperties() {
+    return properties;
+  }
 
-    /**
-     * Adds a node tag.
-     *
-     * @param key   the metadata key to add
-     * @param value the metadata value to add
-     * @return the node configuration
-     */
-    public MemberConfig addMetadata(String key, String value) {
-        this.metadata.put(key, value);
-        return this;
-    }
+  /**
+   * Sets the member properties.
+   *
+   * @param map the member properties
+   * @return the member configuration
+   */
+  public MemberConfig setProperties(Map<String, String> map) {
+    Properties properties = new Properties();
+    properties.putAll(map);
+    return setProperties(properties);
+  }
+
+  /**
+   * Sets the member properties.
+   *
+   * @param properties the member properties
+   * @return the member configuration
+   */
+  public MemberConfig setProperties(Properties properties) {
+    this.properties = properties;
+    return this;
+  }
+
+  /**
+   * Sets a member property.
+   *
+   * @param key   the property key to et
+   * @param value the property value to et
+   * @return the member configuration
+   */
+  public MemberConfig setProperty(String key, String value) {
+    this.properties.put(key, value);
+    return this;
+  }
 }

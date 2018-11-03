@@ -50,10 +50,10 @@ public class LeaderElectorProxy
   @Override
   public void onLeadershipChange(String topic, Leadership<byte[]> oldLeadership, Leadership<byte[]> newLeadership) {
     LeadershipEvent<byte[]> event = new LeadershipEvent<byte[]>(LeadershipEvent.Type.CHANGE, topic, oldLeadership, newLeadership);
-    leadershipChangeListeners.forEach(l -> l.onEvent(event));
+    leadershipChangeListeners.forEach(l -> l.event(event));
     Set<LeadershipEventListener<byte[]>> listenerSet = topicListeners.get(topic);
     if (listenerSet != null) {
-      listenerSet.forEach(l -> l.onEvent(event));
+      listenerSet.forEach(l -> l.event(event));
     }
   }
 
@@ -99,8 +99,8 @@ public class LeaderElectorProxy
 
   @Override
   public synchronized CompletableFuture<Void> addListener(LeadershipEventListener<byte[]> listener) {
-    leadershipChangeListeners.add(listener);
-    return getProxyClient().acceptAll(service -> service.listen());
+    return getProxyClient().acceptAll(service -> service.listen())
+        .thenRun(() -> leadershipChangeListeners.add(listener));
   }
 
   @Override
@@ -113,17 +113,11 @@ public class LeaderElectorProxy
 
   @Override
   public synchronized CompletableFuture<Void> addListener(String topic, LeadershipEventListener<byte[]> listener) {
-    boolean empty = topicListeners.isEmpty();
-    topicListeners.compute(topic, (t, s) -> {
-      if (s == null) {
-        s = Sets.newCopyOnWriteArraySet();
-      }
-      s.add(listener);
-      return s;
-    });
-
-    if (empty) {
-      return getProxyClient().acceptBy(topic, service -> service.listen());
+    if (topicListeners.isEmpty()) {
+      return getProxyClient().acceptBy(topic, service -> service.listen())
+          .thenRun(() -> topicListeners.computeIfAbsent(topic, t -> Sets.newCopyOnWriteArraySet()).add(listener));
+    } else {
+      topicListeners.computeIfAbsent(topic, t -> Sets.newCopyOnWriteArraySet()).add(listener);
     }
     return CompletableFuture.completedFuture(null);
   }

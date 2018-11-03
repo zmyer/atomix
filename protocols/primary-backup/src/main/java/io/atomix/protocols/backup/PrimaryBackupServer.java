@@ -103,19 +103,19 @@ public class PrimaryBackupServer implements Managed<PrimaryBackupServer> {
         return context.stop();
     }
 
-    /**
-     * Primary-backup server builder
-     */
-    public static class Builder implements io.atomix.utils.Builder<PrimaryBackupServer> {
-        protected String serverName = "atomix";
-        protected ClusterMembershipService membershipService;
-        protected PrimaryBackupServerProtocol protocol;
-        protected PrimaryElection primaryElection;
-        protected PrimitiveTypeRegistry primitiveTypes;
-        protected MemberGroupProvider memberGroupProvider;
-        protected ThreadModel threadModel = ThreadModel.SHARED_THREAD_POOL;
-        protected int threadPoolSize = Runtime.getRuntime().availableProcessors();
-        protected ThreadContextFactory threadContextFactory;
+  /**
+   * Primary-backup server builder
+   */
+  public static class Builder implements io.atomix.utils.Builder<PrimaryBackupServer> {
+    protected String serverName = "atomix";
+    protected ClusterMembershipService membershipService;
+    protected PrimaryBackupServerProtocol protocol;
+    protected PrimaryElection primaryElection;
+    protected PrimitiveTypeRegistry primitiveTypes;
+    protected MemberGroupProvider memberGroupProvider;
+    protected ThreadModel threadModel = ThreadModel.SHARED_THREAD_POOL;
+    protected int threadPoolSize = Math.max(Math.min(Runtime.getRuntime().availableProcessors() * 2, 16), 4);
+    protected ThreadContextFactory threadContextFactory;
 
         /**
          * Sets the server name.

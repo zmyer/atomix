@@ -15,7 +15,7 @@
  */
 package io.atomix.utils.net;
 
-import java.net.Inet4Address;
+import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Objects;
@@ -73,12 +73,7 @@ public final class Address {
     } else {
       port = DEFAULT_PORT;
     }
-
-    try {
-      return new Address(host, port, InetAddress.getByName(host));
-    } catch (UnknownHostException e) {
-      throw new MalformedAddressException(address, e);
-    }
+    return new Address(host, port);
   }
 
   /**
@@ -89,11 +84,7 @@ public final class Address {
    * @return a new address
    */
   public static Address from(String host, int port) {
-    try {
-      return new Address(host, port, InetAddress.getByName(host));
-    } catch (UnknownHostException e) {
-      throw new IllegalArgumentException("Failed to locate host", e);
-    }
+    return new Address(host, port);
   }
 
   /**
@@ -105,7 +96,7 @@ public final class Address {
   public static Address from(int port) {
     try {
       InetAddress address = getLocalAddress();
-      return new Address(address.getHostName(), port, address);
+      return new Address(address.getHostName(), port);
     } catch (UnknownHostException e) {
       throw new IllegalArgumentException("Failed to locate host", e);
     }
@@ -124,14 +115,20 @@ public final class Address {
 
   private final String host;
   private final int port;
-  private final InetAddress address;
-  private final Type type;
+  private transient volatile Type type;
+  private transient volatile InetAddress address;
+
+  public Address(String host, int port) {
+    this(host, port, null);
+  }
 
   public Address(String host, int port, InetAddress address) {
     this.host = host;
     this.port = port;
     this.address = address;
-    this.type = address instanceof Inet4Address ? Type.IPV4 : Type.IPV6;
+    if (address != null) {
+      this.type = address instanceof Inet6Address ? Type.IPV6 : Type.IPV4;
+    }
   }
 
   /**
@@ -158,7 +155,42 @@ public final class Address {
    * @return the IP address
    */
   public InetAddress address() {
+    return address(false);
+  }
+
+  /**
+   * Returns the IP address.
+   *
+   * @param resolve whether to force resolve the hostname
+   * @return the IP address
+   */
+  public InetAddress address(boolean resolve) {
+    if (resolve) {
+      address = resolveAddress();
+      return address;
+    }
+
+    if (address == null) {
+      synchronized (this) {
+        if (address == null) {
+          address = resolveAddress();
+        }
+      }
+    }
     return address;
+  }
+
+  /**
+   * Resolves the IP address from the hostname.
+   *
+   * @return the resolved IP address or {@code null} if the IP could not be resolved
+   */
+  private InetAddress resolveAddress() {
+    try {
+      return InetAddress.getByName(host);
+    } catch (UnknownHostException e) {
+      return null;
+    }
   }
 
   /**
@@ -167,24 +199,30 @@ public final class Address {
    * @return the address type
    */
   public Type type() {
+    if (type == null) {
+      synchronized (this) {
+        if (type == null) {
+          type = address() instanceof Inet6Address ? Type.IPV6 : Type.IPV4;
+        }
+      }
+    }
     return type;
   }
 
   @Override
   public String toString() {
-    switch (type) {
-      case IPV4:
-        return String.format("%s:%d", host(), port());
-      case IPV6:
-        return String.format("[%s]:%d", host(), port());
-      default:
-        throw new AssertionError();
+    String host = host();
+    int port = port();
+    if (host.matches("([0-9a-f]{1,4}:){7}([0-9a-f]){1,4}")) {
+      return String.format("[%s]:%d", host, port);
+    } else {
+      return String.format("%s:%d", host, port);
     }
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(address, port);
+    return Objects.hash(host, port);
   }
 
   @Override
@@ -199,7 +237,7 @@ public final class Address {
       return false;
     }
     Address that = (Address) obj;
-    return this.port == that.port &&
-        Objects.equals(this.address, that.address);
+    return this.host.equals(that.host)
+        && this.port == that.port;
   }
 }

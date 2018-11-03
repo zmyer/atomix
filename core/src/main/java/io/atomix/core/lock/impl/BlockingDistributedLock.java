@@ -15,18 +15,18 @@
  */
 package io.atomix.core.lock.impl;
 
+import com.google.common.base.Throwables;
 import io.atomix.core.lock.AsyncDistributedLock;
 import io.atomix.core.lock.DistributedLock;
 import io.atomix.primitive.PrimitiveException;
 import io.atomix.primitive.Synchronous;
-import io.atomix.utils.time.Version;
 
 import java.time.Duration;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.locks.Condition;
 
 /**
  * Default implementation for a {@code DistributedLock} backed by a {@link AsyncDistributedLock}.
@@ -43,23 +43,38 @@ public class BlockingDistributedLock extends Synchronous<AsyncDistributedLock> i
   }
 
   @Override
-  public Version lock() {
-    return asyncLock.lock().join();
+  public void lock() {
+    asyncLock.lock().join();
   }
 
   @Override
-  public Optional<Version> tryLock() {
+  public void lockInterruptibly() throws InterruptedException {
+    asyncLock.lock().join();
+  }
+
+  @Override
+  public Condition newCondition() {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public boolean tryLock() {
     return asyncLock.tryLock().join();
   }
 
   @Override
-  public Optional<Version> tryLock(Duration timeout) {
+  public boolean tryLock(Duration timeout) {
     return asyncLock.tryLock(timeout).join();
   }
 
   @Override
   public void unlock() {
     complete(asyncLock.unlock());
+  }
+
+  @Override
+  public boolean isLocked() {
+    return complete(asyncLock.isLocked());
   }
 
   @Override
@@ -76,7 +91,12 @@ public class BlockingDistributedLock extends Synchronous<AsyncDistributedLock> i
     } catch (TimeoutException e) {
       throw new PrimitiveException.Timeout();
     } catch (ExecutionException e) {
-      throw new PrimitiveException(e.getCause());
+      Throwable cause = Throwables.getRootCause(e);
+      if (cause instanceof PrimitiveException) {
+        throw (PrimitiveException) cause;
+      } else {
+        throw new PrimitiveException(cause);
+      }
     }
   }
 }

@@ -25,6 +25,7 @@ import io.atomix.primitive.operation.Operations;
 import io.atomix.primitive.operation.PrimitiveOperation;
 import io.atomix.primitive.proxy.ProxySession;
 import io.atomix.primitive.session.SessionClient;
+import io.atomix.utils.concurrent.Futures;
 import io.atomix.utils.concurrent.ThreadContext;
 import io.atomix.utils.serializer.Serializer;
 import org.slf4j.Logger;
@@ -44,11 +45,12 @@ import java.util.function.Function;
  */
 // TODO: 2018/8/1 by zmyer
 public class DefaultProxySession<S> implements ProxySession<S> {
-    private final Logger log = LoggerFactory.getLogger(getClass());
-    private final SessionClient session;
-    private final Serializer serializer;
-    private final ServiceProxy<S> proxy;
-    private volatile CompletableFuture<ProxySession<S>> connectFuture;
+  private final Logger log = LoggerFactory.getLogger(getClass());
+  private final SessionClient session;
+  private final Serializer serializer;
+  private final ServiceProxy<S> proxy;
+  private volatile CompletableFuture<ProxySession<S>> connectFuture;
+  private volatile boolean closed;
 
     // TODO: 2018/8/1 by zmyer
     @SuppressWarnings("unchecked")
@@ -95,16 +97,21 @@ public class DefaultProxySession<S> implements ProxySession<S> {
         });
     }
 
-    // TODO: 2018/8/1 by zmyer
-    @Override
-    public CompletableFuture<Void> accept(Consumer<S> operation) {
-        return proxy.accept(operation);
+  @Override
+  public CompletableFuture<Void> accept(Consumer<S> operation) {
+    if (closed) {
+      return Futures.exceptionalFuture(new PrimitiveException.ClosedSession());
     }
+    return proxy.accept(operation);
+  }
 
-    @Override
-    public <R> CompletableFuture<R> apply(Function<S, R> operation) {
-        return proxy.apply(operation);
+  @Override
+  public <R> CompletableFuture<R> apply(Function<S, R> operation) {
+    if (closed) {
+      return Futures.exceptionalFuture(new PrimitiveException.ClosedSession());
     }
+    return proxy.apply(operation);
+  }
 
     // TODO: 2018/8/1 by zmyer
     @Override
@@ -130,10 +137,15 @@ public class DefaultProxySession<S> implements ProxySession<S> {
         return connectFuture;
     }
 
-    @Override
-    public CompletableFuture<Void> close() {
-        return session.close();
-    }
+  @Override
+  public CompletableFuture<Void> close() {
+    return session.close().thenRun(() -> closed = true);
+  }
+
+  @Override
+  public CompletableFuture<Void> delete() {
+    return session.delete().thenRun(() -> closed = true);
+  }
 
     /**
      * Returns the serializer for the primitive operations.

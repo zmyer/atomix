@@ -18,7 +18,6 @@ package io.atomix.core.tree;
 
 import com.google.common.collect.Comparators;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
 import org.apache.commons.lang3.StringUtils;
 
 import java.util.ArrayList;
@@ -32,30 +31,78 @@ import java.util.Objects;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
- * Unique key for nodes in the {@link DocumentTree}.
+ * Unique key for nodes in the {@link AtomicDocumentTree}.
  */
 public class DocumentPath implements Comparable<DocumentPath> {
+  private static final String ROOT_ELEMENT = "";
+
+  /**
+   * Creates a new {@code DocumentPath} from a period delimited path string.
+   *
+   * @param path path string
+   * @return {@code DocumentPath} instance
+   */
+  public static DocumentPath from(String path) {
+    if (path.equals(ROOT_PATH)) {
+      return ROOT;
+    }
+    return new DocumentPath(Arrays.asList(path.split(PATH_SEPARATOR)));
+  }
+
+  /**
+   * Creates a new {@code DocumentPath} from a list of path elements.
+   *
+   * @param elements path elements
+   * @return {@code DocumentPath} instance
+   */
+  public static DocumentPath from(String... elements) {
+    return from(Arrays.asList(elements));
+  }
+
+  /**
+   * Creates a new root {@code DocumentPath} from a list of path elements.
+   *
+   * @param elements path elements
+   * @return {@code DocumentPath} instance
+   */
+  public static DocumentPath from(List<String> elements) {
+    List<String> copy = new ArrayList<>();
+    copy.add(ROOT_ELEMENT);
+    copy.addAll(elements);
+    return new DocumentPath(copy);
+  }
+
+  /**
+   * Creates a new root {@code DocumentPath} from a list of path elements.
+   *
+   * @param elements path elements
+   * @param child    child element
+   * @return {@code DocumentPath} instance
+   */
+  public static DocumentPath from(List<String> elements, String child) {
+    List<String> copy = new ArrayList<>();
+    copy.add(ROOT_ELEMENT);
+    copy.addAll(elements);
+    copy.add(child);
+    return new DocumentPath(copy);
+  }
 
   /**
    * Default path separator.
    */
-  public static final String DEFAULT_SEPARATOR = "|";
+  private static final String PATH_SEPARATOR = "/";
 
   /**
-   * Default path separator regex.
+   * Root document path.
    */
-  public static final String DEFAULT_SEPARATOR_RE = "\\|";
-
-  // TODO: Add means to set the path separator and separator ERE.
-  private static String pathSeparator = DEFAULT_SEPARATOR;
-  private static String pathSeparatorRE = DEFAULT_SEPARATOR_RE;
+  private static final String ROOT_PATH = "/";
 
   /**
    * Root document tree path.
    */
-  public static final DocumentPath ROOT = DocumentPath.from("root");
+  public static final DocumentPath ROOT = new DocumentPath(ImmutableList.of(ROOT_ELEMENT));
 
-  private final List<String> pathElements = Lists.newArrayList();
+  private final List<String> pathElements;
 
   /**
    * Private utility constructor for internal generation of partial paths only.
@@ -64,7 +111,7 @@ public class DocumentPath implements Comparable<DocumentPath> {
    */
   private DocumentPath(List<String> pathElements) {
     checkNotNull(pathElements);
-    this.pathElements.addAll(pathElements);
+    this.pathElements = ImmutableList.copyOf(pathElements);
   }
 
   /**
@@ -80,62 +127,20 @@ public class DocumentPath implements Comparable<DocumentPath> {
    */
   public DocumentPath(String nodeName, DocumentPath parentPath) {
     checkNotNull(nodeName, "Node name cannot be null");
-    if (nodeName.contains(pathSeparator)) {
-      throw new IllegalDocumentNameException("'" + pathSeparator + "'" +
-          " are not allowed in names.");
+    if (nodeName.contains(PATH_SEPARATOR)) {
+      throw new IllegalDocumentNameException("'" + PATH_SEPARATOR + "' are not allowed in names.");
     }
+
+    ImmutableList.Builder<String> builder = ImmutableList.builder();
     if (parentPath != null) {
-      pathElements.addAll(parentPath.pathElements());
+      builder.addAll(parentPath.pathElements());
     }
-    pathElements.add(nodeName);
+    builder.add(nodeName);
+
+    pathElements = builder.build();
     if (pathElements.isEmpty()) {
-      throw new IllegalDocumentNameException("A document path must contain at" +
-          "least one non-null" +
-          "element.");
+      throw new IllegalDocumentNameException("A document path must contain at least one non-null element.");
     }
-  }
-
-  /**
-   * Creates a new {@code DocumentPath} from a period delimited path string.
-   *
-   * @param path path string
-   * @return {@code DocumentPath} instance
-   */
-  public static DocumentPath from(String path) {
-    return new DocumentPath(Arrays.asList(path.split(pathSeparatorRE)));
-  }
-
-  /**
-   * Creates a new {@code DocumentPath} from a list of path elements.
-   *
-   * @param elements path elements
-   * @return {@code DocumentPath} instance
-   */
-  public static DocumentPath from(String... elements) {
-    return from(Arrays.asList(elements));
-  }
-
-  /**
-   * Creates a new {@code DocumentPath} from a list of path elements.
-   *
-   * @param elements path elements
-   * @return {@code DocumentPath} instance
-   */
-  public static DocumentPath from(List<String> elements) {
-    return new DocumentPath(elements);
-  }
-
-  /**
-   * Creates a new {@code DocumentPath} from a list of path elements.
-   *
-   * @param elements path elements
-   * @param child    child element
-   * @return {@code DocumentPath} instance
-   */
-  public static DocumentPath from(List<String> elements, String child) {
-    elements = new ArrayList<>(elements);
-    elements.add(child);
-    return from(elements);
   }
 
   /**
@@ -229,12 +234,16 @@ public class DocumentPath implements Comparable<DocumentPath> {
 
   @Override
   public String toString() {
+    if (pathElements.equals(ROOT.pathElements)) {
+      return ROOT_PATH;
+    }
+
     StringBuilder stringBuilder = new StringBuilder();
     Iterator<String> iter = pathElements.iterator();
     while (iter.hasNext()) {
       stringBuilder.append(iter.next());
       if (iter.hasNext()) {
-        stringBuilder.append(pathSeparator);
+        stringBuilder.append(PATH_SEPARATOR);
       }
     }
     return stringBuilder.toString();

@@ -2,18 +2,20 @@
 
 ![Atomix](http://atomix.io/assets/img/logos/atomix-medium.png)
 
-## [Website][Website] | [Javadoc][Javadoc] | [Google Group][Google group]
+## [Website][Website] | [Javadoc][Javadoc] | [Google Group][Google Group]
 
 [![Build Status](https://travis-ci.org/atomix/atomix.svg?branch=master)](https://travis-ci.org/atomix/atomix)
+[![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=io.atomix%3Aatomix-parent&metric=alert_status)](https://sonarcloud.io/dashboard?id=io.atomix%3Aatomix-parent)
 [![Coverage Status](https://coveralls.io/repos/github/atomix/atomix/badge.svg?branch=master)](https://coveralls.io/github/atomix/atomix?branch=master)
-[![Maven Central](https://maven-badges.herokuapp.com/maven-central/io.atomix/atomix/badge.svg)](https://maven-badges.herokuapp.com/maven-central/io.atomix/atomix)
+[![Maven Central](https://maven-badges.herokuapp.com/maven-central/io.atomix/atomix/badge.svg?cache=foo)](https://maven-badges.herokuapp.com/maven-central/io.atomix/atomix)
+[![Javadocs](http://www.javadoc.io/badge/io.atomix/atomix.svg)](https://atomix.io/docs/latest/api/)
 [![Gitter](https://img.shields.io/badge/GITTER-join%20chat-green.svg)](https://gitter.im/atomix/atomix)
 
 **A reactive Java framework for building fault-tolerant distributed systems**
 
 Please see the [website][Website] for full documentation.
 
-Atomix 2.1 is a fully featured framework for building fault-tolerant distributed systems. It provides a set of high-level primitives commonly needed for building scalable and fault-tolerant distributed systems. These primitives include:
+Atomix 3.0 is a fully featured framework for building fault-tolerant distributed systems. It provides a set of high-level primitives commonly needed for building scalable and fault-tolerant distributed systems. These primitives include:
 * Cluster management and failure detection
 * Direct and publish-subscribe messaging
 * Distributed coordination primitives built on a novel implementation of the [Raft][Raft] consensus protocol
@@ -37,8 +39,8 @@ innovative and intelligent tools for profiling Java and .NET applications.
 
 ![YourKit](https://www.yourkit.com/images/yklogo.png)
 
-[Website]: http://atomix.io
-[Google group]: https://groups.google.com/forum/#!forum/atomixio
+[Website]: https://atomix.io
+[Google Group]: https://groups.google.com/forum/#!forum/atomixio
 [Javadoc]: http://atomix.io/docs/latest/api/
 [Raft]: https://raft.github.io/
 [ONF]: https://www.opennetworking.org/

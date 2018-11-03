@@ -24,7 +24,7 @@ import io.atomix.protocols.raft.partition.impl.RaftClientCommunicator;
 import io.atomix.protocols.raft.partition.impl.RaftNamespaces;
 import io.atomix.protocols.raft.partition.impl.RaftPartitionClient;
 import io.atomix.protocols.raft.partition.impl.RaftPartitionServer;
-import io.atomix.storage.StorageLevel;
+import io.atomix.utils.concurrent.ThreadContextFactory;
 import io.atomix.utils.serializer.Serializer;
 
 import java.io.File;
@@ -40,20 +40,22 @@ import static com.google.common.base.MoreObjects.toStringHelper;
  */
 public class RaftPartition implements Partition {
   private final PartitionId partitionId;
-  private final StorageLevel storageLevel;
-  private final long segmentSize;
-  private final boolean flushOnCommit;
+  private final RaftPartitionGroupConfig config;
   private final File dataDirectory;
+  private final ThreadContextFactory threadContextFactory;
   private PartitionMetadata partition;
   private RaftPartitionClient client;
   private RaftPartitionServer server;
 
-  public RaftPartition(PartitionId partitionId, StorageLevel storageLevel, long segmentSize, boolean flushOnCommit, File dataDirectory) {
+  public RaftPartition(
+      PartitionId partitionId,
+      RaftPartitionGroupConfig config,
+      File dataDirectory,
+      ThreadContextFactory threadContextFactory) {
     this.partitionId = partitionId;
-    this.storageLevel = storageLevel;
-    this.segmentSize = segmentSize;
-    this.flushOnCommit = flushOnCommit;
+    this.config = config;
     this.dataDirectory = dataDirectory;
+    this.threadContextFactory = threadContextFactory;
   }
 
   @Override
@@ -97,39 +99,25 @@ public class RaftPartition implements Partition {
   }
 
   /**
-   * Returns the Raft partition storage level.
-   *
-   * @return the Raft partition storage level
-   */
-  public StorageLevel storageLevel() {
-    return storageLevel;
-  }
-
-  /**
-   * Returns the log segment size.
-   *
-   * @return the log segment size
-   */
-  public long segmentSize() {
-    return segmentSize;
-  }
-
-  /**
-   * Returns whether to flush logs to disk on commit.
-   *
-   * @return whether to flush logs to disk on commit
-   */
-  public boolean flushOnCommit() {
-    return flushOnCommit;
-  }
-
-  /**
    * Returns the partition data directory.
    *
    * @return the partition data directory
    */
   public File dataDirectory() {
     return dataDirectory;
+  }
+
+  /**
+   * Takes a snapshot of the partition.
+   *
+   * @return a future to be completed once the snapshot is complete
+   */
+  public CompletableFuture<Void> snapshot() {
+    RaftPartitionServer server = this.server;
+    if (server != null) {
+      return server.snapshot();
+    }
+    return CompletableFuture.completedFuture(null);
   }
 
   @Override
@@ -196,10 +184,12 @@ public class RaftPartition implements Partition {
   protected RaftPartitionServer createServer(PartitionManagementService managementService) {
     return new RaftPartitionServer(
         this,
+        config,
         managementService.getMembershipService().getLocalMember().id(),
         managementService.getMembershipService(),
         managementService.getMessagingService(),
-        managementService.getPrimitiveTypes());
+        managementService.getPrimitiveTypes(),
+        threadContextFactory);
   }
 
   /**
@@ -212,7 +202,8 @@ public class RaftPartition implements Partition {
         new RaftClientCommunicator(
             name(),
             Serializer.using(RaftNamespaces.RAFT_PROTOCOL),
-            managementService.getMessagingService()));
+            managementService.getMessagingService()),
+        threadContextFactory);
   }
 
   /**

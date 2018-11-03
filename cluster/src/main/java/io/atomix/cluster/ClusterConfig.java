@@ -15,193 +15,170 @@
  */
 package io.atomix.cluster;
 
+import io.atomix.cluster.discovery.NodeDiscoveryConfig;
+import io.atomix.cluster.messaging.MessagingConfig;
+import io.atomix.cluster.protocol.GroupMembershipProtocolConfig;
+import io.atomix.cluster.protocol.PhiMembershipProtocolConfig;
 import io.atomix.utils.config.Config;
-import io.atomix.utils.net.Address;
-import io.atomix.utils.net.MalformedAddressException;
 
-import java.util.ArrayList;
-import java.util.List;
+import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
  * Cluster configuration.
  */
 // TODO: 2018/7/30 by zmyer
 public class ClusterConfig implements Config {
-    private static final String DEFAULT_CLUSTER_NAME = "atomix";
-    private static final String DEFAULT_MULTICAST_IP = "230.0.0.1";
-    private static final int DEFAULT_MULTICAST_PORT = 54321;
+  private static final String DEFAULT_CLUSTER_NAME = "atomix";
 
-    private String name = DEFAULT_CLUSTER_NAME;
-    private String localMemberId;
-    private MemberConfig localMember;
-    private List<MemberConfig> members = new ArrayList<>();
-    private boolean multicastEnabled = false;
-    private Address multicastAddress;
-    private GroupMembershipConfig membershipConfig = new GroupMembershipConfig();
+  private String clusterId = DEFAULT_CLUSTER_NAME;
+  private MemberConfig nodeConfig = new MemberConfig();
+  private NodeDiscoveryConfig discoveryConfig;
+  private MulticastConfig multicastConfig = new MulticastConfig();
+  private GroupMembershipProtocolConfig protocolConfig = new PhiMembershipProtocolConfig();
+  private MembershipConfig membershipConfig = new MembershipConfig();
+  private MessagingConfig messagingConfig = new MessagingConfig();
 
-    public ClusterConfig() {
-        try {
-            multicastAddress = Address.from(DEFAULT_MULTICAST_IP, DEFAULT_MULTICAST_PORT);
-        } catch (MalformedAddressException e) {
-            multicastAddress = Address.from(DEFAULT_MULTICAST_PORT);
-        }
-    }
+  /**
+   * Returns the cluster identifier.
+   *
+   * @return the cluster identifier
+   */
+  public String getClusterId() {
+    return clusterId;
+  }
 
-    /**
-     * Returns the cluster name.
-     *
-     * @return the cluster name
-     */
-    public String getName() {
-        return name;
-    }
+  /**
+   * Sets the cluster identifier.
+   *
+   * @param clusterId the cluster identifier
+   * @return the cluster configuration
+   */
+  public ClusterConfig setClusterId(String clusterId) {
+    this.clusterId = clusterId;
+    return this;
+  }
 
-    /**
-     * Sets the cluster name.
-     *
-     * @param name the cluster name
-     * @return the cluster configuration
-     */
-    public ClusterConfig setName(String name) {
-        this.name = name;
-        return this;
-    }
+  /**
+   * Returns the local member configuration.
+   *
+   * @return the local member configuration
+   */
+  public MemberConfig getNodeConfig() {
+    return nodeConfig;
+  }
 
-    /**
-     * Returns the local member identifier.
-     *
-     * @return the local member identifier
-     */
-    public String getLocalMemberId() {
-        return localMemberId;
-    }
+  /**
+   * Sets the local member configuration.
+   *
+   * @param nodeConfig the local member configuration
+   * @return the cluster configuration
+   */
+  public ClusterConfig setNodeConfig(MemberConfig nodeConfig) {
+    this.nodeConfig = checkNotNull(nodeConfig);
+    return this;
+  }
 
-    /**
-     * Sets the local member identifier.
-     *
-     * @param localMemberId the local member identifier
-     * @return the cluster configuration
-     */
-    public ClusterConfig setLocalMemberId(String localMemberId) {
-        this.localMemberId = localMemberId;
-        return this;
-    }
+  /**
+   * Returns the node discovery provider configuration.
+   *
+   * @return the node discovery provider configuration
+   */
+  public NodeDiscoveryConfig getDiscoveryConfig() {
+    return discoveryConfig;
+  }
 
-    /**
-     * Returns the local node configuration.
-     *
-     * @return the local node configuration
-     */
-    public MemberConfig getLocalMember() {
-        MemberConfig member = localMember;
-        if (member == null && localMemberId != null) {
-            member = members.stream()
-                    .filter(m -> m.getId().id().equals(localMemberId))
-                    .findFirst()
-                    .orElse(null);
-        }
-        return member;
-    }
+  /**
+   * Sets the node discovery provider configuration.
+   *
+   * @param discoveryConfig the node discovery provider configuration
+   * @return the node configuration
+   */
+  public ClusterConfig setDiscoveryConfig(NodeDiscoveryConfig discoveryConfig) {
+    this.discoveryConfig = checkNotNull(discoveryConfig);
+    return this;
+  }
 
-    /**
-     * Sets the local node configuration.
-     *
-     * @param localMember the local node configuration
-     * @return the cluster configuration
-     */
-    public ClusterConfig setLocalMember(MemberConfig localMember) {
-        this.localMember = localMember;
-        return this;
-    }
+  /**
+   * Returns the multicast configuration.
+   *
+   * @return the multicast configuration
+   */
+  public MulticastConfig getMulticastConfig() {
+    return multicastConfig;
+  }
 
-    /**
-     * Returns the cluster nodes.
-     *
-     * @return the cluster nodes
-     */
-    public List<MemberConfig> getMembers() {
-        return members;
-    }
+  /**
+   * Sets the multicast configuration.
+   *
+   * @param multicastConfig the multicast configuration
+   * @return the cluster configuration
+   */
+  public ClusterConfig setMulticastConfig(MulticastConfig multicastConfig) {
+    this.multicastConfig = checkNotNull(multicastConfig);
+    return this;
+  }
 
-    /**
-     * Sets the cluster nodes.
-     *
-     * @param members the cluster nodes
-     * @return the cluster configuration
-     */
-    public ClusterConfig setMembers(List<MemberConfig> members) {
-        this.members = members;
-        return this;
-    }
+  /**
+   * Returns the group membership protocol configuration.
+   *
+   * @return the group membership protocol configuration
+   */
+  public GroupMembershipProtocolConfig getProtocolConfig() {
+    return protocolConfig;
+  }
 
-    /**
-     * Adds a member to the configuration.
-     *
-     * @param member the member to add
-     * @return the cluster configuration
-     */
-    public ClusterConfig addMember(MemberConfig member) {
-        members.add(member);
-        return this;
-    }
+  /**
+   * Sets the group membership protocol configuration.
+   *
+   * @param protocolConfig the group membership protocol configuration
+   * @return the cluster configuration
+   */
+  public ClusterConfig setProtocolConfig(GroupMembershipProtocolConfig protocolConfig) {
+    this.protocolConfig = protocolConfig;
+    return this;
+  }
 
-    /**
-     * Returns whether multicast is enabled.
-     *
-     * @return whether multicast is enabled
-     */
-    public boolean isMulticastEnabled() {
-        return multicastEnabled;
-    }
+  /**
+   * Returns the cluster membership configuration.
+   *
+   * @return the cluster membership configuration
+   * @deprecated since 3.1
+   */
+  @Deprecated
+  public MembershipConfig getMembershipConfig() {
+    return membershipConfig;
+  }
 
-    /**
-     * Sets whether multicast is enabled.
-     *
-     * @param multicastEnabled whether multicast is enabled
-     * @return the cluster configuration
-     */
-    public ClusterConfig setMulticastEnabled(boolean multicastEnabled) {
-        this.multicastEnabled = multicastEnabled;
-        return this;
-    }
+  /**
+   * Sets the cluster membership configuration.
+   *
+   * @param membershipConfig the cluster membership configuration
+   * @return the cluster configuration
+   * @deprecated since 3.1
+   */
+  @Deprecated
+  public ClusterConfig setMembershipConfig(MembershipConfig membershipConfig) {
+    this.membershipConfig = checkNotNull(membershipConfig);
+    return this;
+  }
 
-    /**
-     * Returns the multicast address.
-     *
-     * @return the multicast address
-     */
-    public Address getMulticastAddress() {
-        return multicastAddress;
-    }
+  /**
+   * Returns the cluster messaging configuration.
+   *
+   * @return the messaging configuration
+   */
+  public MessagingConfig getMessagingConfig() {
+    return messagingConfig;
+  }
 
-    /**
-     * Sets the multicast address.
-     *
-     * @param multicastAddress the multicast address
-     * @return the cluster configuration
-     */
-    public ClusterConfig setMulticastAddress(Address multicastAddress) {
-        this.multicastAddress = multicastAddress;
-        return this;
-    }
-
-    /**
-     * Returns the group membership configuration.
-     *
-     * @return the group membership configuration
-     */
-    public GroupMembershipConfig getMembershipConfig() {
-        return membershipConfig;
-    }
-
-    /**
-     * Sets the group membership configuration.
-     *
-     * @param membershipConfig the group membership configuration
-     * @return the cluster configuration
-     */
-    public ClusterConfig setMembershipConfig(GroupMembershipConfig membershipConfig) {
-        this.membershipConfig = membershipConfig;
-        return this;
-    }
+  /**
+   * Sets the cluster messaging configuration.
+   *
+   * @param messagingConfig the messaging configuration
+   * @return the cluster configuration
+   */
+  public ClusterConfig setMessagingConfig(MessagingConfig messagingConfig) {
+    this.messagingConfig = messagingConfig;
+    return this;
+  }
 }

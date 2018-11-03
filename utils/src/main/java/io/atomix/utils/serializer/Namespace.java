@@ -77,10 +77,10 @@ public final class Namespace implements KryoFactory, KryoPool {
 
     private static final Logger log = getLogger(Namespace.class);
 
-    /**
-     * Default Kryo namespace.
-     */
-    public static Namespace DEFAULT = builder().build();
+  /**
+   * Default Kryo namespace.
+   */
+  public static final Namespace DEFAULT = builder().build();
 
     private final KryoPool kryoPool = new KryoPool.Builder(this)
             .softReferences()
@@ -265,26 +265,25 @@ public final class Namespace implements KryoFactory, KryoPool {
         return new Builder();
     }
 
-    @SuppressWarnings("unchecked")
-    private static List<RegistrationBlock> buildRegistrationBlocks(NamespaceConfig config) {
-        List<Pair<Class<?>[], Serializer<?>>> types = new ArrayList<>();
-        List<RegistrationBlock> blocks = new ArrayList<>();
-        blocks.addAll(Namespaces.BASIC.registeredBlocks);
-        for (NamespaceTypeConfig type : config.getTypes()) {
-            try {
-                if (type.getId() == null) {
-                    types.add(Pair.of(new Class[]{ type.getType() }, type.getSerializer().newInstance()));
-                } else {
-                    blocks.add(new RegistrationBlock(type.getId(), Collections.singletonList(
-                            Pair.of(new Class[]{ type.getType() }, type.getSerializer().newInstance()))));
-                }
-            } catch (InstantiationException | IllegalAccessException e) {
-                throw new ConfigurationException("Failed to instantiate serializer from configuration", e);
-            }
+  @SuppressWarnings("unchecked")
+  private static List<RegistrationBlock> buildRegistrationBlocks(NamespaceConfig config) {
+    List<Pair<Class<?>[], Serializer<?>>> types = new ArrayList<>();
+    List<RegistrationBlock> blocks = new ArrayList<>();
+    blocks.addAll(Namespaces.BASIC.registeredBlocks);
+    for (NamespaceTypeConfig type : config.getTypes()) {
+      try {
+        if (type.getId() == null) {
+          types.add(Pair.of(new Class[]{type.getType()}, type.getSerializer() != null ? type.getSerializer().newInstance() : null));
+        } else {
+          blocks.add(new RegistrationBlock(type.getId(), Collections.singletonList(Pair.of(new Class[]{type.getType()}, type.getSerializer().newInstance()))));
         }
-        blocks.add(new RegistrationBlock(Namespaces.BEGIN_USER_CUSTOM_ID, types));
-        return blocks;
+      } catch (InstantiationException | IllegalAccessException e) {
+        throw new ConfigurationException("Failed to instantiate serializer from configuration", e);
+      }
     }
+    blocks.add(new RegistrationBlock(FLOATING_ID, types));
+    return blocks;
+  }
 
     public Namespace(NamespaceConfig config) {
         this(buildRegistrationBlocks(config), Thread.currentThread().getContextClassLoader(),

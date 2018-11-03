@@ -67,16 +67,15 @@ import static io.atomix.utils.concurrent.Threads.namedThreads;
 public class DefaultClusterEventService implements ManagedClusterEventService {
     private static final Logger LOGGER = LoggerFactory.getLogger(DefaultClusterEventService.class);
 
-    private static final Serializer SERIALIZER = Serializer.using(Namespace.builder()
-            .register(Namespaces.BASIC)
-            .register(MemberId.class)
-            .register(MemberId.Type.class)
-            .register(LogicalTimestamp.class)
-            .register(WallClockTimestamp.class)
-            .register(InternalSubscriptionInfo.class)
-            .register(InternalMessage.class)
-            .register(InternalMessage.Type.class)
-            .build());
+  private static final Serializer SERIALIZER = Serializer.using(Namespace.builder()
+      .register(Namespaces.BASIC)
+      .register(MemberId.class)
+      .register(LogicalTimestamp.class)
+      .register(WallClockTimestamp.class)
+      .register(InternalSubscriptionInfo.class)
+      .register(InternalMessage.class)
+      .register(InternalMessage.Type.class)
+      .build());
 
     private static final String GOSSIP_MESSAGE_SUBJECT = "ClusterEventingService-update";
 
@@ -100,45 +99,42 @@ public class DefaultClusterEventService implements ManagedClusterEventService {
         this.localMemberId = membershipService.getLocalMember().id();
     }
 
-    @Override
-    public <M> void broadcast(String topic, M message, Function<M, byte[]> encoder) {
-        byte[] payload = SERIALIZER.encode(new InternalMessage(InternalMessage.Type.ALL, encoder.apply(message)));
-        getSubscriberNodes(topic).forEach(memberId -> {
-            Member member = membershipService.getMember(memberId);
-            if (member != null && member.getState() == Member.State.ACTIVE) {
-                messagingService.sendAsync(member.address(), topic, payload);
-            }
-        });
-    }
+  @Override
+  public <M> void broadcast(String topic, M message, Function<M, byte[]> encoder) {
+    byte[] payload = SERIALIZER.encode(new InternalMessage(InternalMessage.Type.ALL, encoder.apply(message)));
+    getSubscriberNodes(topic).forEach(memberId -> {
+      Member member = membershipService.getMember(memberId);
+      if (member != null && member.isReachable()) {
+        messagingService.sendAsync(member.address(), topic, payload);
+      }
+    });
+  }
 
-    @Override
-    public <M> CompletableFuture<Void> unicast(String topic, M message, Function<M, byte[]> encoder) {
-        MemberId memberId = getNextMemberId(topic);
-        if (memberId != null) {
-            Member member = membershipService.getMember(memberId);
-            if (member != null && member.getState() == Member.State.ACTIVE) {
-                byte[] payload = SERIALIZER.encode(
-                        new InternalMessage(InternalMessage.Type.DIRECT, encoder.apply(message)));
-                return messagingService.sendAsync(member.address(), topic, payload);
-            }
-        }
-        return CompletableFuture.completedFuture(null);
+  @Override
+  public <M> CompletableFuture<Void> unicast(String topic, M message, Function<M, byte[]> encoder) {
+    MemberId memberId = getNextMemberId(topic);
+    if (memberId != null) {
+      Member member = membershipService.getMember(memberId);
+      if (member != null && member.isReachable()) {
+        byte[] payload = SERIALIZER.encode(new InternalMessage(InternalMessage.Type.DIRECT, encoder.apply(message)));
+        return messagingService.sendAsync(member.address(), topic, payload);
+      }
     }
+    return CompletableFuture.completedFuture(null);
+  }
 
-    @Override
-    public <M, R> CompletableFuture<R> send(String topic, M message, Function<M, byte[]> encoder,
-            Function<byte[], R> decoder, Duration timeout) {
-        MemberId memberId = getNextMemberId(topic);
-        if (memberId != null) {
-            Member member = membershipService.getMember(memberId);
-            if (member != null && member.getState() == Member.State.ACTIVE) {
-                byte[] payload = SERIALIZER.encode(
-                        new InternalMessage(InternalMessage.Type.DIRECT, encoder.apply(message)));
-                return messagingService.sendAndReceive(member.address(), topic, payload, timeout).thenApply(decoder);
-            }
-        }
-        return Futures.exceptionalFuture(new MessagingException.NoRemoteHandler());
+  @Override
+  public <M, R> CompletableFuture<R> send(String topic, M message, Function<M, byte[]> encoder, Function<byte[], R> decoder, Duration timeout) {
+    MemberId memberId = getNextMemberId(topic);
+    if (memberId != null) {
+      Member member = membershipService.getMember(memberId);
+      if (member != null && member.isReachable()) {
+        byte[] payload = SERIALIZER.encode(new InternalMessage(InternalMessage.Type.DIRECT, encoder.apply(message)));
+        return messagingService.sendAndReceive(member.address(), topic, payload, timeout).thenApply(decoder);
+      }
     }
+    return Futures.exceptionalFuture(new MessagingException.NoRemoteHandler());
+  }
 
     /**
      * Returns a collection of nodes that subscribe to the given topic.
@@ -230,16 +226,15 @@ public class DefaultClusterEventService implements ManagedClusterEventService {
         }
     }
 
-    /**
-     * Sends a gossip message to an active peer.
-     */
-    // TODO: 2018/7/31 by zmyer
-    private void gossip() {
-        final List<Member> members = membershipService.getMembers()
-                .stream()
-                .filter(node -> !localMemberId.equals(node.id()))
-                .filter(node -> node.getState() == Member.State.ACTIVE)
-                .collect(Collectors.toList());
+  /**
+   * Sends a gossip message to an active peer.
+   */
+  private void gossip() {
+    List<Member> members = membershipService.getMembers()
+        .stream()
+        .filter(node -> !localMemberId.equals(node.id()))
+        .filter(node -> node.isReachable())
+        .collect(Collectors.toList());
 
         if (!members.isEmpty()) {
             Collections.shuffle(members);

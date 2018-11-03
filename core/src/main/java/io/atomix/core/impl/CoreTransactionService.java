@@ -20,9 +20,10 @@ import com.google.common.collect.ImmutableSet;
 import io.atomix.cluster.ClusterMembershipEvent;
 import io.atomix.cluster.ClusterMembershipEventListener;
 import io.atomix.cluster.MemberId;
-import io.atomix.core.map.AsyncConsistentMap;
-import io.atomix.core.map.ConsistentMapConfig;
-import io.atomix.core.map.ConsistentMapType;
+import io.atomix.core.iterator.AsyncIterator;
+import io.atomix.core.map.AsyncAtomicMap;
+import io.atomix.core.map.AtomicMapConfig;
+import io.atomix.core.map.AtomicMapType;
 import io.atomix.core.transaction.ManagedTransactionService;
 import io.atomix.core.transaction.ParticipantInfo;
 import io.atomix.core.transaction.TransactionException;
@@ -31,10 +32,13 @@ import io.atomix.core.transaction.TransactionService;
 import io.atomix.core.transaction.TransactionState;
 import io.atomix.core.transaction.Transactional;
 import io.atomix.primitive.DistributedPrimitive;
+import io.atomix.primitive.PrimitiveBuilder;
 import io.atomix.primitive.PrimitiveManagementService;
 import io.atomix.primitive.PrimitiveType;
 import io.atomix.primitive.partition.PartitionGroup;
 import io.atomix.primitive.protocol.PrimitiveProtocol;
+import io.atomix.primitive.protocol.ProxyCompatibleBuilder;
+import io.atomix.primitive.protocol.ProxyProtocol;
 import io.atomix.utils.concurrent.Futures;
 import io.atomix.utils.serializer.Namespace;
 import io.atomix.utils.serializer.Namespaces;
@@ -43,6 +47,7 @@ import io.atomix.utils.time.Versioned;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -59,32 +64,31 @@ import static com.google.common.base.Preconditions.checkState;
  */
 // TODO: 2018/7/30 by zmyer
 public class CoreTransactionService implements ManagedTransactionService {
-    private static final Logger LOGGER = LoggerFactory.getLogger(CoreTransactionService.class);
-    private static final Serializer SERIALIZER = Serializer.using(Namespace.builder()
-            .register(Namespaces.BASIC)
-            .register(MemberId.class)
-            .register(MemberId.Type.class)
-            .register(TransactionId.class)
-            .register(TransactionState.class)
-            .register(ParticipantInfo.class)
-            .register(TransactionInfo.class)
-            .build());
-    private final PrimitiveManagementService managementService;
-    private final MemberId localMemberId;
-    private final ClusterMembershipEventListener clusterEventListener = this::onMembershipChange;
-    private AsyncConsistentMap<TransactionId, TransactionInfo> transactions;
-    private final AtomicBoolean started = new AtomicBoolean();
+  private static final Logger LOGGER = LoggerFactory.getLogger(CoreTransactionService.class);
+  private static final Serializer SERIALIZER = Serializer.using(Namespace.builder()
+      .register(Namespaces.BASIC)
+      .register(MemberId.class)
+      .register(TransactionId.class)
+      .register(TransactionState.class)
+      .register(ParticipantInfo.class)
+      .register(TransactionInfo.class)
+      .build());
+  private final PrimitiveManagementService managementService;
+  private final MemberId localMemberId;
+  private final ClusterMembershipEventListener clusterEventListener = this::onMembershipChange;
+  private volatile AsyncAtomicMap<TransactionId, TransactionInfo> transactions;
+  private final AtomicBoolean started = new AtomicBoolean();
 
     public CoreTransactionService(PrimitiveManagementService managementService) {
         this.managementService = checkNotNull(managementService);
         this.localMemberId = managementService.getMembershipService().getLocalMember().id();
     }
 
-    @Override
-    public Set<TransactionId> getActiveTransactions() {
-        checkState(isRunning());
-        return transactions.keySet().join();
-    }
+  @Override
+  public Set<TransactionId> getActiveTransactions() {
+    checkState(isRunning());
+    return transactions.sync().keySet();
+  }
 
     @Override
     public TransactionState getTransactionState(TransactionId transactionId) {
@@ -182,40 +186,51 @@ public class CoreTransactionService implements ManagedTransactionService {
         return transactions.remove(transactionId).thenApply(v -> null);
     }
 
-    /**
-     * Handles a cluster membership change event.
-     */
-    private void onMembershipChange(ClusterMembershipEvent event) {
-        if (event.type() == ClusterMembershipEvent.Type.MEMBER_REMOVED) {
-            transactions.entrySet().thenAccept(entries -> entries.stream()
-                    .filter(entry -> entry.getValue().value().coordinator.equals(event.subject().id()))
-                    .forEach(entry -> {
-                        recoverTransaction(entry.getKey(), entry.getValue().value());
-                    }));
-        }
+  /**
+   * Handles a cluster membership change event.
+   */
+  private void onMembershipChange(ClusterMembershipEvent event) {
+    if (event.type() == ClusterMembershipEvent.Type.MEMBER_REMOVED) {
+      recoverTransactions(transactions.entrySet().iterator(), event.subject().id());
     }
+  }
 
-    /**
-     * Recovers and completes the given transaction.
-     *
-     * @param transactionId   the transaction identifier
-     * @param transactionInfo the transaction info
-     */
-    private void recoverTransaction(TransactionId transactionId, TransactionInfo transactionInfo) {
-        switch (transactionInfo.state) {
-        case PREPARING:
-            completePreparingTransaction(transactionId);
-            break;
-        case COMMITTING:
-            completeCommittingTransaction(transactionId);
-            break;
-        case ROLLING_BACK:
-            completeRollingBackTransaction(transactionId);
-            break;
-        default:
-            break;
-        }
+  /**
+   * Recursively recovers transactions using the given iterator.
+   *
+   * @param iterator the asynchronous iterator from which to recover transactions
+   * @param memberId the transaction member ID
+   */
+  private void recoverTransactions(AsyncIterator<Map.Entry<TransactionId, Versioned<TransactionInfo>>> iterator, MemberId memberId) {
+    iterator.next().thenAccept(entry -> {
+      if (entry.getValue().value().coordinator.equals(memberId)) {
+        recoverTransaction(entry.getKey(), entry.getValue().value());
+      }
+      recoverTransactions(iterator, memberId);
+    });
+  }
+
+  /**
+   * Recovers and completes the given transaction.
+   *
+   * @param transactionId the transaction identifier
+   * @param transactionInfo the transaction info
+   */
+  private void recoverTransaction(TransactionId transactionId, TransactionInfo transactionInfo) {
+    switch (transactionInfo.state) {
+      case PREPARING:
+        completePreparingTransaction(transactionId);
+        break;
+      case COMMITTING:
+        completeCommittingTransaction(transactionId);
+        break;
+      case ROLLING_BACK:
+        completeRollingBackTransaction(transactionId);
+        break;
+      default:
+        break;
     }
+  }
 
     /**
      * Completes a transaction in the {@link TransactionState#PREPARING} state.
@@ -322,22 +337,19 @@ public class CoreTransactionService implements ManagedTransactionService {
         });
     }
 
-    /**
-     * Completes an individual participant in a transaction by loading the primitive by type/protocol/partition group
-     * and applying the given completion function to it.
-     */
-    @SuppressWarnings("unchecked")
-    private CompletableFuture<Void> completeParticipant(
-            ParticipantInfo participantInfo,
-            Function<Transactional<?>, CompletableFuture<Void>> completionFunction) {
-        // Look up the primitive type for the participant. If the primitive type is not found, return an exception.
-        PrimitiveType primitiveType = managementService.getPrimitiveTypeRegistry().getPrimitiveType(
-                participantInfo.type());
-        if (primitiveType == null) {
-            return Futures.exceptionalFuture(new TransactionException(
-                    "Failed to locate primitive type " + participantInfo.type() + " for participant " +
-                            participantInfo.name()));
-        }
+  /**
+   * Completes an individual participant in a transaction by loading the primitive by type/protocol/partition group and
+   * applying the given completion function to it.
+   */
+  @SuppressWarnings("unchecked")
+  private CompletableFuture<Void> completeParticipant(
+      ParticipantInfo participantInfo,
+      Function<Transactional<?>, CompletableFuture<Void>> completionFunction) {
+    // Look up the primitive type for the participant. If the primitive type is not found, return an exception.
+    PrimitiveType primitiveType = managementService.getPrimitiveTypeRegistry().getPrimitiveType(participantInfo.type());
+    if (primitiveType == null) {
+      return Futures.exceptionalFuture(new TransactionException("Failed to locate primitive type " + participantInfo.type() + " for participant " + participantInfo.name()));
+    }
 
         // Look up the protocol type for the participant.
         PrimitiveProtocol.Type protocolType = managementService.getProtocolTypeRegistry().getProtocolType(
@@ -361,31 +373,30 @@ public class CoreTransactionService implements ManagedTransactionService {
                     "Failed to locate partition group for participant " + participantInfo.name()));
         }
 
-        DistributedPrimitive primitive = primitiveType.newBuilder(participantInfo.name(), primitiveType.newConfig(),
-                managementService)
-                .withProtocol(partitionGroup.newProtocol())
-                .build();
-        return completionFunction.apply((Transactional<?>) primitive);
-    }
+    PrimitiveBuilder builder = primitiveType.newBuilder(participantInfo.name(), primitiveType.newConfig(), managementService);
+    ((ProxyCompatibleBuilder) builder).withProtocol(partitionGroup.newProtocol());
+    DistributedPrimitive primitive = builder.build();
+    return completionFunction.apply((Transactional<?>) primitive);
+  }
 
-    // TODO: 2018/8/1 by zmyer
-    @Override
-    @SuppressWarnings("unchecked")
-    public CompletableFuture<TransactionService> start() {
-        managementService.getMembershipService().addListener(clusterEventListener);
-        return ConsistentMapType.<TransactionId, TransactionInfo>instance()
-                .newBuilder("atomix-transactions", new ConsistentMapConfig(), managementService)
-                .withProtocol(managementService.getPartitionService().getSystemPartitionGroup().newProtocol())
-                .withSerializer(SERIALIZER)
-                .withCacheEnabled()
-                .buildAsync()
-                .thenApply(transactions -> {
-                    this.transactions = transactions.async();
-                    LOGGER.info("Started");
-                    started.set(true);
-                    return this;
-                });
-    }
+  @Override
+  @SuppressWarnings("unchecked")
+  public CompletableFuture<TransactionService> start() {
+    PrimitiveProtocol protocol = managementService.getPartitionService().getSystemPartitionGroup().newProtocol();
+    return AtomicMapType.<TransactionId, TransactionInfo>instance()
+        .newBuilder("atomix-transactions", new AtomicMapConfig(), managementService)
+        .withSerializer(SERIALIZER)
+        .withProtocol((ProxyProtocol) protocol)
+        .withCacheEnabled()
+        .buildAsync()
+        .thenApply(transactions -> {
+          this.transactions = transactions.async();
+          managementService.getMembershipService().addListener(clusterEventListener);
+          LOGGER.info("Started");
+          started.set(true);
+          return this;
+        });
+  }
 
     @Override
     public boolean isRunning() {

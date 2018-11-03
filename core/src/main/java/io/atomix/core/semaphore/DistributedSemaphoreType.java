@@ -15,12 +15,11 @@
  */
 package io.atomix.core.semaphore;
 
+import io.atomix.core.semaphore.impl.AtomicSemaphoreServiceConfig;
+import io.atomix.core.semaphore.impl.DefaultDistributedSemaphoreBuilder;
 import io.atomix.core.semaphore.impl.DefaultDistributedSemaphoreService;
-import io.atomix.core.semaphore.impl.DistributedSemaphoreProxyBuilder;
-import io.atomix.core.semaphore.impl.DistributedSemaphoreResource;
 import io.atomix.primitive.PrimitiveManagementService;
 import io.atomix.primitive.PrimitiveType;
-import io.atomix.primitive.resource.PrimitiveResource;
 import io.atomix.primitive.service.PrimitiveService;
 import io.atomix.primitive.service.ServiceConfig;
 import io.atomix.utils.serializer.Namespace;
@@ -54,7 +53,7 @@ public class DistributedSemaphoreType implements PrimitiveType<DistributedSemaph
   public Namespace namespace() {
     return Namespace.builder()
         .register(Namespaces.BASIC)
-        .register(DistributedSemaphoreServiceConfig.class)
+        .register(AtomicSemaphoreServiceConfig.class)
         .register(Version.class)
         .register(QueueStatus.class)
         .build();
@@ -62,7 +61,7 @@ public class DistributedSemaphoreType implements PrimitiveType<DistributedSemaph
 
   @Override
   public PrimitiveService newService(ServiceConfig config) {
-    return new DefaultDistributedSemaphoreService((DistributedSemaphoreServiceConfig) config);
+    return new DefaultDistributedSemaphoreService((AtomicSemaphoreServiceConfig) config);
   }
 
   @Override
@@ -72,12 +71,7 @@ public class DistributedSemaphoreType implements PrimitiveType<DistributedSemaph
 
   @Override
   public DistributedSemaphoreBuilder newBuilder(String name, DistributedSemaphoreConfig config, PrimitiveManagementService managementService) {
-    return new DistributedSemaphoreProxyBuilder(name, config, managementService);
-  }
-
-  @Override
-  public PrimitiveResource newResource(DistributedSemaphore primitive) {
-    return new DistributedSemaphoreResource(primitive.async());
+    return new DefaultDistributedSemaphoreBuilder(name, config, managementService);
   }
 
   @Override

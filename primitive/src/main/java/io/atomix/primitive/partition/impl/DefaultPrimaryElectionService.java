@@ -55,15 +55,15 @@ public class DefaultPrimaryElectionService implements ManagedPrimaryElectionServ
             .register(PrimaryElectorEvents.NAMESPACE)
             .build());
 
-    private final PartitionGroup partitions;
-    private final Set<PrimaryElectionEventListener> listeners = Sets.newCopyOnWriteArraySet();
-    private final Consumer<PrimitiveEvent> eventListener = event -> {
-        PrimaryElectionEvent electionEvent = SERIALIZER.decode(event.value());
-        listeners.forEach(l -> l.onEvent(electionEvent));
-    };
-    private final Map<PartitionId, ManagedPrimaryElection> elections = Maps.newConcurrentMap();
-    private final AtomicBoolean started = new AtomicBoolean();
-    private SessionClient proxy;
+  private final PartitionGroup partitions;
+  private final Set<PrimaryElectionEventListener> listeners = Sets.newCopyOnWriteArraySet();
+  private final Consumer<PrimitiveEvent> eventListener = event -> {
+    PrimaryElectionEvent electionEvent = SERIALIZER.decode(event.value());
+    listeners.forEach(l -> l.event(electionEvent));
+  };
+  private final Map<PartitionId, ManagedPrimaryElection> elections = Maps.newConcurrentMap();
+  private final AtomicBoolean started = new AtomicBoolean();
+  private SessionClient proxy;
 
     // TODO: 2018/7/31 by zmyer
     public DefaultPrimaryElectionService(PartitionGroup partitionGroup) {

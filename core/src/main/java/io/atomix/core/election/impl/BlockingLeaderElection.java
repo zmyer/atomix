@@ -15,6 +15,7 @@
  */
 package io.atomix.core.election.impl;
 
+import com.google.common.base.Throwables;
 import io.atomix.core.election.AsyncLeaderElection;
 import io.atomix.core.election.LeaderElection;
 import io.atomix.core.election.Leadership;
@@ -107,7 +108,12 @@ public class BlockingLeaderElection<T> extends Synchronous<AsyncLeaderElection<T
     } catch (TimeoutException e) {
       throw new PrimitiveException.Timeout();
     } catch (ExecutionException e) {
-      throw new PrimitiveException(e.getCause());
+      Throwable cause = Throwables.getRootCause(e);
+      if (cause instanceof PrimitiveException) {
+        throw (PrimitiveException) cause;
+      } else {
+        throw new PrimitiveException(cause);
+      }
     }
   }
 }

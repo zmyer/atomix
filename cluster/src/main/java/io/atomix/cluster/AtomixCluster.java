@@ -16,7 +16,13 @@
 package io.atomix.cluster;
 
 import com.google.common.collect.Streams;
+import io.atomix.cluster.discovery.BootstrapDiscoveryProvider;
+import io.atomix.cluster.discovery.MulticastDiscoveryConfig;
+import io.atomix.cluster.discovery.MulticastDiscoveryProvider;
+import io.atomix.cluster.discovery.NodeDiscoveryConfig;
+import io.atomix.cluster.discovery.NodeDiscoveryProvider;
 import io.atomix.cluster.impl.DefaultClusterMembershipService;
+import io.atomix.cluster.impl.DefaultNodeDiscoveryService;
 import io.atomix.cluster.messaging.BroadcastService;
 import io.atomix.cluster.messaging.ClusterCommunicationService;
 import io.atomix.cluster.messaging.ClusterEventService;
@@ -24,12 +30,17 @@ import io.atomix.cluster.messaging.ManagedBroadcastService;
 import io.atomix.cluster.messaging.ManagedClusterCommunicationService;
 import io.atomix.cluster.messaging.ManagedClusterEventService;
 import io.atomix.cluster.messaging.ManagedMessagingService;
+import io.atomix.cluster.messaging.ManagedUnicastService;
 import io.atomix.cluster.messaging.MessagingService;
+import io.atomix.cluster.messaging.UnicastService;
 import io.atomix.cluster.messaging.impl.DefaultClusterCommunicationService;
 import io.atomix.cluster.messaging.impl.DefaultClusterEventService;
 import io.atomix.cluster.messaging.impl.NettyBroadcastService;
 import io.atomix.cluster.messaging.impl.NettyMessagingService;
+import io.atomix.cluster.messaging.impl.NettyUnicastService;
+import io.atomix.cluster.protocol.GroupMembershipProtocol;
 import io.atomix.utils.Managed;
+import io.atomix.utils.Version;
 import io.atomix.utils.concurrent.Futures;
 import io.atomix.utils.concurrent.SingleThreadContext;
 import io.atomix.utils.concurrent.ThreadContext;
@@ -39,22 +50,53 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.util.Arrays;
-import java.util.Collection;
+import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static com.google.common.base.MoreObjects.toStringHelper;
-import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
- * Cluster configuration.
+ * Atomix cluster manager.
+ * <p>
+ * The cluster manager is the basis for all cluster management and communication in an Atomix cluster. This class is
+ * responsible for bootstrapping new clusters or joining existing ones, establishing communication between nodes,
+ * and detecting failures.
+ * <p>
+ * The Atomix cluster can be run as a standalone instance for cluster management and communication. To build a cluster
+ * instance, use {@link #builder()} to create a new builder.
+ * <pre>
+ *   {@code
+ *   AtomixCluster cluster = AtomixCluster.builder()
+ *     .withClusterName("my-cluster")
+ *     .withMemberId("member-1")
+ *     .withAddress("localhost:1234")
+ *     .withMulticastEnabled()
+ *     .build();
+ *   }
+ * </pre>
+ * The instance can be configured with a unique identifier via {@link AtomixClusterBuilder#withMemberId(String)}. The member ID
+ * can be used to lookup the member in the {@link ClusterMembershipService} or send messages to this node from other
+ * member nodes. The {@link AtomixClusterBuilder#withAddress(Address) address} is the host and port to which the node will bind
+ * for intra-cluster communication over TCP.
+ * <p>
+ * Once an instance has been configured, the {@link #start()} method must be called to bootstrap the instance. The
+ * {@code start()} method returns a {@link CompletableFuture} which will be completed once all the services have been
+ * bootstrapped.
+ * <pre>
+ *   {@code
+ *   cluster.start().join();
+ *   }
+ * </pre>
+ * <p>
+ * Cluster membership is determined by a configurable {@link NodeDiscoveryProvider}. To configure the membership
+ * provider use {@link AtomixClusterBuilder#withMembershipProvider(NodeDiscoveryProvider)}. By default, the
+ * {@link MulticastDiscoveryProvider} will be used if multicast is {@link AtomixClusterBuilder#withMulticastEnabled() enabled},
+ * otherwise the {@link BootstrapDiscoveryProvider} will be used if no provider is explicitly provided.
  */
-// TODO: 2018/7/30 by zmyer
-public class AtomixCluster implements Managed<Void> {
-    private static final String[] DEFAULT_RESOURCES = new String[]{ "cluster" };
+public class AtomixCluster implements BootstrapService, Managed<Void> {
+  private static final String[] DEFAULT_RESOURCES = new String[]{"cluster"};
 
     private static String[] withDefaultResources(String config) {
         return Streams.concat(Stream.of(config), Stream.of(DEFAULT_RESOURCES)).toArray(String[]::new);
@@ -71,129 +113,170 @@ public class AtomixCluster implements Managed<Void> {
         return new ConfigMapper(classLoader).loadResources(ClusterConfig.class, resources);
     }
 
-    /**
-     * Returns a new Atomix builder.
-     *
-     * @return a new Atomix builder
-     */
-    public static Builder builder() {
-        return builder(Thread.currentThread().getContextClassLoader());
-    }
+  /**
+   * Returns a new Atomix builder.
+   *
+   * @return a new Atomix builder
+   */
+  public static AtomixClusterBuilder builder() {
+    return builder(Thread.currentThread().getContextClassLoader());
+  }
 
-    /**
-     * Returns a new Atomix builder.
-     *
-     * @param classLoader the class loader
-     * @return a new Atomix builder
-     */
-    public static Builder builder(ClassLoader classLoader) {
-        return builder(config(DEFAULT_RESOURCES, classLoader));
-    }
+  /**
+   * Returns a new Atomix builder.
+   *
+   * @param classLoader the class loader
+   * @return a new Atomix builder
+   */
+  public static AtomixClusterBuilder builder(ClassLoader classLoader) {
+    return builder(config(DEFAULT_RESOURCES, classLoader));
+  }
 
-    /**
-     * Returns a new Atomix builder.
-     *
-     * @param config the Atomix configuration
-     * @return a new Atomix builder
-     */
-    public static Builder builder(String config) {
-        return builder(config, Thread.currentThread().getContextClassLoader());
-    }
+  /**
+   * Returns a new Atomix builder.
+   *
+   * @param config the Atomix configuration
+   * @return a new Atomix builder
+   */
+  public static AtomixClusterBuilder builder(String config) {
+    return builder(config, Thread.currentThread().getContextClassLoader());
+  }
 
-    /**
-     * Returns a new Atomix builder.
-     *
-     * @param config      the Atomix configuration
-     * @param classLoader the class loader
-     * @return a new Atomix builder
-     */
-    public static Builder builder(String config, ClassLoader classLoader) {
-        return new Builder(config(withDefaultResources(config), classLoader));
-    }
+  /**
+   * Returns a new Atomix builder.
+   *
+   * @param config      the Atomix configuration
+   * @param classLoader the class loader
+   * @return a new Atomix builder
+   */
+  public static AtomixClusterBuilder builder(String config, ClassLoader classLoader) {
+    return new AtomixClusterBuilder(config(withDefaultResources(config), classLoader));
+  }
 
-    /**
-     * Returns a new Atomix builder.
-     *
-     * @param config the Atomix configuration
-     * @return a new Atomix builder
-     */
-    public static Builder builder(ClusterConfig config) {
-        return new Builder(config);
-    }
+  /**
+   * Returns a new Atomix builder.
+   *
+   * @param config the Atomix configuration
+   * @return a new Atomix builder
+   */
+  public static AtomixClusterBuilder builder(ClusterConfig config) {
+    return new AtomixClusterBuilder(config);
+  }
 
     private static final Logger LOGGER = LoggerFactory.getLogger(AtomixCluster.class);
 
-    protected final ManagedMessagingService messagingService;
-    protected final ManagedBroadcastService broadcastService;
-    protected final ManagedClusterMembershipService membershipService;
-    protected final ManagedClusterCommunicationService communicationService;
-    protected final ManagedClusterEventService eventService;
-    protected volatile CompletableFuture<Void> openFuture;
-    protected volatile CompletableFuture<Void> closeFuture;
-    private final ThreadContext threadContext = new SingleThreadContext("atomix-cluster-%d");
-    private final AtomicBoolean started = new AtomicBoolean();
+  protected final ManagedMessagingService messagingService;
+  protected final ManagedUnicastService unicastService;
+  protected final ManagedBroadcastService broadcastService;
+  protected final NodeDiscoveryProvider discoveryProvider;
+  protected final GroupMembershipProtocol membershipProtocol;
+  protected final ManagedClusterMembershipService membershipService;
+  protected final ManagedClusterCommunicationService communicationService;
+  protected final ManagedClusterEventService eventService;
+  protected volatile CompletableFuture<Void> openFuture;
+  protected volatile CompletableFuture<Void> closeFuture;
+  private final ThreadContext threadContext = new SingleThreadContext("atomix-cluster-%d");
+  private final AtomicBoolean started = new AtomicBoolean();
 
-    public AtomixCluster(String configFile) {
-        this(loadConfig(new File(System.getProperty("user.dir"), configFile),
-                Thread.currentThread().getContextClassLoader()));
-    }
+  public AtomixCluster(String configFile) {
+    this(loadConfig(
+        new File(System.getProperty("atomix.root", System.getProperty("user.dir")), configFile),
+        Thread.currentThread().getContextClassLoader()), null);
+  }
 
-    public AtomixCluster(File configFile) {
-        this(loadConfig(configFile, Thread.currentThread().getContextClassLoader()));
-    }
+  public AtomixCluster(File configFile) {
+    this(loadConfig(configFile, Thread.currentThread().getContextClassLoader()), null);
+  }
 
-    public AtomixCluster(ClusterConfig config) {
-        this.messagingService = buildMessagingService(config);
-        this.broadcastService = buildBroadcastService(config);
-        this.membershipService = buildClusterMembershipService(config, messagingService, broadcastService);
-        this.communicationService = buildClusterMessagingService(membershipService, messagingService);
-        this.eventService = buildClusterEventService(membershipService, messagingService);
-    }
+  public AtomixCluster(ClusterConfig config, Version version) {
+    this(config, version, buildMessagingService(config), buildUnicastService(config), buildBroadcastService(config));
+  }
 
-    /**
-     * Returns the broadcast service.
-     *
-     * @return the broadcast service
-     */
-    public BroadcastService getBroadcastService() {
-        return broadcastService;
-    }
+  protected AtomixCluster(ClusterConfig config, Version version, ManagedMessagingService messagingService, ManagedUnicastService unicastService, ManagedBroadcastService broadcastService) {
+    this.messagingService = messagingService != null ? messagingService : buildMessagingService(config);
+    this.unicastService = unicastService != null ? unicastService : buildUnicastService(config);
+    this.broadcastService = broadcastService != null ? broadcastService : buildBroadcastService(config);
+    this.discoveryProvider = buildLocationProvider(config);
+    this.membershipProtocol = buildMembershipProtocol(config);
+    this.membershipService = buildClusterMembershipService(config, this, discoveryProvider, membershipProtocol, version);
+    this.communicationService = buildClusterMessagingService(getMembershipService(), getMessagingService());
+    this.eventService = buildClusterEventService(getMembershipService(), getMessagingService());
+  }
 
-    /**
-     * Returns the messaging service.
-     *
-     * @return the messaging service
-     */
-    public MessagingService getMessagingService() {
-        return messagingService;
-    }
+  /**
+   * Returns the cluster unicast service.
+   * <p>
+   * The unicast service supports unreliable uni-directional messaging via UDP. This is a
+   * low-level cluster communication API. For higher level messaging, use the
+   * {@link #getCommunicationService() communication service} or {@link #getEventService() event service}.
+   *
+   * @return the cluster unicast service
+   */
+  @Override
+  public UnicastService getUnicastService() {
+    return unicastService;
+  }
 
-    /**
-     * Returns the cluster service.
-     *
-     * @return the cluster service
-     */
-    public ClusterMembershipService getMembershipService() {
-        return membershipService;
-    }
+  /**
+   * Returns the cluster broadcast service.
+   * <p>
+   * The broadcast service is used to broadcast messages to all nodes in the cluster via multicast.
+   * The broadcast service is disabled by default. To enable broadcast, the cluster must be configured with
+   * {@link AtomixClusterBuilder#withMulticastEnabled() multicast enabled}.
+   *
+   * @return the cluster broadcast service
+   */
+  @Override
+  public BroadcastService getBroadcastService() {
+    return broadcastService;
+  }
 
-    /**
-     * Returns the cluster communication service.
-     *
-     * @return the cluster communication service
-     */
-    public ClusterCommunicationService getCommunicationService() {
-        return communicationService;
-    }
+  /**
+   * Returns the cluster messaging service.
+   * <p>
+   * The messaging service is used for direct point-to-point messaging between nodes by {@link Address}. This is a
+   * low-level cluster communication API. For higher level messaging, use the
+   * {@link #getCommunicationService() communication service} or {@link #getEventService() event service}.
+   *
+   * @return the cluster messaging service
+   */
+  @Override
+  public MessagingService getMessagingService() {
+    return messagingService;
+  }
 
-    /**
-     * Returns the cluster event service.
-     *
-     * @return the cluster event service
-     */
-    public ClusterEventService getEventService() {
-        return eventService;
-    }
+  /**
+   * Returns the cluster membership service.
+   * <p>
+   * The membership service manages cluster membership information and failure detection.
+   *
+   * @return the cluster membership service
+   */
+  public ClusterMembershipService getMembershipService() {
+    return membershipService;
+  }
+
+  /**
+   * Returns the cluster communication service.
+   * <p>
+   * The cluster communication service is used for high-level unicast, multicast, broadcast, and request-reply messaging.
+   *
+   * @return the cluster communication service
+   */
+  public ClusterCommunicationService getCommunicationService() {
+    return communicationService;
+  }
+
+  /**
+   * Returns the cluster event service.
+   * <p>
+   * The cluster event service is used for high-level publish-subscribe messaging.
+   *
+   * @return the cluster event service
+   */
+  public ClusterEventService getEventService() {
+    return eventService;
+  }
 
     // TODO: 2018/7/30 by zmyer
     @Override
@@ -224,12 +307,10 @@ public class AtomixCluster implements Managed<Void> {
                 .thenApply(v -> null);
     }
 
-    // TODO: 2018/7/31 by zmyer
-    protected CompletableFuture<Void> completeStartup() {
-        started.set(true);
-        LOGGER.info("Started");
-        return CompletableFuture.completedFuture(null);
-    }
+  protected CompletableFuture<Void> completeStartup() {
+    started.set(true);
+    return CompletableFuture.completedFuture(null);
+  }
 
     @Override
     public boolean isRunning() {
@@ -281,53 +362,88 @@ public class AtomixCluster implements Managed<Void> {
         return new ConfigMapper(classLoader).loadResources(ClusterConfig.class, config.getAbsolutePath());
     }
 
-    /**
-     * Builds a default messaging service.
-     */
-    // TODO: 2018/7/31 by zmyer
-    protected static ManagedMessagingService buildMessagingService(ClusterConfig config) {
-        return NettyMessagingService.builder()
-                .withName(config.getName())
-                .withAddress(config.getLocalMember().getAddress())
-                .build();
-    }
+  /**
+   * Builds a default messaging service.
+   */
+  protected static ManagedMessagingService buildMessagingService(ClusterConfig config) {
+    return new NettyMessagingService(
+        config.getClusterId(),
+        config.getNodeConfig().getAddress(),
+        config.getMessagingConfig());
+  }
 
-    /**
-     * Builds a default broadcast service.
-     */
-    // TODO: 2018/7/31 by zmyer
-    protected static ManagedBroadcastService buildBroadcastService(ClusterConfig config) {
-        return NettyBroadcastService.builder()
-                .withLocalAddress(config.getLocalMember().getAddress())
-                .withGroupAddress(config.getMulticastAddress())
-                .withEnabled(config.isMulticastEnabled())
-                .build();
-    }
+  /**
+   * Builds a default unicast service.
+   */
+  protected static ManagedUnicastService buildUnicastService(ClusterConfig config) {
+    return NettyUnicastService.builder()
+        .withAddress(config.getNodeConfig().getAddress())
+        .build();
+  }
 
-    /**
-     * Builds a cluster service.
-     */
-    // TODO: 2018/7/31 by zmyer
-    protected static ManagedClusterMembershipService buildClusterMembershipService(
-            final ClusterConfig config,
-            final MessagingService messagingService,
-            final BroadcastService broadcastService) {
-        // If the local node has not be configured, create a default node.
-        final Member localMember;
-        if (config.getLocalMember() == null) {
-            Address address = Address.local();
-            localMember = Member.member(address);
-        } else {
-            localMember = new Member(config.getLocalMember());
-        }
-        return new DefaultClusterMembershipService(
-                localMember,
-                config.getMembers()
-                        .stream()
-                        .map(Member::new)
-                        .collect(Collectors.toList()), messagingService, broadcastService,
-                config.getMembershipConfig());
+  /**
+   * Builds a default broadcast service.
+   */
+  protected static ManagedBroadcastService buildBroadcastService(ClusterConfig config) {
+    return NettyBroadcastService.builder()
+        .withLocalAddress(config.getNodeConfig().getAddress())
+        .withGroupAddress(new Address(
+            config.getMulticastConfig().getGroup().getHostAddress(),
+            config.getMulticastConfig().getPort(),
+            config.getMulticastConfig().getGroup()))
+        .withEnabled(config.getMulticastConfig().isEnabled())
+        .build();
+  }
+
+  /**
+   * Builds a member location provider.
+   */
+  @SuppressWarnings("unchecked")
+  protected static NodeDiscoveryProvider buildLocationProvider(ClusterConfig config) {
+    NodeDiscoveryConfig discoveryProviderConfig = config.getDiscoveryConfig();
+    if (discoveryProviderConfig != null) {
+      return discoveryProviderConfig.getType().newProvider(discoveryProviderConfig);
     }
+    if (config.getMulticastConfig().isEnabled()) {
+      return new MulticastDiscoveryProvider(new MulticastDiscoveryConfig());
+    } else {
+      return new BootstrapDiscoveryProvider(Collections.emptyList());
+    }
+  }
+
+  /**
+   * Builds the group membership protocol.
+   */
+  @SuppressWarnings("unchecked")
+  protected static GroupMembershipProtocol buildMembershipProtocol(ClusterConfig config) {
+    return config.getProtocolConfig().getType().newProtocol(config.getProtocolConfig());
+  }
+
+  /**
+   * Builds a cluster service.
+   */
+  protected static ManagedClusterMembershipService buildClusterMembershipService(
+      ClusterConfig config,
+      BootstrapService bootstrapService,
+      NodeDiscoveryProvider discoveryProvider,
+      GroupMembershipProtocol membershipProtocol,
+      Version version) {
+    // If the local node has not be configured, create a default node.
+    Member localMember = Member.builder()
+        .withId(config.getNodeConfig().getId())
+        .withAddress(config.getNodeConfig().getAddress())
+        .withHost(config.getNodeConfig().getHost())
+        .withRack(config.getNodeConfig().getRack())
+        .withZone(config.getNodeConfig().getZone())
+        .withProperties(config.getNodeConfig().getProperties())
+        .build();
+    return new DefaultClusterMembershipService(
+        localMember,
+        version,
+        new DefaultNodeDiscoveryService(bootstrapService, localMember, discoveryProvider),
+        bootstrapService,
+        membershipProtocol);
+  }
 
     /**
      * Builds a cluster messaging service.
@@ -338,118 +454,11 @@ public class AtomixCluster implements Managed<Void> {
         return new DefaultClusterCommunicationService(membershipService, messagingService);
     }
 
-    /**
-     * Builds a cluster event service.
-     */
-    // TODO: 2018/7/31 by zmyer
-    protected static ManagedClusterEventService buildClusterEventService(
-            ClusterMembershipService membershipService, MessagingService messagingService) {
-        return new DefaultClusterEventService(membershipService, messagingService);
-    }
-
-    /**
-     * Cluster builder.
-     */
-    // TODO: 2018/7/30 by zmyer
-    public static class Builder implements io.atomix.utils.Builder<AtomixCluster> {
-        protected final ClusterConfig config;
-
-        protected Builder() {
-            this(new ClusterConfig());
-        }
-
-        protected Builder(ClusterConfig config) {
-            this.config = checkNotNull(config);
-        }
-
-        /**
-         * Sets the cluster name.
-         *
-         * @param clusterName the cluster name
-         * @return the cluster builder
-         */
-        public Builder withClusterName(String clusterName) {
-            config.setName(clusterName);
-            return this;
-        }
-
-        /**
-         * Sets the local member name.
-         *
-         * @param localMember the local member name
-         * @return the cluster builder
-         */
-        public Builder withLocalMember(String localMember) {
-            config.setLocalMemberId(localMember);
-            return this;
-        }
-
-        /**
-         * Sets the local node metadata.
-         *
-         * @param localMember the local node metadata
-         * @return the cluster metadata builder
-         */
-        public Builder withLocalMember(Member localMember) {
-            config.setLocalMember(localMember.config());
-            return this;
-        }
-
-        /**
-         * Sets the core nodes.
-         *
-         * @param members the core nodes
-         * @return the Atomix builder
-         */
-        public Builder withMembers(Member... members) {
-            return withMembers(Arrays.asList(checkNotNull(members)));
-        }
-
-        /**
-         * Sets the core nodes.
-         *
-         * @param members the core nodes
-         * @return the Atomix builder
-         */
-        public Builder withMembers(Collection<Member> members) {
-            members.forEach(member -> config.addMember(member.config()));
-            return this;
-        }
-
-        /**
-         * Enables multicast node discovery.
-         *
-         * @return the Atomix builder
-         */
-        public Builder withMulticastEnabled() {
-            return withMulticastEnabled(true);
-        }
-
-        /**
-         * Sets whether multicast node discovery is enabled.
-         *
-         * @param multicastEnabled whether to enable multicast node discovery
-         * @return the Atomix builder
-         */
-        public Builder withMulticastEnabled(boolean multicastEnabled) {
-            config.setMulticastEnabled(multicastEnabled);
-            return this;
-        }
-
-        /**
-         * Sets the multicast address.
-         *
-         * @param address the multicast address
-         * @return the Atomix builder
-         */
-        public Builder withMulticastAddress(Address address) {
-            config.setMulticastAddress(address);
-            return this;
-        }
-
-        @Override
-        public AtomixCluster build() {
-            return new AtomixCluster(config);
-        }
-    }
+  /**
+   * Builds a cluster event service.
+   */
+  protected static ManagedClusterEventService buildClusterEventService(
+      ClusterMembershipService membershipService, MessagingService messagingService) {
+    return new DefaultClusterEventService(membershipService, messagingService);
+  }
 }

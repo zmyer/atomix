@@ -53,17 +53,16 @@ public enum PrimaryElectorOperations implements OperationId {
         return type;
     }
 
-    public static final Namespace NAMESPACE = Namespace.builder()
-            .register(Namespaces.BASIC)
-            .nextId(Namespaces.BEGIN_USER_CUSTOM_ID)
-            .register(Enter.class)
-            .register(GetTerm.class)
-            .register(GroupMember.class)
-            .register(MemberId.class)
-            .register(MemberId.Type.class)
-            .register(MemberGroupId.class)
-            .register(PartitionId.class)
-            .build(PrimaryElectorOperations.class.getSimpleName());
+  public static final Namespace NAMESPACE = Namespace.builder()
+      .register(Namespaces.BASIC)
+      .nextId(Namespaces.BEGIN_USER_CUSTOM_ID)
+      .register(Enter.class)
+      .register(GetTerm.class)
+      .register(GroupMember.class)
+      .register(MemberId.class)
+      .register(MemberGroupId.class)
+      .register(PartitionId.class)
+      .build(PrimaryElectorOperations.class.getSimpleName());
 
     /**
      * Abstract election query.
@@ -81,8 +80,8 @@ public enum PrimaryElectorOperations implements OperationId {
     public abstract static class PartitionOperation extends ElectorOperation {
         protected PartitionId partitionId;
 
-        public PartitionOperation() {
-        }
+    public PartitionOperation() {
+    }
 
         public PartitionOperation(PartitionId partitionId) {
             this.partitionId = checkNotNull(partitionId);

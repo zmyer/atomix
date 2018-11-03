@@ -25,134 +25,160 @@ import java.util.function.Function;
 import static io.atomix.utils.serializer.serializers.DefaultSerializers.BASIC;
 
 /**
- * Cluster event service.
+ * Publish-subscribe based messaging service.
+ * <p>
+ * This service is an abstraction for publish-subscribe based cluster communication. Messages are published and received
+ * based on arbitrary {@link String} topics. It supports several types of messaging:
+ * <ul>
+ *   <li>{@link #broadcast(String, Object)} broadcasts a message to all subscribers registered for the topic</li>
+ *   <li>{@link #unicast(String, Object)} sends a unicast message directly to one of the subscribers registered
+ *   for the topic; unicast messages are generally delivered in round-robin fashion</li>
+ *   <li>{@link #send(String, Object)} sends a message directly to one of the subscribers registered for the topic
+ *   and awaits a reply; direct messages are generally delivered in round-robin fashion</li>
+ * </ul>
+ * To register to listen for messages, use one of the {@link #subscribe(String, Consumer, Executor)} methods:
+ * <pre>
+ *   {@code
+ *   Subscription subscription = atomix.getEventService().subscribe("test", message -> {
+ *     System.out.println("Received message");
+ *   }, executor).join();
+ *   }
+ * </pre>
+ * To cancel the subscription for a topic, call {@link Subscription#close()} on the returned {@link Subscription}
+ * object:
+ * <pre>
+ *   {@code
+ *   subscription.close().join();
+ *   }
+ * </pre>
+ * This API relies on {@link CompletableFuture} for asynchronous completion of all method calls.
  */
 // TODO: 2018/7/31 by zmyer
 public interface ClusterEventService {
 
-    /**
-     * Broadcasts a message to all controller nodes.
-     *
-     * @param topic   message topic
-     * @param message message to send
-     * @param <M>     message type
-     */
-    default <M> void broadcast(
-            String topic,
-            M message) {
-        broadcast(topic, message, BASIC::encode);
-    }
+  /**
+   * Broadcasts a message to all subscribers registered for the given {@code topic}.
+   *
+   * @param topic   message topic
+   * @param message message to send
+   * @param <M>     message type
+   */
+  default <M> void broadcast(
+      String topic,
+      M message) {
+    broadcast(topic, message, BASIC::encode);
+  }
 
-    /**
-     * Broadcasts a message to all controller nodes.
-     *
-     * @param topic   message topic
-     * @param message message to send
-     * @param encoder function for encoding message to byte[]
-     * @param <M>     message type
-     */
-    <M> void broadcast(
-            String topic,
-            M message,
-            Function<M, byte[]> encoder);
+  /**
+   * Broadcasts a message to all subscribers registered for the given {@code topic}.
+   *
+   * @param topic   message topic
+   * @param message message to send
+   * @param encoder function for encoding message to byte[]
+   * @param <M>     message type
+   */
+  <M> void broadcast(
+      String topic,
+      M message,
+      Function<M, byte[]> encoder);
 
-    /**
-     * Sends a message to the specified controller node.
-     *
-     * @param topic   message topic
-     * @param message message to send
-     * @param <M>     message type
-     * @return future that is completed when the message is sent
-     */
-    default <M> CompletableFuture<Void> unicast(
-            String topic,
-            M message) {
-        return unicast(topic, message, BASIC::encode);
-    }
+  /**
+   * Unicasts a message to the next registered subscriber for {@code topic}.
+   *
+   * @param topic   message topic
+   * @param message message to send
+   * @param <M>     message type
+   * @return future that is completed when the message is sent
+   */
+  default <M> CompletableFuture<Void> unicast(
+      String topic,
+      M message) {
+    return unicast(topic, message, BASIC::encode);
+  }
 
-    /**
-     * Sends a message to the specified controller node.
-     *
-     * @param message message to send
-     * @param topic   message topic
-     * @param encoder function for encoding message to byte[]
-     * @param <M>     message type
-     * @return future that is completed when the message is sent
-     */
-    <M> CompletableFuture<Void> unicast(
-            String topic,
-            M message,
-            Function<M, byte[]> encoder);
+  /**
+   * Unicasts a message to the next registered subscriber for {@code topic}.
+   *
+   * @param message message to send
+   * @param topic   message topic
+   * @param encoder function for encoding message to byte[]
+   * @param <M>     message type
+   * @return future that is completed when the message is sent
+   */
+  <M> CompletableFuture<Void> unicast(
+      String topic,
+      M message,
+      Function<M, byte[]> encoder);
 
-    /**
-     * Sends a message and expects a reply.
-     *
-     * @param topic   message topic
-     * @param message message to send
-     * @param <M>     request type
-     * @param <R>     reply type
-     * @return reply future
-     */
-    default <M, R> CompletableFuture<R> send(
-            String topic,
-            M message) {
-        return send(topic, message, BASIC::encode, BASIC::decode, null);
-    }
+  /**
+   * Sends a direct message to the next registered subscriber for {@code topic} and awaits a reply.
+   *
+   * @param topic   message topic
+   * @param message message to send
+   * @param <M>     request type
+   * @param <R>     reply type
+   * @return reply future
+   */
+  default <M, R> CompletableFuture<R> send(
+      String topic,
+      M message) {
+    return send(topic, message, BASIC::encode, BASIC::decode, null);
+  }
 
-    /**
-     * Sends a message and expects a reply.
-     *
-     * @param topic   message topic
-     * @param message message to send
-     * @param timeout reply timeout
-     * @param <M>     request type
-     * @param <R>     reply type
-     * @return reply future
-     */
-    default <M, R> CompletableFuture<R> send(
-            String topic,
-            M message,
-            Duration timeout) {
-        return send(topic, message, BASIC::encode, BASIC::decode, timeout);
-    }
+  /**
+   * Sends a direct message to the next registered subscriber for {@code topic} and awaits a reply.
+   *
+   * @param topic   message topic
+   * @param message message to send
+   * @param timeout reply timeout
+   * @param <M>     request type
+   * @param <R>     reply type
+   * @return reply future
+   */
+  default <M, R> CompletableFuture<R> send(
+      String topic,
+      M message,
+      Duration timeout) {
+    return send(topic, message, BASIC::encode, BASIC::decode, timeout);
+  }
 
-    /**
-     * Sends a message and expects a reply.
-     *
-     * @param topic   message topic
-     * @param message message to send
-     * @param encoder function for encoding request to byte[]
-     * @param decoder function for decoding response from byte[]
-     * @param <M>     request type
-     * @param <R>     reply type
-     * @return reply future
-     */
-    default <M, R> CompletableFuture<R> send(
-            String topic,
-            M message,
-            Function<M, byte[]> encoder,
-            Function<byte[], R> decoder) {
-        return send(topic, message, encoder, decoder, null);
-    }
+  /**
+   * Sends a direct message to the next registered subscriber for {@code topic} and awaits a reply.
+   *
+   * @param topic   message topic
+   * @param message message to send
+   * @param encoder function for encoding request to byte[]
+   * @param decoder function for decoding response from byte[]
+   * @param <M>     request type
+   * @param <R>     reply type
+   * @return reply future
+   */
+  default <M, R> CompletableFuture<R> send(
+      String topic,
+      M message,
+      Function<M, byte[]> encoder,
+      Function<byte[], R> decoder) {
+    return send(topic, message, encoder, decoder, null);
+  }
 
-    /**
-     * Sends a message and expects a reply.
-     *
-     * @param topic   message topic
-     * @param message message to send
-     * @param encoder function for encoding request to byte[]
-     * @param decoder function for decoding response from byte[]
-     * @param timeout reply timeout
-     * @param <M>     request type
-     * @param <R>     reply type
-     * @return reply future
-     */
-    <M, R> CompletableFuture<R> send(
-            String topic,
-            M message,
-            Function<M, byte[]> encoder,
-            Function<byte[], R> decoder,
-            Duration timeout);
+  /**
+   * Sends a direct message to the next registered subscriber for {@code topic} and awaits a reply.
+   *
+   * @param topic   message topic
+   * @param message message to send
+   * @param encoder function for encoding request to byte[]
+   * @param decoder function for decoding response from byte[]
+   * @param timeout reply timeout
+   * @param <M>     request type
+   * @param <R>     reply type
+   * @return reply future
+   */
+  <M, R> CompletableFuture<R> send(
+      String topic,
+      M message,
+      Function<M, byte[]> encoder,
+      Function<byte[], R> decoder,
+      Duration timeout);
 
     /**
      * Adds a new subscriber for the specified message topic.

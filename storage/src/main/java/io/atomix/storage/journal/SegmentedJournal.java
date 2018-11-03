@@ -18,17 +18,18 @@ package io.atomix.storage.journal;
 import com.google.common.collect.Sets;
 import io.atomix.storage.StorageException;
 import io.atomix.storage.StorageLevel;
-import io.atomix.storage.buffer.Buffer;
-import io.atomix.storage.buffer.FileBuffer;
-import io.atomix.storage.buffer.HeapBuffer;
-import io.atomix.storage.buffer.MappedBuffer;
-import io.atomix.storage.journal.index.SparseJournalIndex;
-import io.atomix.utils.serializer.Serializer;
+import io.atomix.utils.serializer.Namespace;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.file.StandardOpenOption;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.SortedMap;
@@ -40,59 +41,59 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
 /**
- *
- *  Segmented journal implementation.
- *
- * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
+ * Segmented journal.
  */
 public class SegmentedJournal<E> implements Journal<E> {
 
   /**
-   * Returns a new segmented journal builder.
+   * Returns a new Raft log builder.
    *
-   * @return A new segmented journal builder.
+   * @return A new Raft log builder.
    */
   public static <E> Builder<E> builder() {
     return new Builder<>();
   }
 
-  private static final int DEFAULT_BUFFER_SIZE = 1024 * 64;
   private static final int SEGMENT_BUFFER_FACTOR = 3;
 
   private final Logger log = LoggerFactory.getLogger(getClass());
   private final String name;
   private final StorageLevel storageLevel;
   private final File directory;
-  private final Serializer serializer;
+  private final Namespace namespace;
   private final int maxSegmentSize;
+  private final int maxEntrySize;
   private final int maxEntriesPerSegment;
   private final double indexDensity;
-  private final int cacheSize;
+  private final boolean flushOnCommit;
+  private final SegmentedJournalWriter<E> writer;
+  private volatile long commitIndex;
 
   private final NavigableMap<Long, JournalSegment<E>> segments = new ConcurrentSkipListMap<>();
-  private final Collection<SegmentedJournalReader<E>> readers = Sets.newConcurrentHashSet();
+  private final Collection<SegmentedJournalReader> readers = Sets.newConcurrentHashSet();
   private JournalSegment<E> currentSegment;
 
-  private final SegmentedJournalWriter<E> writer;
   private volatile boolean open = true;
 
   public SegmentedJournal(
       String name,
       StorageLevel storageLevel,
       File directory,
-      Serializer serializer,
+      Namespace namespace,
       int maxSegmentSize,
+      int maxEntrySize,
       int maxEntriesPerSegment,
       double indexDensity,
-      int cacheSize) {
+      boolean flushOnCommit) {
     this.name = checkNotNull(name, "name cannot be null");
     this.storageLevel = checkNotNull(storageLevel, "storageLevel cannot be null");
     this.directory = checkNotNull(directory, "directory cannot be null");
-    this.serializer = checkNotNull(serializer, "serializer cannot be null");
+    this.namespace = checkNotNull(namespace, "namespace cannot be null");
     this.maxSegmentSize = maxSegmentSize;
+    this.maxEntrySize = maxEntrySize;
     this.maxEntriesPerSegment = maxEntriesPerSegment;
     this.indexDensity = indexDensity;
-    this.cacheSize = cacheSize;
+    this.flushOnCommit = flushOnCommit;
     open();
     this.writer = openWriter();
   }
@@ -109,9 +110,9 @@ public class SegmentedJournal<E> implements Journal<E> {
   /**
    * Returns the storage directory.
    * <p>
-   * The storage directory is the directory to which all segments write files. Segment files
-   * for multiple logs may be stored in the storage directory, and files for each log instance will be identified
-   * by the {@code prefix} provided when the log is opened.
+   * The storage directory is the directory to which all segments write files. Segment files for multiple logs may be
+   * stored in the storage directory, and files for each log instance will be identified by the {@code prefix} provided
+   * when the log is opened.
    *
    * @return The storage directory.
    */
@@ -133,8 +134,7 @@ public class SegmentedJournal<E> implements Journal<E> {
   /**
    * Returns the maximum journal segment size.
    * <p>
-   * The maximum segment size dictates the maximum size any segment in a segment may consume
-   * in bytes.
+   * The maximum segment size dictates the maximum size any segment in a segment may consume in bytes.
    *
    * @return The maximum segment size in bytes.
    */
@@ -143,15 +143,51 @@ public class SegmentedJournal<E> implements Journal<E> {
   }
 
   /**
+   * Returns the maximum journal entry size.
+   * <p>
+   * The maximum entry size dictates the maximum size any entry in the segment may consume in bytes.
+   *
+   * @return the maximum entry size in bytes
+   */
+  public int maxEntrySize() {
+    return maxEntrySize;
+  }
+
+  /**
    * Returns the maximum number of entries per segment.
    * <p>
-   * The maximum entries per segment dictates the maximum number of entries
-   * that are allowed to be stored in any segment in a journal.
+   * The maximum entries per segment dictates the maximum number of entries that are allowed to be stored in any segment
+   * in a journal.
    *
    * @return The maximum number of entries per segment.
+   * @deprecated since 3.0.2
    */
+  @Deprecated
   public int maxEntriesPerSegment() {
     return maxEntriesPerSegment;
+  }
+
+  @Override
+  public SegmentedJournalWriter<E> writer() {
+    return writer;
+  }
+
+  @Override
+  public SegmentedJournalReader<E> openReader(long index) {
+    return openReader(index, SegmentedJournalReader.Mode.ALL);
+  }
+
+  /**
+   * Opens a new Raft log reader with the given reader mode.
+   *
+   * @param index The index from which to begin reading entries.
+   * @param mode The mode in which to read entries.
+   * @return The Raft log reader.
+   */
+  public SegmentedJournalReader<E> openReader(long index, SegmentedJournalReader.Mode mode) {
+    SegmentedJournalReader<E> reader = new SegmentedJournalReader<>(this, index, mode);
+    readers.add(reader);
+    return reader;
   }
 
   /**
@@ -355,16 +391,35 @@ public class SegmentedJournal<E> implements Journal<E> {
    * Creates a new segment.
    */
   JournalSegment<E> createSegment(JournalSegmentDescriptor descriptor) {
-    switch (storageLevel) {
-      case MEMORY:
-        return createMemorySegment(descriptor);
-      case MAPPED:
-        return createMappedSegment(descriptor);
-      case DISK:
-        return createDiskSegment(descriptor);
-      default:
-        throw new AssertionError();
+    File segmentFile = JournalSegmentFile.createSegmentFile(name, directory, descriptor.id());
+
+    RandomAccessFile raf;
+    FileChannel channel;
+    try {
+      raf = new RandomAccessFile(segmentFile, "rw");
+      raf.setLength(descriptor.maxSegmentSize());
+      channel =  raf.getChannel();
+    } catch (IOException e) {
+      throw new StorageException(e);
     }
+
+    ByteBuffer buffer = ByteBuffer.allocate(JournalSegmentDescriptor.BYTES);
+    descriptor.copyTo(buffer);
+    buffer.flip();
+    try {
+      channel.write(buffer);
+    } catch (IOException e) {
+      throw new StorageException(e);
+    } finally {
+      try {
+        channel.close();
+        raf.close();
+      } catch (IOException e) {
+      }
+    }
+    JournalSegment<E> segment = newSegment(new JournalSegmentFile(segmentFile), descriptor);
+    log.debug("Created segment: {}", segment);
+    return segment;
   }
 
   /**
@@ -375,95 +430,33 @@ public class SegmentedJournal<E> implements Journal<E> {
    * @return The segment instance.
    */
   protected JournalSegment<E> newSegment(JournalSegmentFile segmentFile, JournalSegmentDescriptor descriptor) {
-    return new JournalSegment<>(segmentFile, descriptor, indexDensity, cacheSize, serializer);
-  }
-
-  /**
-   * Creates a new segment.
-   */
-  private JournalSegment<E> createDiskSegment(JournalSegmentDescriptor descriptor) {
-    File segmentFile = JournalSegmentFile.createSegmentFile(name, directory, descriptor.id());
-    Buffer buffer = FileBuffer.allocate(segmentFile, Math.min(DEFAULT_BUFFER_SIZE, descriptor.maxSegmentSize()), Integer.MAX_VALUE);
-    descriptor.copyTo(buffer);
-    JournalSegment<E> segment = newSegment(new JournalSegmentFile(segmentFile), descriptor);
-    log.debug("Created disk segment: {}", segment);
-    return segment;
-  }
-
-  /**
-   * Creates a new segment.
-   */
-  private JournalSegment<E> createMappedSegment(JournalSegmentDescriptor descriptor) {
-    File segmentFile = JournalSegmentFile.createSegmentFile(name, directory, descriptor.id());
-    Buffer buffer = MappedBuffer.allocate(segmentFile, Math.min(DEFAULT_BUFFER_SIZE, descriptor.maxSegmentSize()), Integer.MAX_VALUE);
-    descriptor.copyTo(buffer);
-    JournalSegment<E> segment = newSegment(new JournalSegmentFile(segmentFile), descriptor);
-    log.debug("Created memory mapped segment: {}", segment);
-    return segment;
-  }
-
-  /**
-   * Creates a new segment.
-   */
-  private JournalSegment<E> createMemorySegment(JournalSegmentDescriptor descriptor) {
-    File segmentFile = JournalSegmentFile.createSegmentFile(name, directory, descriptor.id());
-    Buffer buffer = HeapBuffer.allocate(Math.min(DEFAULT_BUFFER_SIZE, descriptor.maxSegmentSize()), Integer.MAX_VALUE);
-    descriptor.copyTo(buffer);
-    JournalSegment<E> segment = newSegment(new JournalSegmentFile(segmentFile), descriptor);
-    log.debug("Created memory segment: {}", segment);
-    return segment;
+    return new JournalSegment<>(segmentFile, descriptor, storageLevel, maxEntrySize, indexDensity, namespace);
   }
 
   /**
    * Loads a segment.
    */
   private JournalSegment<E> loadSegment(long segmentId) {
-    switch (storageLevel) {
-      case MEMORY:
-        return loadMemorySegment(segmentId);
-      case MAPPED:
-        return loadMappedSegment(segmentId);
-      case DISK:
-        return loadDiskSegment(segmentId);
-      default:
-        throw new AssertionError();
+    File segmentFile = JournalSegmentFile.createSegmentFile(name, directory, segmentId);
+    ByteBuffer buffer = ByteBuffer.allocate(JournalSegmentDescriptor.BYTES);
+    try (FileChannel channel = openChannel(segmentFile)) {
+      channel.read(buffer);
+      buffer.flip();
+      JournalSegmentDescriptor descriptor = new JournalSegmentDescriptor(buffer);
+      JournalSegment<E> segment = newSegment(new JournalSegmentFile(segmentFile), descriptor);
+      log.debug("Loaded disk segment: {} ({})", descriptor.id(), segmentFile.getName());
+      return segment;
+    } catch (IOException e) {
+      throw new StorageException(e);
     }
   }
 
-  /**
-   * Loads a segment.
-   */
-  private JournalSegment<E> loadDiskSegment(long segmentId) {
-    File file = JournalSegmentFile.createSegmentFile(name, directory, segmentId);
-    Buffer buffer = FileBuffer.allocate(file, Math.min(DEFAULT_BUFFER_SIZE, maxSegmentSize), Integer.MAX_VALUE);
-    JournalSegmentDescriptor descriptor = new JournalSegmentDescriptor(buffer);
-    JournalSegment<E> segment = newSegment(new JournalSegmentFile(file), descriptor);
-    log.debug("Loaded disk segment: {} ({})", descriptor.id(), file.getName());
-    return segment;
-  }
-
-  /**
-   * Loads a segment.
-   */
-  private JournalSegment<E> loadMappedSegment(long segmentId) {
-    File file = JournalSegmentFile.createSegmentFile(name, directory, segmentId);
-    Buffer buffer = MappedBuffer.allocate(file, Math.min(DEFAULT_BUFFER_SIZE, maxSegmentSize), Integer.MAX_VALUE);
-    JournalSegmentDescriptor descriptor = new JournalSegmentDescriptor(buffer);
-    JournalSegment<E> segment = newSegment(new JournalSegmentFile(file), descriptor);
-    log.debug("Loaded memory mapped segment: {} ({})", descriptor.id(), file.getName());
-    return segment;
-  }
-
-  /**
-   * Loads a segment.
-   */
-  private JournalSegment<E> loadMemorySegment(long segmentId) {
-    File file = JournalSegmentFile.createSegmentFile(name, directory, segmentId);
-    Buffer buffer = HeapBuffer.allocate(Math.min(DEFAULT_BUFFER_SIZE, maxSegmentSize), Integer.MAX_VALUE);
-    JournalSegmentDescriptor descriptor = new JournalSegmentDescriptor(buffer);
-    JournalSegment<E> segment = newSegment(new JournalSegmentFile(file), descriptor);
-    log.debug("Loaded memory segment: {}", descriptor.id());
-    return segment;
+  private FileChannel openChannel(File file) {
+    try {
+      return FileChannel.open(file.toPath(), StandardOpenOption.CREATE, StandardOpenOption.READ, StandardOpenOption.WRITE);
+    } catch (IOException e) {
+      throw new StorageException(e);
+    }
   }
 
   /**
@@ -483,73 +476,41 @@ public class SegmentedJournal<E> implements Journal<E> {
       // If the file looks like a segment file, attempt to load the segment.
       if (JournalSegmentFile.isSegmentFile(name, file)) {
         JournalSegmentFile segmentFile = new JournalSegmentFile(file);
-        JournalSegmentDescriptor descriptor = new JournalSegmentDescriptor(FileBuffer.allocate(file, JournalSegmentDescriptor.BYTES));
+        ByteBuffer buffer = ByteBuffer.allocate(JournalSegmentDescriptor.BYTES);
+        try (FileChannel channel = openChannel(file)) {
+          channel.read(buffer);
+          buffer.flip();
+        } catch (IOException e) {
+          throw new StorageException(e);
+        }
+
+        JournalSegmentDescriptor descriptor = new JournalSegmentDescriptor(buffer);
 
         // Load the segment.
         JournalSegment<E> segment = loadSegment(descriptor.id());
 
-        // If a segment with an equal or lower index has already been loaded, ensure this segment is not superseded
-        // by the earlier segment. This can occur due to segments being combined during log compaction.
-        Map.Entry<Long, JournalSegment<E>> previousEntry = segments.floorEntry(segment.index());
-        if (previousEntry != null) {
-
-          // If an existing descriptor exists with a lower index than this segment's first index, check to determine
-          // whether this segment's first index is contained in that existing index. If it is, determine which segment
-          // should take precedence based on segment versions.
-          JournalSegment previousSegment = previousEntry.getValue();
-
-          // If the two segments start at the same index, the segment with the higher version number is used.
-          if (previousSegment.index() == segment.index()) {
-            if (segment.descriptor().version() > previousSegment.descriptor().version()) {
-              log.debug("Replaced segment {} with newer version: {} ({})", previousSegment.descriptor().id(), segment.descriptor().version(), segmentFile.file().getName());
-              segments.remove(previousEntry.getKey());
-              previousSegment.close();
-              previousSegment.delete();
-            } else {
-              segment.close();
-              segment.delete();
-              continue;
-            }
-          }
-          // If the existing segment's entries overlap with the loaded segment's entries, the existing segment always
-          // supersedes the loaded segment. Log compaction processes ensure this is always the case.
-          else if (previousSegment.index() + previousSegment.length() > segment.index()) {
-            segment.close();
-            segment.delete();
-            continue;
-          }
-        }
-
         // Add the segment to the segments list.
         log.debug("Found segment: {} ({})", segment.descriptor().id(), segmentFile.file().getName());
         segments.put(segment.index(), segment);
-
-        // Ensure any segments later in the log with which this segment overlaps are removed.
-        Map.Entry<Long, JournalSegment<E>> nextEntry = segments.higherEntry(segment.index());
-        while (nextEntry != null) {
-          if (nextEntry.getValue().index() < segment.index() + segment.length()) {
-            segments.remove(nextEntry.getKey());
-            nextEntry = segments.higherEntry(segment.index());
-          } else {
-            break;
-          }
-        }
-
-        descriptor.close();
       }
     }
 
-    for (Map.Entry<Long, JournalSegment<E>> entry : segments.entrySet()) {
-      final Long segmentId = entry.getKey();
-      final JournalSegment<E> segment = entry.getValue();
-      Map.Entry<Long, JournalSegment<E>> previousEntry = segments.floorEntry(segmentId - 1);
-      if (previousEntry != null) {
-        JournalSegment<E> previousSegment = previousEntry.getValue();
-        if (previousSegment.lastIndex() != segment.index() - 1) {
-          log.warn("Found misaligned segment {}", segment);
-          segments.remove(segmentId);
-        }
+    // Verify that all the segments in the log align with one another.
+    JournalSegment<E> previousSegment = null;
+    boolean corrupted = false;
+    Iterator<Map.Entry<Long, JournalSegment<E>>> iterator = segments.entrySet().iterator();
+    while (iterator.hasNext()) {
+      JournalSegment<E> segment = iterator.next().getValue();
+      if (previousSegment != null && previousSegment.lastIndex() != segment.index() - 1) {
+        log.warn("Journal is inconsistent. {} is not aligned with prior segment {}", segment.file().file(), previousSegment.file().file());
+        corrupted = true;
       }
+      if (corrupted) {
+        segment.close();
+        segment.delete();
+        iterator.remove();
+      }
+      previousSegment = segment;
     }
 
     return segments.values();
@@ -561,7 +522,7 @@ public class SegmentedJournal<E> implements Journal<E> {
    * @param index The index at which to reset readers.
    */
   void resetHead(long index) {
-    for (SegmentedJournalReader<E> reader : readers) {
+    for (SegmentedJournalReader reader : readers) {
       if (reader.getNextIndex() < index) {
         reader.reset(index);
       }
@@ -574,26 +535,14 @@ public class SegmentedJournal<E> implements Journal<E> {
    * @param index The index at which to reset readers.
    */
   void resetTail(long index) {
-    for (SegmentedJournalReader<E> reader : readers) {
+    for (SegmentedJournalReader reader : readers) {
       if (reader.getNextIndex() >= index) {
         reader.reset(index);
       }
     }
   }
 
-  @Override
-  public SegmentedJournalWriter<E> writer() {
-    return writer;
-  }
-
-  @Override
-  public SegmentedJournalReader<E> openReader(long index) {
-    SegmentedJournalReader<E> reader = new SegmentedJournalReader<>(this, index);
-    readers.add(reader);
-    return reader;
-  }
-
-  void closeReader(SegmentedJournalReader<E> reader) {
+  void closeReader(SegmentedJournalReader reader) {
     readers.remove(reader);
   }
 
@@ -659,12 +608,41 @@ public class SegmentedJournal<E> implements Journal<E> {
   }
 
   /**
-   * Segmented journal builder.
+   * Returns whether {@code flushOnCommit} is enabled for the log.
+   *
+   * @return Indicates whether {@code flushOnCommit} is enabled for the log.
+   */
+  boolean isFlushOnCommit() {
+    return flushOnCommit;
+  }
+
+  /**
+   * Commits entries up to the given index.
+   *
+   * @param index The index up to which to commit entries.
+   */
+  void setCommitIndex(long index) {
+    this.commitIndex = index;
+  }
+
+  /**
+   * Returns the Raft log commit index.
+   *
+   * @return The Raft log commit index.
+   */
+  long getCommitIndex() {
+    return commitIndex;
+  }
+
+  /**
+   * Raft log builder.
    */
   public static class Builder<E> implements io.atomix.utils.Builder<SegmentedJournal<E>> {
+    private static final boolean DEFAULT_FLUSH_ON_COMMIT = false;
     private static final String DEFAULT_NAME = "atomix";
     private static final String DEFAULT_DIRECTORY = System.getProperty("user.dir");
     private static final int DEFAULT_MAX_SEGMENT_SIZE = 1024 * 1024 * 32;
+    private static final int DEFAULT_MAX_ENTRY_SIZE = 1024 * 1024;
     private static final int DEFAULT_MAX_ENTRIES_PER_SEGMENT = 1024 * 1024;
     private static final double DEFAULT_INDEX_DENSITY = .005;
     private static final int DEFAULT_CACHE_SIZE = 1024;
@@ -672,11 +650,13 @@ public class SegmentedJournal<E> implements Journal<E> {
     protected String name = DEFAULT_NAME;
     protected StorageLevel storageLevel = StorageLevel.DISK;
     protected File directory = new File(DEFAULT_DIRECTORY);
-    protected Serializer serializer;
+    protected Namespace namespace;
     protected int maxSegmentSize = DEFAULT_MAX_SEGMENT_SIZE;
+    protected int maxEntrySize = DEFAULT_MAX_ENTRY_SIZE;
     protected int maxEntriesPerSegment = DEFAULT_MAX_ENTRIES_PER_SEGMENT;
     protected double indexDensity = DEFAULT_INDEX_DENSITY;
     protected int cacheSize = DEFAULT_CACHE_SIZE;
+    private boolean flushOnCommit = DEFAULT_FLUSH_ON_COMMIT;
 
     protected Builder() {
     }
@@ -733,22 +713,22 @@ public class SegmentedJournal<E> implements Journal<E> {
     }
 
     /**
-     * Sets the journal serializer, returning the builder for method chaining.
+     * Sets the journal namespace, returning the builder for method chaining.
      *
-     * @param serializer The journal serializer.
+     * @param namespace The journal serializer.
      * @return The journal builder.
      */
-    public Builder<E> withSerializer(Serializer serializer) {
-      this.serializer = checkNotNull(serializer, "serializer cannot be null");
+    public Builder<E> withNamespace(Namespace namespace) {
+      this.namespace = checkNotNull(namespace, "namespace cannot be null");
       return this;
     }
 
     /**
      * Sets the maximum segment size in bytes, returning the builder for method chaining.
      * <p>
-     * The maximum segment size dictates when logs should roll over to new segments. As entries are written to
-     * a segment of the log, once the size of the segment surpasses the configured maximum segment size, the
-     * log will create a new segment and append new entries to that segment.
+     * The maximum segment size dictates when logs should roll over to new segments. As entries are written to a segment
+     * of the log, once the size of the segment surpasses the configured maximum segment size, the log will create a new
+     * segment and append new entries to that segment.
      * <p>
      * By default, the maximum segment size is {@code 1024 * 1024 * 32}.
      *
@@ -763,19 +743,34 @@ public class SegmentedJournal<E> implements Journal<E> {
     }
 
     /**
+     * Sets the maximum entry size in bytes, returning the builder for method chaining.
+     *
+     * @param maxEntrySize the maximum entry size in bytes
+     * @return the storage builder
+     * @throws IllegalArgumentException if the {@code maxEntrySize} is not positive
+     */
+    public Builder<E> withMaxEntrySize(int maxEntrySize) {
+      checkArgument(maxEntrySize > 0, "maxEntrySize must be positive");
+      this.maxEntrySize = maxEntrySize;
+      return this;
+    }
+
+    /**
      * Sets the maximum number of allows entries per segment, returning the builder for method chaining.
      * <p>
-     * The maximum entry count dictates when logs should roll over to new segments. As entries are written to
-     * a segment of the log, if the entry count in that segment meets the configured maximum entry count, the
-     * log will create a new segment and append new entries to that segment.
+     * The maximum entry count dictates when logs should roll over to new segments. As entries are written to a segment
+     * of the log, if the entry count in that segment meets the configured maximum entry count, the log will create a
+     * new segment and append new entries to that segment.
      * <p>
      * By default, the maximum entries per segment is {@code 1024 * 1024}.
      *
      * @param maxEntriesPerSegment The maximum number of entries allowed per segment.
      * @return The storage builder.
-     * @throws IllegalArgumentException If the {@code maxEntriesPerSegment} not greater than the default max entries per
-     *                                  segment
+     * @throws IllegalArgumentException If the {@code maxEntriesPerSegment} not greater than the default max entries
+     *     per segment
+     * @deprecated since 3.0.2
      */
+    @Deprecated
     public Builder<E> withMaxEntriesPerSegment(int maxEntriesPerSegment) {
       checkArgument(maxEntriesPerSegment > 0, "max entries per segment must be positive");
       checkArgument(maxEntriesPerSegment <= DEFAULT_MAX_ENTRIES_PER_SEGMENT,
@@ -787,8 +782,8 @@ public class SegmentedJournal<E> implements Journal<E> {
     /**
      * Sets the journal index density.
      * <p>
-     * The index density is the frequency at which the position of entries written to the journal will be recorded in
-     * an in-memory index for faster seeking.
+     * The index density is the frequency at which the position of entries written to the journal will be recorded in an
+     * in-memory index for faster seeking.
      *
      * @param indexDensity the index density
      * @return the journal builder
@@ -806,7 +801,9 @@ public class SegmentedJournal<E> implements Journal<E> {
      * @param cacheSize the journal cache size
      * @return the journal builder
      * @throws IllegalArgumentException if the cache size is not positive
+     * @deprecated since 3.0.4
      */
+    @Deprecated
     public Builder<E> withCacheSize(int cacheSize) {
       checkArgument(cacheSize >= 0, "cacheSize must be positive");
       this.cacheSize = cacheSize;
@@ -814,13 +811,45 @@ public class SegmentedJournal<E> implements Journal<E> {
     }
 
     /**
-     * Builds the journal.
+     * Enables flushing buffers to disk when entries are committed to a segment, returning the builder for method
+     * chaining.
+     * <p>
+     * When flush-on-commit is enabled, log entry buffers will be automatically flushed to disk each time an entry is
+     * committed in a given segment.
      *
-     * @return The built storage configuration.
+     * @return The storage builder.
      */
+    public Builder<E> withFlushOnCommit() {
+      return withFlushOnCommit(true);
+    }
+
+    /**
+     * Sets whether to flush buffers to disk when entries are committed to a segment, returning the builder for method
+     * chaining.
+     * <p>
+     * When flush-on-commit is enabled, log entry buffers will be automatically flushed to disk each time an entry is
+     * committed in a given segment.
+     *
+     * @param flushOnCommit Whether to flush buffers to disk when entries are committed to a segment.
+     * @return The storage builder.
+     */
+    public Builder<E> withFlushOnCommit(boolean flushOnCommit) {
+      this.flushOnCommit = flushOnCommit;
+      return this;
+    }
+
     @Override
     public SegmentedJournal<E> build() {
-      return new SegmentedJournal<>(name, storageLevel, directory, serializer, maxSegmentSize, maxEntriesPerSegment, indexDensity, cacheSize);
+      return new SegmentedJournal<>(
+          name,
+          storageLevel,
+          directory,
+          namespace,
+          maxSegmentSize,
+          maxEntrySize,
+          maxEntriesPerSegment,
+          indexDensity,
+          flushOnCommit);
     }
   }
 }

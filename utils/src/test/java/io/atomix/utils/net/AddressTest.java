@@ -15,7 +15,10 @@
  */
 package io.atomix.utils.net;
 
+import org.junit.Ignore;
 import org.junit.Test;
+
+import java.net.InetAddress;
 
 import static org.junit.Assert.assertEquals;
 
@@ -28,14 +31,24 @@ public class AddressTest {
     Address address = Address.from("127.0.0.1:5000");
     assertEquals("127.0.0.1", address.host());
     assertEquals(5000, address.port());
-    assertEquals("127.0.0.1:5000", address.toString());
+    assertEquals("localhost", address.address().getHostName());
+    assertEquals( "127.0.0.1:5000", address.toString());
   }
 
   @Test
   public void testIPv6Address() throws Exception {
-    Address address = Address.from("[FE80:CD00:0000:0CDE:1257:0000:211E:729C]:5000");
-    assertEquals("FE80:CD00:0000:0CDE:1257:0000:211E:729C", address.host());
+    Address address = Address.from("[fe80:cd00:0000:0cde:1257:0000:211e:729c]:5000");
+    assertEquals("fe80:cd00:0000:0cde:1257:0000:211e:729c", address.host());
     assertEquals(5000, address.port());
-    assertEquals("[FE80:CD00:0000:0CDE:1257:0000:211E:729C]:5000", address.toString());
+    assertEquals("fe80:cd00:0:cde:1257:0:211e:729c", address.address().getHostName());
+    assertEquals("[fe80:cd00:0000:0cde:1257:0000:211e:729c]:5000", address.toString());
+  }
+
+  @Test
+  @Ignore
+  public void testResolveAddress() throws Exception {
+    Address address = Address.from("localhost", 5000);
+    assertEquals("127.0.0.1", address.address().getHostAddress());
+    assertEquals(5000, address.port());
   }
 }

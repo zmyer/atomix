@@ -20,7 +20,8 @@ import io.atomix.cluster.ClusterMembershipService;
 import io.atomix.cluster.MemberId;
 import io.atomix.primitive.AbstractAsyncPrimitive;
 import io.atomix.primitive.AsyncPrimitive;
-import io.atomix.primitive.DistributedPrimitiveBuilder;
+import io.atomix.primitive.PrimitiveBuilder;
+import io.atomix.primitive.PrimitiveException;
 import io.atomix.primitive.PrimitiveInfo;
 import io.atomix.primitive.PrimitiveManagementService;
 import io.atomix.primitive.PrimitiveRegistry;
@@ -107,7 +108,7 @@ import static org.mockito.Mockito.when;
  * Raft test.
  */
 public class RaftTest extends ConcurrentTestCase {
-  private static final Serializer storageSerializer = Serializer.using(Namespace.builder()
+  private static final Namespace NAMESPACE = Namespace.builder()
       .register(CloseSessionEntry.class)
       .register(CommandEntry.class)
       .register(ConfigurationEntry.class)
@@ -124,15 +125,12 @@ public class RaftTest extends ConcurrentTestCase {
       .register(HashSet.class)
       .register(DefaultRaftMember.class)
       .register(MemberId.class)
-      .register(MemberId.Type.class)
       .register(RaftMember.Type.class)
       .register(Instant.class)
       .register(Configuration.class)
       .register(byte[].class)
       .register(long[].class)
-      .build());
-
-  private static final Serializer clientSerializer = Serializer.using(Namespace.DEFAULT);
+      .build();
 
   protected volatile int nextId;
   protected volatile List<RaftMember> members;
@@ -1146,6 +1144,46 @@ public class RaftTest extends ConcurrentTestCase {
     await(Duration.ofSeconds(10).toMillis(), 2);
   }
 
+  @Test
+  public void testSessionDelete() throws Throwable {
+    createServers(3);
+
+    RaftClient client1 = createClient();
+    TestPrimitive primitive1 = createPrimitive(client1);
+
+    RaftClient client2 = createClient();
+    TestPrimitive primitive2 = createPrimitive(client2);
+
+    primitive1.write("foo").thenRun(this::resume);
+    primitive2.write("bar").thenRun(this::resume);
+    await(5000, 2);
+
+    primitive1.delete().thenRun(this::resume);
+    await(5000);
+
+    primitive2.write("baz").whenComplete((result, error) -> {
+      threadAssertTrue(error.getCause() instanceof PrimitiveException.UnknownService);
+      resume();
+    });
+    primitive2.read().whenComplete((result, error) -> {
+      threadAssertTrue(error.getCause() instanceof PrimitiveException.UnknownService);
+      resume();
+    });
+    await(5000, 2);
+
+    primitive2.read().whenComplete((result, error) -> {
+      threadAssertTrue(error.getCause() instanceof PrimitiveException.ClosedSession);
+      resume();
+    });
+    await(5000);
+
+    RaftClient client3 = createClient();
+    TestPrimitive primitive3 = createPrimitive(client3);
+
+    primitive3.write("foo").thenCompose(v -> primitive3.read()).thenRun(this::resume);
+    await(5000);
+  }
+
   /**
    * Returns the next unique member identifier.
    *
@@ -1225,7 +1263,7 @@ public class RaftTest extends ConcurrentTestCase {
         .withStorage(RaftStorage.builder()
             .withStorageLevel(StorageLevel.DISK)
             .withDirectory(new File(String.format("target/test-logs/%s", memberId)))
-            .withSerializer(storageSerializer)
+            .withNamespace(NAMESPACE)
             .withMaxSegmentSize(1024 * 10)
             .withMaxEntriesPerSegment(10)
             .build());
@@ -1292,6 +1330,7 @@ public class RaftTest extends ConcurrentTestCase {
         (key, partitions) -> partitions.get(0));
     PrimitiveRegistry registry = mock(PrimitiveRegistry.class);
     when(registry.createPrimitive(any(String.class), any(PrimitiveType.class))).thenReturn(CompletableFuture.completedFuture(new PrimitiveInfo("raft-test", TestPrimitiveType.INSTANCE)));
+    when(registry.deletePrimitive(any(String.class))).thenReturn(CompletableFuture.completedFuture(null));
     return new TestPrimitiveImpl(proxy, registry);
   }
 
@@ -1357,7 +1396,7 @@ public class RaftTest extends ConcurrentTestCase {
     }
 
     @Override
-    public DistributedPrimitiveBuilder newBuilder(String primitiveName, PrimitiveConfig config, PrimitiveManagementService managementService) {
+    public PrimitiveBuilder newBuilder(String primitiveName, PrimitiveConfig config, PrimitiveManagementService managementService) {
       throw new UnsupportedOperationException();
     }
 

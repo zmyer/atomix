@@ -168,10 +168,15 @@ public class PrimaryBackupServiceContext implements ServiceContext {
         return role.role();
     }
 
-    @Override
-    public PrimitiveId serviceId() {
-        return primitiveId;
-    }
+  @Override
+  public PrimitiveId serviceId() {
+    return primitiveId;
+  }
+
+  @Override
+  public MemberId localMemberId() {
+      return memberId();
+  }
 
     /**
      * Returns the primitive descriptor.
@@ -537,89 +542,94 @@ public class PrimaryBackupServiceContext implements ServiceContext {
         return session;
     }
 
-    /**
-     * Expires the session with the given ID.
-     *
-     * @param sessionId the session ID
-     */
-    public void expireSession(long sessionId) {
-        PrimaryBackupSession session = sessions.remove(sessionId);
-        if (session != null) {
-            session.expire();
-            service.expire(session.sessionId());
-        }
+  /**
+   * Expires the session with the given ID.
+   *
+   * @param sessionId the session ID
+   */
+  public void expireSession(long sessionId) {
+    PrimaryBackupSession session = sessions.remove(sessionId);
+    if (session != null) {
+      log.debug("Expiring session {}", session.sessionId());
+      session.expire();
+      service.expire(session.sessionId());
     }
+  }
 
-    /**
-     * Closes the session with the given ID.
-     *
-     * @param sessionId the session ID
-     */
-    public void closeSession(long sessionId) {
-        PrimaryBackupSession session = sessions.remove(sessionId);
-        if (session != null) {
-            session.close();
-            service.close(session.sessionId());
-        }
+  /**
+   * Closes the session with the given ID.
+   *
+   * @param sessionId the session ID
+   */
+  public void closeSession(long sessionId) {
+    PrimaryBackupSession session = sessions.remove(sessionId);
+    if (session != null) {
+      log.debug("Closing session {}", session.sessionId());
+      session.close();
+      service.close(session.sessionId());
     }
+  }
 
-    /**
-     * Handles a cluster event.
-     */
-    private void handleClusterEvent(ClusterMembershipEvent event) {
-        if (event.type() == ClusterMembershipEvent.Type.MEMBER_REMOVED) {
-            for (Session session : sessions.values()) {
-                if (session.memberId().equals(event.subject().id())) {
-                    role.expire((PrimaryBackupSession) session);
-                }
-            }
+  /**
+   * Handles a cluster event.
+   */
+  private void handleClusterEvent(ClusterMembershipEvent event) {
+    threadContext.execute(() -> {
+      if (event.type() == ClusterMembershipEvent.Type.MEMBER_REMOVED) {
+        for (Session session : sessions.values()) {
+          if (session.memberId().equals(event.subject().id())) {
+            role.expire((PrimaryBackupSession) session);
+          }
         }
-    }
+      }
+    });
+  }
 
-    /**
-     * Changes the roles.
-     */
-    // TODO: 2018/8/1 by zmyer
-    private void changeRole(PrimaryTerm term) {
-        if (term.term() > currentTerm) {
-            log.debug("Term changed: {}", term);
-            currentTerm = term.term();
-            primary = term.primary() != null ? term.primary().memberId() : null;
-            backups = term.backups(descriptor.backups())
-                    .stream()
-                    .map(GroupMember::memberId)
-                    .collect(Collectors.toList());
+  /**
+   * Changes the roles.
+   */
+  private void changeRole(PrimaryTerm term) {
+    threadContext.execute(() -> {
+      if (term.term() > currentTerm) {
+        log.debug("Term changed: {}", term);
+        currentTerm = term.term();
+        primary = term.primary() != null ? term.primary().memberId() : null;
+        backups = term.backups(descriptor.backups())
+            .stream()
+            .map(GroupMember::memberId)
+            .collect(Collectors.toList());
 
-            if (Objects.equals(primary, clusterMembershipService.getLocalMember().id())) {
-                if (this.role == null) {
-                    this.role = new PrimaryRole(this);
-                    log.debug("{} transitioning to {}", clusterMembershipService.getLocalMember().id(), Role.PRIMARY);
-                } else if (this.role.role() != Role.PRIMARY) {
-                    this.role.close();
-                    this.role = new PrimaryRole(this);
-                    log.debug("{} transitioning to {}", clusterMembershipService.getLocalMember().id(), Role.PRIMARY);
-                }
-            } else if (backups.contains(clusterMembershipService.getLocalMember().id())) {
-                if (this.role == null) {
-                    this.role = new BackupRole(this);
-                    log.debug("{} transitioning to {}", clusterMembershipService.getLocalMember().id(), Role.BACKUP);
-                } else if (this.role.role() != Role.BACKUP) {
-                    this.role.close();
-                    this.role = new BackupRole(this);
-                    log.debug("{} transitioning to {}", clusterMembershipService.getLocalMember().id(), Role.BACKUP);
-                }
-            } else {
-                if (this.role == null) {
-                    this.role = new NoneRole(this);
-                    log.debug("{} transitioning to {}", clusterMembershipService.getLocalMember().id(), Role.NONE);
-                } else if (this.role.role() != Role.NONE) {
-                    this.role.close();
-                    this.role = new NoneRole(this);
-                    log.debug("{} transitioning to {}", clusterMembershipService.getLocalMember().id(), Role.NONE);
-                }
-            }
+        if (Objects.equals(primary, clusterMembershipService.getLocalMember().id())) {
+          if (this.role == null) {
+            this.role = new PrimaryRole(this);
+            log.debug("{} transitioning to {}", clusterMembershipService.getLocalMember().id(), Role.PRIMARY);
+          } else if (this.role.role() != Role.PRIMARY) {
+            this.role.close();
+            this.role = new PrimaryRole(this);
+            log.debug("{} transitioning to {}", clusterMembershipService.getLocalMember().id(), Role.PRIMARY);
+          }
+        } else if (backups.contains(clusterMembershipService.getLocalMember().id())) {
+          if (this.role == null) {
+            this.role = new BackupRole(this);
+            log.debug("{} transitioning to {}", clusterMembershipService.getLocalMember().id(), Role.BACKUP);
+          } else if (this.role.role() != Role.BACKUP) {
+            this.role.close();
+            this.role = new BackupRole(this);
+            log.debug("{} transitioning to {}", clusterMembershipService.getLocalMember().id(), Role.BACKUP);
+          }
+        } else {
+          if (this.role == null) {
+            this.role = new NoneRole(this);
+            log.debug("{} transitioning to {}", clusterMembershipService.getLocalMember().id(), Role.NONE);
+          } else if (this.role.role() != Role.NONE) {
+            this.role.close();
+            this.role = new NoneRole(this);
+            log.debug("{} transitioning to {}", clusterMembershipService.getLocalMember().id(), Role.NONE);
+          }
         }
-    }
+      }
+    });
+  }
 
     /**
      * Closes the service.

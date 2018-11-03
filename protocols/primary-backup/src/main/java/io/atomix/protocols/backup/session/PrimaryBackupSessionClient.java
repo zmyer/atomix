@@ -42,6 +42,7 @@ import io.atomix.protocols.backup.protocol.PrimaryBackupClientProtocol;
 import io.atomix.protocols.backup.protocol.PrimaryBackupResponse.Status;
 import io.atomix.protocols.backup.protocol.PrimitiveDescriptor;
 import io.atomix.utils.concurrent.ComposableFuture;
+import io.atomix.utils.concurrent.Futures;
 import io.atomix.utils.concurrent.ThreadContext;
 import io.atomix.utils.logging.ContextualLoggerFactory;
 import io.atomix.utils.logging.LoggerContext;
@@ -253,18 +254,18 @@ public class PrimaryBackupSessionClient implements SessionClient {
         });
     }
 
-    /**
-     * Handles a cluster event.
-     */
-    private void handleClusterEvent(ClusterMembershipEvent event) {
-        if (event.type() == ClusterMembershipEvent.Type.MEMBER_REMOVED && event.subject().id().equals(
-                term.primary().memberId())) {
-            threadContext.execute(() -> {
-                state = PrimitiveState.SUSPENDED;
-                stateChangeListeners.forEach(l -> l.accept(state));
-            });
-        }
+  /**
+   * Handles a cluster event.
+   */
+  private void handleClusterEvent(ClusterMembershipEvent event) {
+    PrimaryTerm term = this.term;
+    if (term != null && event.type() == ClusterMembershipEvent.Type.MEMBER_REMOVED && event.subject().id().equals(term.primary().memberId())) {
+      threadContext.execute(() -> {
+        state = PrimitiveState.SUSPENDED;
+        stateChangeListeners.forEach(l -> l.accept(state));
+      });
     }
+  }
 
     /**
      * Handles a primitive event.
@@ -339,17 +340,21 @@ public class PrimaryBackupSessionClient implements SessionClient {
         return future;
     }
 
-    /**
-     * Primary-backup partition proxy builder.
-     */
-    // TODO: 2018/7/31 by zmyer
-    public abstract static class Builder extends SessionClient.Builder {
-        protected Consistency consistency = Consistency.SEQUENTIAL;
-        protected Replication replication = Replication.ASYNCHRONOUS;
-        protected Recovery recovery = Recovery.RECOVER;
-        protected int numBackups = 1;
-        protected int maxRetries = 0;
-        protected Duration retryDelay = Duration.ofMillis(100);
+  @Override
+  public CompletableFuture<Void> delete() {
+    return close().thenCompose(v -> Futures.exceptionalFuture(new UnsupportedOperationException("Delete not supported by primary-backup protocol")));
+  }
+
+  /**
+   * Primary-backup partition proxy builder.
+   */
+  public abstract static class Builder extends SessionClient.Builder {
+    protected Consistency consistency = Consistency.SEQUENTIAL;
+    protected Replication replication = Replication.ASYNCHRONOUS;
+    protected Recovery recovery = Recovery.RECOVER;
+    protected int numBackups = 1;
+    protected int maxRetries = 0;
+    protected Duration retryDelay = Duration.ofMillis(100);
 
         /**
          * Sets the protocol consistency model.

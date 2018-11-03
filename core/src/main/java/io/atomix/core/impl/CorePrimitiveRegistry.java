@@ -15,11 +15,11 @@
  */
 package io.atomix.core.impl;
 
-import io.atomix.core.map.AsyncConsistentMap;
-import io.atomix.core.map.ConsistentMapType;
-import io.atomix.core.map.impl.ConsistentMapProxy;
-import io.atomix.core.map.impl.ConsistentMapService;
-import io.atomix.core.map.impl.TranscodingAsyncConsistentMap;
+import io.atomix.core.map.AsyncAtomicMap;
+import io.atomix.core.map.AtomicMapType;
+import io.atomix.core.map.impl.AtomicMapProxy;
+import io.atomix.core.map.impl.AtomicMapService;
+import io.atomix.core.map.impl.TranscodingAsyncAtomicMap;
 import io.atomix.primitive.DistributedPrimitive;
 import io.atomix.primitive.ManagedPrimitiveRegistry;
 import io.atomix.primitive.PrimitiveException;
@@ -28,7 +28,7 @@ import io.atomix.primitive.PrimitiveRegistry;
 import io.atomix.primitive.PrimitiveType;
 import io.atomix.primitive.PrimitiveTypeRegistry;
 import io.atomix.primitive.partition.PartitionService;
-import io.atomix.primitive.protocol.PrimitiveProtocol;
+import io.atomix.primitive.protocol.ProxyProtocol;
 import io.atomix.primitive.proxy.ProxyClient;
 import io.atomix.primitive.service.ServiceConfig;
 import io.atomix.utils.serializer.Namespaces;
@@ -51,10 +51,10 @@ import static com.google.common.base.Preconditions.checkNotNull;
 public class CorePrimitiveRegistry implements ManagedPrimitiveRegistry {
     private static final Serializer SERIALIZER = Serializer.using(Namespaces.BASIC);
 
-    private final PartitionService partitionService;
-    private final PrimitiveTypeRegistry primitiveTypeRegistry;
-    private final AtomicBoolean started = new AtomicBoolean();
-    private AsyncConsistentMap<String, String> primitives;
+  private final PartitionService partitionService;
+  private final PrimitiveTypeRegistry primitiveTypeRegistry;
+  private final AtomicBoolean started = new AtomicBoolean();
+  private AsyncAtomicMap<String, String> primitives;
 
     public CorePrimitiveRegistry(PartitionService partitionService, PrimitiveTypeRegistry primitiveTypeRegistry) {
         this.partitionService = checkNotNull(partitionService);
@@ -79,32 +79,25 @@ public class CorePrimitiveRegistry implements ManagedPrimitiveRegistry {
         return future;
     }
 
-    @Override
-    public Collection<PrimitiveInfo> getPrimitives() {
-        try {
-            return primitives.entrySet()
-                    .get(DistributedPrimitive.DEFAULT_OPERATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
-                    .stream()
-                    .map(entry -> new PrimitiveInfo(entry.getKey(),
-                            primitiveTypeRegistry.getPrimitiveType(entry.getValue().value())))
-                    .collect(Collectors.toList());
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new PrimitiveException.Interrupted();
-        } catch (TimeoutException e) {
-            throw new PrimitiveException.Timeout();
-        } catch (ExecutionException e) {
-            throw new PrimitiveException(e.getCause());
-        }
-    }
+  @Override
+  public CompletableFuture<Void> deletePrimitive(String name) {
+    return primitives.remove(name).thenApply(v -> null);
+  }
 
-    @Override
-    public Collection<PrimitiveInfo> getPrimitives(PrimitiveType primitiveType) {
-        return getPrimitives()
-                .stream()
-                .filter(primitive -> primitive.type().equals(primitiveType))
-                .collect(Collectors.toList());
-    }
+  @Override
+  public Collection<PrimitiveInfo> getPrimitives() {
+    return primitives.sync().entrySet().stream()
+        .map(entry -> new PrimitiveInfo(entry.getKey(), primitiveTypeRegistry.getPrimitiveType(entry.getValue().value())))
+        .collect(Collectors.toList());
+  }
+
+  @Override
+  public Collection<PrimitiveInfo> getPrimitives(PrimitiveType primitiveType) {
+    return getPrimitives()
+        .stream()
+        .filter(primitive -> primitive.type().name().equals(primitiveType.name()))
+        .collect(Collectors.toList());
+  }
 
     @Override
     public PrimitiveInfo getPrimitive(String name) {
@@ -123,30 +116,29 @@ public class CorePrimitiveRegistry implements ManagedPrimitiveRegistry {
         }
     }
 
-    // TODO: 2018/8/1 by zmyer
-    @Override
-    @SuppressWarnings("unchecked")
-    public CompletableFuture<PrimitiveRegistry> start() {
-        final PrimitiveProtocol protocol = partitionService.getSystemPartitionGroup().newProtocol();
-        final ProxyClient<ConsistentMapService> proxy = protocol.newProxy(
-                "primitives",
-                ConsistentMapType.instance(),
-                ConsistentMapService.class,
-                new ServiceConfig(),
-                partitionService);
-        return proxy.connect()
-                .thenApply(v -> {
-                    final ConsistentMapProxy mapProxy = new ConsistentMapProxy(proxy, this);
-                    primitives = new TranscodingAsyncConsistentMap<>(
-                            mapProxy,
-                            key -> key,
-                            key -> key,
-                            value -> value != null ? SERIALIZER.encode(value) : null,
-                            value -> value != null ? SERIALIZER.decode(value) : null);
-                    started.set(true);
-                    return this;
-                });
-    }
+  @Override
+  @SuppressWarnings("unchecked")
+  public CompletableFuture<PrimitiveRegistry> start() {
+    ProxyProtocol protocol = partitionService.getSystemPartitionGroup().newProtocol();
+    ProxyClient proxy = protocol.newProxy(
+        "primitives",
+        AtomicMapType.instance(),
+        AtomicMapService.class,
+        new ServiceConfig(),
+        partitionService);
+    return proxy.connect()
+        .thenApply(v -> {
+          AtomicMapProxy mapProxy = new AtomicMapProxy(proxy, this);
+          primitives = new TranscodingAsyncAtomicMap<>(
+              mapProxy,
+              key -> key,
+              key -> key,
+              value -> value != null ? SERIALIZER.encode(value) : null,
+              value -> value != null ? SERIALIZER.decode(value) : null);
+          started.set(true);
+          return this;
+        });
+  }
 
     @Override
     public boolean isRunning() {

@@ -26,25 +26,30 @@ import java.util.Objects;
 // TODO: 2018/7/31 by zmyer
 public class ClusterMembershipEvent extends AbstractEvent<ClusterMembershipEvent.Type, Member> {
 
+  /**
+   * Type of cluster-related events.
+   */
+  public enum Type {
     /**
-     * Type of cluster-related events.
+     * Indicates that a new member has been added.
      */
-    public enum Type {
-        /**
-         * Signifies that a new member has been added.
-         */
-        MEMBER_ADDED,
+    MEMBER_ADDED,
 
-        /**
-         * Signifies that a member's state has changed.
-         */
-        MEMBER_UPDATED,
+    /**
+     * Indicates that a member's metadata has changed.
+     */
+    METADATA_CHANGED,
 
-        /**
-         * Signifies that a member has been removed.
-         */
-        MEMBER_REMOVED,
-    }
+    /**
+     * Indicates that a member's reachability has changed.
+     */
+    REACHABILITY_CHANGED,
+
+    /**
+     * Indicates that a member has been removed.
+     */
+    MEMBER_REMOVED,
+  }
 
     /**
      * Creates an event of a given type and for the specified instance and the

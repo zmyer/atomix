@@ -17,7 +17,11 @@ package io.atomix.utils.concurrent;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.BinaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -30,15 +34,45 @@ import java.util.stream.Stream;
 // TODO: 2018/7/31 by zmyer
 public final class Futures {
 
-    /**
-     * Creates a future that is synchronously completed.
-     *
-     * @param result The future result.
-     * @return The completed future.
-     */
-    public static <T> CompletableFuture<T> completedFuture(T result) {
-        return CompletableFuture.completedFuture(result);
+  /**
+   * Gets a future result with a default timeout.
+   *
+   * @param future the future to block
+   * @param <T> the future result type
+   * @return the future result
+   * @throws RuntimeException if a future exception occurs
+   */
+  public static <T> T get(Future<T> future) {
+    return get(future, 30, TimeUnit.SECONDS);
+  }
+
+  /**
+   * Gets a future result with a default timeout.
+   *
+   * @param future the future to block
+   * @param timeout the future timeout
+   * @param timeUnit the future timeout time unit
+   * @param <T> the future result type
+   * @return the future result
+   * @throws RuntimeException if a future exception occurs
+   */
+  public static <T> T get(Future<T> future, long timeout, TimeUnit timeUnit) {
+    try {
+      return future.get(timeout, timeUnit);
+    } catch (InterruptedException | ExecutionException | TimeoutException e) {
+      throw new RuntimeException(e);
     }
+  }
+
+  /**
+   * Creates a future that is synchronously completed.
+   *
+   * @param result The future result.
+   * @return The completed future.
+   */
+  public static <T> CompletableFuture<T> completedFuture(T result) {
+    return CompletableFuture.completedFuture(result);
+  }
 
     /**
      * Creates a future that is asynchronously completed.

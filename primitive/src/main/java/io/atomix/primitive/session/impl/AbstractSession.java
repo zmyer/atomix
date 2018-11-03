@@ -30,13 +30,12 @@ import static com.google.common.base.Preconditions.checkNotNull;
 /**
  * Abstract session.
  */
-// TODO: 2018/8/1 by zmyer
-public abstract class AbstractSession implements Session {
-    private final SessionId sessionId;
-    private final String primitiveName;
-    private final PrimitiveType primitiveType;
-    private final MemberId memberId;
-    private final Serializer serializer;
+public abstract class AbstractSession<C> implements Session<C> {
+  private final SessionId sessionId;
+  private final String primitiveName;
+  private final PrimitiveType primitiveType;
+  private final MemberId memberId;
+  private final Serializer serializer;
 
     @SuppressWarnings("unchecked")
     protected AbstractSession(

@@ -16,6 +16,7 @@
 
 package io.atomix.primitive.service;
 
+import io.atomix.cluster.MemberId;
 import io.atomix.primitive.PrimitiveId;
 import io.atomix.primitive.PrimitiveType;
 import io.atomix.primitive.operation.OperationType;
@@ -48,12 +49,19 @@ public interface ServiceContext {
      */
     String serviceName();
 
-    /**
-     * Returns the state machine type.
-     *
-     * @return The state machine type.
-     */
-    PrimitiveType serviceType();
+  /**
+   * Returns the state machine type.
+   *
+   * @return The state machine type.
+   */
+  PrimitiveType serviceType();
+
+  /**
+   * Returns the local member ID
+   *
+   * @return The local member ID
+   */
+  MemberId localMemberId();
 
     /**
      * Returns the service configuration.

@@ -48,38 +48,37 @@ import io.atomix.utils.serializer.Namespaces;
 // TODO: 2018/8/1 by zmyer
 public final class PrimaryBackupNamespaces {
 
-    /**
-     * Primary-backup protocol namespace.
-     */
-    public static final Namespace PROTOCOL = Namespace.builder()
-            .register(Namespaces.BASIC)
-            .nextId(Namespaces.BEGIN_USER_CUSTOM_ID)
-            .register(MemberId.class)
-            .register(MemberId.Type.class)
-            .register(PrimaryBackupResponse.Status.class)
-            .register(ExecuteRequest.class)
-            .register(ExecuteResponse.class)
-            .register(BackupRequest.class)
-            .register(BackupResponse.class)
-            .register(RestoreRequest.class)
-            .register(RestoreResponse.class)
-            .register(CloseRequest.class)
-            .register(CloseResponse.class)
-            .register(MetadataRequest.class)
-            .register(MetadataResponse.class)
-            .register(BackupOperation.Type.class)
-            .register(ExecuteOperation.class)
-            .register(HeartbeatOperation.class)
-            .register(ExpireOperation.class)
-            .register(CloseOperation.class)
-            .register(PrimitiveDescriptor.class)
-            .register(PrimitiveOperation.class)
-            .register(PrimitiveEvent.class)
-            .register(DefaultEventType.class)
-            .register(DefaultOperationId.class)
-            .register(OperationType.class)
-            .register(Replication.class)
-            .build("PrimaryBackupProtocol");
+  /**
+   * Primary-backup protocol namespace.
+   */
+  public static final Namespace PROTOCOL = Namespace.builder()
+      .register(Namespaces.BASIC)
+      .nextId(Namespaces.BEGIN_USER_CUSTOM_ID)
+      .register(MemberId.class)
+      .register(PrimaryBackupResponse.Status.class)
+      .register(ExecuteRequest.class)
+      .register(ExecuteResponse.class)
+      .register(BackupRequest.class)
+      .register(BackupResponse.class)
+      .register(RestoreRequest.class)
+      .register(RestoreResponse.class)
+      .register(CloseRequest.class)
+      .register(CloseResponse.class)
+      .register(MetadataRequest.class)
+      .register(MetadataResponse.class)
+      .register(BackupOperation.Type.class)
+      .register(ExecuteOperation.class)
+      .register(HeartbeatOperation.class)
+      .register(ExpireOperation.class)
+      .register(CloseOperation.class)
+      .register(PrimitiveDescriptor.class)
+      .register(PrimitiveOperation.class)
+      .register(PrimitiveEvent.class)
+      .register(DefaultEventType.class)
+      .register(DefaultOperationId.class)
+      .register(OperationType.class)
+      .register(Replication.class)
+      .build("PrimaryBackupProtocol");
 
     private PrimaryBackupNamespaces() {
     }

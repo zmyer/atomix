@@ -23,6 +23,7 @@ import io.atomix.protocols.raft.cluster.RaftCluster;
 import io.atomix.protocols.raft.storage.RaftStorage;
 import io.atomix.utils.concurrent.AtomixFuture;
 import io.atomix.utils.concurrent.Futures;
+import io.atomix.utils.concurrent.ThreadContextFactory;
 import io.atomix.utils.logging.ContextualLoggerFactory;
 import io.atomix.utils.logging.LoggerContext;
 import org.slf4j.Logger;
@@ -78,6 +79,11 @@ public class DefaultRaftServer implements RaftServer {
   @Override
   public void removeRoleChangeListener(Consumer<Role> listener) {
     context.removeRoleChangeListener(listener);
+  }
+
+  @Override
+  public CompletableFuture<Void> compact() {
+    return context.compact();
   }
 
   @Override
@@ -226,6 +232,10 @@ public class DefaultRaftServer implements RaftServer {
 
     @Override
     public RaftServer build() {
+      Logger log = ContextualLoggerFactory.getLogger(RaftServer.class, LoggerContext.builder(RaftServer.class)
+          .addValue(name)
+          .build());
+
       if (primitiveTypes == null) {
         primitiveTypes = new ClasspathScanningPrimitiveTypeRegistry(Thread.currentThread().getContextClassLoader());
       }
@@ -243,7 +253,26 @@ public class DefaultRaftServer implements RaftServer {
         storage = RaftStorage.builder().build();
       }
 
-      RaftContext raft = new RaftContext(name, localMemberId, membershipService, protocol, storage, primitiveTypes, threadModel, threadPoolSize);
+      // If a ThreadContextFactory was not provided, create one and ensure it's closed when the server is stopped.
+      boolean closeOnStop;
+      ThreadContextFactory threadContextFactory;
+      if (this.threadContextFactory == null) {
+        threadContextFactory = threadModel.factory("raft-server-" + name + "-%d", threadPoolSize, log);
+        closeOnStop = true;
+      } else {
+        threadContextFactory = this.threadContextFactory;
+        closeOnStop = false;
+      }
+
+      RaftContext raft = new RaftContext(
+          name,
+          localMemberId,
+          membershipService,
+          protocol,
+          storage,
+          primitiveTypes,
+          threadContextFactory,
+          closeOnStop);
       raft.setElectionTimeout(electionTimeout);
       raft.setHeartbeatInterval(heartbeatInterval);
       raft.setSessionTimeout(sessionTimeout);

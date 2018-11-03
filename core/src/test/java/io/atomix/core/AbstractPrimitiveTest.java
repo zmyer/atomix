@@ -15,36 +15,34 @@
  */
 package io.atomix.core;
 
-import io.atomix.primitive.protocol.PrimitiveProtocol;
-import io.atomix.protocols.backup.partition.PrimaryBackupPartitionGroup;
-import io.atomix.protocols.raft.partition.RaftPartitionGroup;
+import io.atomix.core.test.TestAtomixFactory;
+import io.atomix.core.test.protocol.TestProtocol;
+import io.atomix.primitive.protocol.ProxyProtocol;
 import org.junit.After;
-import org.junit.AfterClass;
 import org.junit.Before;
-import org.junit.BeforeClass;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
  * Base Atomix test.
  */
-public abstract class AbstractPrimitiveTest extends AbstractAtomixTest {
-  private static List<Atomix> servers;
-  private static List<Atomix> clients;
-  private static int id = 10;
+public abstract class AbstractPrimitiveTest {
+  private List<Atomix> members;
+  private TestAtomixFactory atomixFactory;
+  private TestProtocol protocol;
 
   /**
    * Returns the primitive protocol with which to test.
    *
    * @return the protocol with which to test
    */
-  protected abstract PrimitiveProtocol protocol();
+  protected ProxyProtocol protocol() {
+    return protocol;
+  }
 
   /**
    * Returns a new Atomix instance.
@@ -52,60 +50,40 @@ public abstract class AbstractPrimitiveTest extends AbstractAtomixTest {
    * @return a new Atomix instance.
    */
   protected Atomix atomix() throws Exception {
-    Atomix instance = createAtomix(id++, Arrays.asList(1, 2, 3));
-    clients.add(instance);
+    Atomix instance = createAtomix();
     instance.start().get(30, TimeUnit.SECONDS);
     return instance;
   }
 
-  @BeforeClass
-  public static void setupCluster() throws Exception {
-    AbstractAtomixTest.setupAtomix();
-    Function<Atomix.Builder, Atomix> build = builder ->
-        builder.withManagementGroup(RaftPartitionGroup.builder("system")
-            .withNumPartitions(1)
-            .withMembers("1", "2", "3")
-            .build())
-            .addPartitionGroup(RaftPartitionGroup.builder("raft")
-                .withNumPartitions(3)
-                .withMembers("1", "2", "3")
-                .build())
-            .addPartitionGroup(PrimaryBackupPartitionGroup.builder("data")
-                .withNumPartitions(7)
-                .build())
-            .build();
-    servers = new ArrayList<>();
-    servers.add(createAtomix(1, Arrays.asList(1, 2, 3), build));
-    servers.add(createAtomix(2, Arrays.asList(1, 2, 3), build));
-    servers.add(createAtomix(3, Arrays.asList(1, 2, 3), build));
-    List<CompletableFuture<Atomix>> futures = servers.stream().map(a -> a.start().thenApply(v -> a)).collect(Collectors.toList());
-    CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()])).get(30, TimeUnit.SECONDS);
-  }
-
-  @AfterClass
-  public static void teardownCluster() throws Exception {
-    List<CompletableFuture<Void>> futures = servers.stream().map(Atomix::stop).collect(Collectors.toList());
-    try {
-      CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()])).join();
-    } catch (Exception e) {
-      // Do nothing
-    }
-    AbstractAtomixTest.teardownAtomix();
+  /**
+   * Creates a new Atomix instance.
+   *
+   * @return the Atomix instance
+   */
+  private Atomix createAtomix() {
+    Atomix atomix = atomixFactory.newInstance();
+    members.add(atomix);
+    return atomix;
   }
 
   @Before
   public void setupTest() throws Exception {
-    clients = new ArrayList<>();
-    id = 10;
+    members = new ArrayList<>();
+    atomixFactory = new TestAtomixFactory();
+    protocol = TestProtocol.builder()
+        .withNumPartitions(3)
+        .build();
   }
 
   @After
   public void teardownTest() throws Exception {
-    List<CompletableFuture<Void>> futures = clients.stream().map(Atomix::stop).collect(Collectors.toList());
+    List<CompletableFuture<Void>> futures = members.stream().map(Atomix::stop).collect(Collectors.toList());
     try {
-      CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()])).join();
+      CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()])).get(30, TimeUnit.SECONDS);
     } catch (Exception e) {
       // Do nothing
+    } finally {
+      protocol.close();
     }
   }
 }

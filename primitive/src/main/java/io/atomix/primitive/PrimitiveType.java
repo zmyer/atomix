@@ -16,19 +16,16 @@
 package io.atomix.primitive;
 
 import io.atomix.primitive.config.PrimitiveConfig;
-import io.atomix.primitive.resource.PrimitiveResource;
 import io.atomix.primitive.service.PrimitiveService;
 import io.atomix.primitive.service.ServiceConfig;
-import io.atomix.utils.NamedType;
+import io.atomix.utils.ConfiguredType;
 import io.atomix.utils.serializer.Namespace;
 import io.atomix.utils.serializer.Namespaces;
 
 /**
  * Primitive type.
  */
-// TODO: 2018/7/30 by zmyer
-public interface PrimitiveType<B extends DistributedPrimitiveBuilder, C extends PrimitiveConfig,
-        P extends DistributedPrimitive> extends NamedType {
+public interface PrimitiveType<B extends PrimitiveBuilder, C extends PrimitiveConfig, P extends SyncPrimitive> extends ConfiguredType<C> {
 
     /**
      * Returns the primitive type namespace.
@@ -42,12 +39,13 @@ public interface PrimitiveType<B extends DistributedPrimitiveBuilder, C extends 
                 .build();
     }
 
-    /**
-     * Returns a new configuration for the primitive type.
-     *
-     * @return a new primitive configuration
-     */
-    C newConfig();
+  /**
+   * Returns a new instance of the primitive configuration.
+   *
+   * @return a new instance of the primitive configuration
+   */
+  @Override
+  C newConfig();
 
     /**
      * Returns a new primitive builder.
@@ -59,21 +57,11 @@ public interface PrimitiveType<B extends DistributedPrimitiveBuilder, C extends 
      */
     B newBuilder(String primitiveName, C config, PrimitiveManagementService managementService);
 
-    /**
-     * Creates a new service instance from the given configuration.
-     *
-     * @param config the service configuration
-     * @return the service instance
-     */
-    PrimitiveService newService(ServiceConfig config);
-
-    /**
-     * Creates a new resource for the given primitive.
-     *
-     * @param primitive the primitive instance
-     * @return a new resource for the given primitive instance
-     */
-    default PrimitiveResource newResource(P primitive) {
-        return null;
-    }
+  /**
+   * Creates a new service instance from the given configuration.
+   *
+   * @param config the service configuration
+   * @return the service instance
+   */
+  PrimitiveService newService(ServiceConfig config);
 }

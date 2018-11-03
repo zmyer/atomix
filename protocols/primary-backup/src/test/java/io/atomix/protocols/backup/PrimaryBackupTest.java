@@ -17,7 +17,7 @@ package io.atomix.protocols.backup;
 
 import io.atomix.cluster.MemberId;
 import io.atomix.cluster.TestClusterMembershipService;
-import io.atomix.primitive.DistributedPrimitiveBuilder;
+import io.atomix.primitive.PrimitiveBuilder;
 import io.atomix.primitive.PrimitiveManagementService;
 import io.atomix.primitive.PrimitiveType;
 import io.atomix.primitive.Replication;
@@ -53,7 +53,9 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -444,12 +446,16 @@ public class PrimaryBackupTest extends ConcurrentTestCase {
    * Creates a new primary-backup proxy.
    */
   private SessionClient createProxy(PrimaryBackupClient client, int backups, Replication replication) {
-    return client.sessionBuilder("primary-backup-test", TestPrimitiveType.INSTANCE, new ServiceConfig())
-        .withNumBackups(backups)
-        .withReplication(replication)
-        .build()
-        .connect()
-        .join();
+    try {
+      return client.sessionBuilder("primary-backup-test", TestPrimitiveType.INSTANCE, new ServiceConfig())
+          .withNumBackups(backups)
+          .withReplication(replication)
+          .build()
+          .connect()
+          .get(30, TimeUnit.SECONDS);
+    } catch (InterruptedException | ExecutionException | TimeoutException e) {
+      throw new RuntimeException(e);
+    }
   }
 
   @Before
@@ -497,7 +503,7 @@ public class PrimaryBackupTest extends ConcurrentTestCase {
     }
 
     @Override
-    public DistributedPrimitiveBuilder newBuilder(String primitiveName, PrimitiveConfig config, PrimitiveManagementService managementService) {
+    public PrimitiveBuilder newBuilder(String primitiveName, PrimitiveConfig config, PrimitiveManagementService managementService) {
       throw new UnsupportedOperationException();
     }
 

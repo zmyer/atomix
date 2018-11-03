@@ -29,100 +29,118 @@ import java.util.function.Function;
 import static io.atomix.utils.serializer.serializers.DefaultSerializers.BASIC;
 
 /**
- * Service for assisting communications between controller cluster nodes.
+ * High-level {@link MemberId} based intra-cluster messaging service.
+ * <p>
+ * The cluster communication service is used for high-level communication between cluster members. Messages are sent
+ * and received based on arbitrary {@link String} message subjects. Direct messages are sent using the {@link MemberId}
+ * to which to send the message. This API supports several types of messaging:
+ * <ul>
+ *   <li>{@link #broadcast(String, Object)} broadcasts a message to all cluster members</li>
+ *   <li>{@link #multicast(String, Object, Set)} sends the message to all provided members</li>
+ *   <li>{@link #unicast(String, Object, MemberId)} sends a unicast message directly to the given member</li>
+ *   <li>{@link #send(String, Object, MemberId)} sends a message directly to the given member and awaits a reply</li>
+ * </ul>
+ * To register to listen for messages, use one of the {@link #subscribe(String, Consumer, Executor)} methods:
+ * <pre>
+ *   {@code
+ *   atomix.getCommunicationService().subscribe("test", message -> {
+ *     System.out.println("Received message");
+ *   }, executor);
+ *   }
+ * </pre>
  */
 // TODO: 2018/7/31 by zmyer
 public interface ClusterCommunicationService {
 
-    /**
-     * Broadcasts a message to all controller nodes.
-     *
-     * @param subject  message subject
-     * @param message message to send
-     * @param <M>     message type
-     */
-    default <M> void broadcast(String subject, M message) {
-        broadcast(subject, message, BASIC::encode);
-    }
+  /**
+   * Broadcasts a message to all members.
+   *
+   * @param subject  message subject
+   * @param message message to send
+   * @param <M>     message type
+   */
+  default <M> void broadcast(String subject, M message) {
+    broadcast(subject, message, BASIC::encode);
+  }
 
-    /**
-     * Broadcasts a message to all controller nodes.
-     *
-     * @param subject  message subject
-     * @param message message to send
-     * @param encoder function for encoding message to byte[]
-     * @param <M>     message type
-     */
-    <M> void broadcast(String subject, M message, Function<M, byte[]> encoder);
+  /**
+   * Broadcasts a message to all members.
+   *
+   * @param subject  message subject
+   * @param message message to send
+   * @param encoder function for encoding message to byte[]
+   * @param <M>     message type
+   */
+  <M> void broadcast(String subject, M message, Function<M, byte[]> encoder);
 
-    /**
-     * Broadcasts a message to all controller nodes including self.
-     *
-     * @param subject  message subject
-     * @param message message to send
-     * @param <M>     message type
-     */
-    default <M> void broadcastIncludeSelf(String subject, M message) {
-        broadcastIncludeSelf(subject, message, BASIC::encode);
-    }
+  /**
+   * Broadcasts a message to all members including self.
+   *
+   * @param subject  message subject
+   * @param message message to send
+   * @param <M>     message type
+   */
+  default <M> void broadcastIncludeSelf(String subject, M message) {
+    broadcastIncludeSelf(subject, message, BASIC::encode);
+  }
 
-    /**
-     * Broadcasts a message to all controller nodes including self.
-     *
-     * @param subject  message subject
-     * @param message message to send
-     * @param encoder function for encoding message to byte[]
-     * @param <M>     message type
-     */
-    <M> void broadcastIncludeSelf(String subject, M message, Function<M, byte[]> encoder);
+  /**
+   * Broadcasts a message to all members including self.
+   *
+   * @param subject  message subject
+   * @param message message to send
+   * @param encoder function for encoding message to byte[]
+   * @param <M>     message type
+   */
+  <M> void broadcastIncludeSelf(String subject, M message, Function<M, byte[]> encoder);
 
-    /**
-     * Sends a message to the specified controller node.
-     *
-     * @param subject  message subject
-     * @param message  message to send
-     * @param toMemberId destination node identifier
-     * @param <M>      message type
-     * @return future that is completed when the message is sent
-     */
-    default <M> CompletableFuture<Void> unicast(String subject, M message, MemberId toMemberId) {
-        return unicast(subject, message, BASIC::encode, toMemberId);
-    }
+  /**
+   * Sends a message to the specified member.
+   *
+   * @param subject  message subject
+   * @param message  message to send
+   * @param toMemberId destination node identifier
+   * @param <M>      message type
+   * @return future that is completed when the message is sent
+   */
+  default <M> CompletableFuture<Void> unicast(String subject, M message, MemberId toMemberId) {
+    return unicast(subject, message, BASIC::encode, toMemberId);
+  }
 
-    /**
-     * Sends a message to the specified controller node.
-     *
-     * @param subject  message subject
-     * @param message  message to send
-     * @param encoder  function for encoding message to byte[]
-     * @param toMemberId destination node identifier
-     * @param <M>      message type
-     * @return future that is completed when the message is sent
-     */
-    <M> CompletableFuture<Void> unicast(String subject, M message, Function<M, byte[]> encoder, MemberId toMemberId);
+  /**
+   * Sends a message to the specified member.
+   *
+   * @param subject  message subject
+   * @param message  message to send
+   * @param encoder  function for encoding message to byte[]
+   * @param toMemberId destination node identifier
+   * @param <M>      message type
+   * @return future that is completed when the message is sent
+   */
+  <M> CompletableFuture<Void> unicast(String subject, M message, Function<M, byte[]> encoder, MemberId toMemberId);
 
-    /**
-     * Multicasts a message to a set of controller nodes.
-     *
-     * @param subject  message subject
-     * @param message message to send
-     * @param memberIds recipient node identifiers
-     * @param <M>     message type
-     */
-    default <M> void multicast(String subject, M message, Set<MemberId> memberIds) {
-        multicast(subject, message, BASIC::encode, memberIds);
-    }
+  /**
+   * Multicasts a message to a set of members.
+   *
+   * @param subject  message subject
+   * @param message message to send
+   * @param memberIds recipient node identifiers
+   * @param <M>     message type
+   */
+  default <M> void multicast(String subject, M message, Set<MemberId> memberIds) {
+    multicast(subject, message, BASIC::encode, memberIds);
+  }
 
-    /**
-     * Multicasts a message to a set of controller nodes.
-     *
-     * @param subject  message subject
-     * @param message message to send
-     * @param encoder function for encoding message to byte[]
-     * @param memberIds recipient node identifiers
-     * @param <M>     message type
-     */
-    <M> void multicast(String subject, M message, Function<M, byte[]> encoder, Set<MemberId> memberIds);
+  /**
+   * Multicasts a message to a set of members.
+   *
+   * @param subject  message subject
+   * @param message message to send
+   * @param encoder function for encoding message to byte[]
+   * @param memberIds recipient node identifiers
+   * @param <M>     message type
+   */
+  <M> void multicast(String subject, M message, Function<M, byte[]> encoder, Set<MemberId> memberIds);
 
     /**
      * Sends a message and expects a reply.

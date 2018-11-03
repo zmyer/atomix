@@ -17,17 +17,17 @@ package io.atomix.protocols.raft.test;
 
 import com.google.common.collect.Maps;
 import io.atomix.cluster.MemberId;
+import io.atomix.cluster.messaging.MessagingConfig;
 import io.atomix.cluster.messaging.MessagingService;
 import io.atomix.cluster.messaging.impl.NettyMessagingService;
-import io.atomix.primitive.DistributedPrimitiveBuilder;
-import io.atomix.primitive.config.PrimitiveConfig;
+import io.atomix.primitive.PrimitiveBuilder;
 import io.atomix.primitive.PrimitiveManagementService;
 import io.atomix.primitive.PrimitiveType;
+import io.atomix.primitive.config.PrimitiveConfig;
 import io.atomix.primitive.operation.OperationId;
 import io.atomix.primitive.operation.OperationType;
 import io.atomix.primitive.operation.PrimitiveOperation;
 import io.atomix.primitive.operation.impl.DefaultOperationId;
-import io.atomix.primitive.session.SessionClient;
 import io.atomix.primitive.service.AbstractPrimitiveService;
 import io.atomix.primitive.service.BackupInput;
 import io.atomix.primitive.service.BackupOutput;
@@ -35,6 +35,7 @@ import io.atomix.primitive.service.Commit;
 import io.atomix.primitive.service.PrimitiveService;
 import io.atomix.primitive.service.ServiceConfig;
 import io.atomix.primitive.service.ServiceExecutor;
+import io.atomix.primitive.session.SessionClient;
 import io.atomix.primitive.session.SessionId;
 import io.atomix.protocols.raft.RaftClient;
 import io.atomix.protocols.raft.RaftError;
@@ -200,14 +201,13 @@ public class RaftFuzzTest implements Runnable {
       .register(HashSet.class)
       .register(DefaultRaftMember.class)
       .register(MemberId.class)
-      .register(MemberId.Type.class)
       .register(SessionId.class)
       .register(RaftMember.Type.class)
       .register(Instant.class)
       .register(Configuration.class)
       .build());
 
-  private static final Serializer storageSerializer = Serializer.using(Namespace.builder()
+  private static final Namespace storageNamespace = Namespace.builder()
       .register(CloseSessionEntry.class)
       .register(CommandEntry.class)
       .register(ConfigurationEntry.class)
@@ -224,13 +224,12 @@ public class RaftFuzzTest implements Runnable {
       .register(HashSet.class)
       .register(DefaultRaftMember.class)
       .register(MemberId.class)
-      .register(MemberId.Type.class)
       .register(RaftMember.Type.class)
       .register(Instant.class)
       .register(Configuration.class)
       .register(byte[].class)
       .register(long[].class)
-      .build());
+      .build();
 
   private static final Serializer clientSerializer = Serializer.using(Namespace.builder()
       .register(ReadConsistency.class)
@@ -572,7 +571,7 @@ public class RaftFuzzTest implements Runnable {
     RaftServerProtocol protocol;
     if (USE_NETTY) {
       Address address = Address.from(++port);
-      MessagingService messagingManager = NettyMessagingService.builder().withAddress(address).build().start().join();
+      MessagingService messagingManager = new NettyMessagingService("test", address, new MessagingConfig()).start().join();
       messagingServices.add(messagingManager);
       addressMap.put(member.memberId(), address);
       protocol = new RaftServerMessagingProtocol(messagingManager, protocolSerializer, addressMap::get);
@@ -585,7 +584,7 @@ public class RaftFuzzTest implements Runnable {
         .withStorage(RaftStorage.builder()
             .withStorageLevel(StorageLevel.DISK)
             .withDirectory(new File(String.format("target/fuzz-logs/%s", member.memberId())))
-            .withSerializer(storageSerializer)
+            .withNamespace(storageNamespace)
             .withMaxSegmentSize(1024 * 1024)
             .build());
 
@@ -603,7 +602,7 @@ public class RaftFuzzTest implements Runnable {
     RaftClientProtocol protocol;
     if (USE_NETTY) {
       Address address = Address.from(++port);
-      MessagingService messagingManager = NettyMessagingService.builder().withAddress(address).build().start().join();
+      MessagingService messagingManager = new NettyMessagingService("test", address, new MessagingConfig()).start().join();
       addressMap.put(memberId, address);
       protocol = new RaftClientMessagingProtocol(messagingManager, protocolSerializer, addressMap::get);
     } else {
@@ -651,7 +650,7 @@ public class RaftFuzzTest implements Runnable {
     }
 
     @Override
-    public DistributedPrimitiveBuilder newBuilder(String primitiveName, PrimitiveConfig config, PrimitiveManagementService managementService) {
+    public PrimitiveBuilder newBuilder(String primitiveName, PrimitiveConfig config, PrimitiveManagementService managementService) {
       throw new UnsupportedOperationException();
     }
 

@@ -57,22 +57,21 @@ public class ListenerRegistry<E extends Event, L extends EventListener<E>>
         }
     }
 
-    // TODO: 2018/7/31 by zmyer
-    @Override
-    public void process(E event) {
-        for (final L listener : listeners) {
-            try {
-                lastListener = listener;
-                lastStart = System.currentTimeMillis();
-                if (listener.isRelevant(event)) {
-                    listener.onEvent(event);
-                }
-                lastStart = 0;
-            } catch (Exception error) {
-                reportProblem(event, error);
-            }
+  @Override
+  public void process(E event) {
+    for (L listener : listeners) {
+      try {
+        lastListener = listener;
+        lastStart = System.currentTimeMillis();
+        if (listener.isRelevant(event)) {
+          listener.event(event);
         }
+        lastStart = 0;
+      } catch (Exception error) {
+        reportProblem(event, error);
+      }
     }
+  }
 
     @Override
     public void onProcessLimit() {

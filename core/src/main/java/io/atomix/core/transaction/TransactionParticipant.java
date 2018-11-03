@@ -16,6 +16,7 @@
 package io.atomix.core.transaction;
 
 import io.atomix.primitive.DistributedPrimitive;
+import io.atomix.primitive.protocol.ProxyProtocol;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -23,6 +24,8 @@ import java.util.concurrent.CompletableFuture;
  * Transaction participant.
  */
 public interface TransactionParticipant<T> extends DistributedPrimitive {
+  @Override
+  ProxyProtocol protocol();
 
   /**
    * Returns the participant's transaction log.

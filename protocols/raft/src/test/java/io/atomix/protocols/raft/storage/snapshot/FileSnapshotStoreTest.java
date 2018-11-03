@@ -35,6 +35,7 @@ import java.util.UUID;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 /**
  * File snapshot store test.
@@ -73,10 +74,10 @@ public class FileSnapshotStoreTest extends AbstractSnapshotStoreTest {
 
     store = createSnapshotStore();
     assertNotNull(store.getSnapshot(2));
-    assertEquals(store.getSnapshot(2).index(), 2);
+    assertEquals(2, store.getSnapshot(2).index());
 
     try (SnapshotReader reader = snapshot.openReader()) {
-      assertEquals(reader.readLong(), 10);
+      assertEquals(10, reader.readLong());
     }
   }
 
@@ -94,24 +95,26 @@ public class FileSnapshotStoreTest extends AbstractSnapshotStoreTest {
 
     snapshot = snapshot.persist();
 
+    assertTrue(snapshot.isPersisted());
+
     assertNull(store.getSnapshot(2));
 
     snapshot.complete();
     assertNotNull(store.getSnapshot(2));
 
     try (SnapshotReader reader = snapshot.openReader()) {
-      assertEquals(reader.readLong(), 10);
+      assertEquals(10, reader.readLong());
     }
 
     store.close();
 
     store = createSnapshotStore();
     assertNotNull(store.getSnapshot(2));
-    assertEquals(store.getSnapshot(2).index(), 2);
+    assertEquals(2, store.getSnapshot(2).index());
 
     snapshot = store.getSnapshot(2);
     try (SnapshotReader reader = snapshot.openReader()) {
-      assertEquals(reader.readLong(), 10);
+      assertEquals(10, reader.readLong());
     }
   }
 

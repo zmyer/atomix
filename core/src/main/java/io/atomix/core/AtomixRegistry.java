@@ -15,11 +15,10 @@
  */
 package io.atomix.core;
 
-import io.atomix.core.impl.ClasspathScanningAtomixRegistry;
-import io.atomix.core.profile.ProfileRegistry;
-import io.atomix.primitive.PrimitiveTypeRegistry;
-import io.atomix.primitive.partition.PartitionGroupTypeRegistry;
-import io.atomix.primitive.protocol.PrimitiveProtocolTypeRegistry;
+import io.atomix.core.registry.ClasspathScanningRegistry;
+import io.atomix.utils.NamedType;
+
+import java.util.Collection;
 
 /**
  * Atomix registry.
@@ -36,43 +35,33 @@ public interface AtomixRegistry {
         return registry(Thread.currentThread().getContextClassLoader());
     }
 
-    /**
-     * Creates a new registry instance using the given class loader.
-     *
-     * @param classLoader the registry class loader
-     * @return the registry instance
-     */
-    // TODO: 2018/7/30 by zmyer
-    static AtomixRegistry registry(ClassLoader classLoader) {
-        return new ClasspathScanningAtomixRegistry(classLoader);
-    }
+  /**
+   * Creates a new registry instance using the given class loader.
+   *
+   * @param classLoader the registry class loader
+   * @return the registry instance
+   */
+  static AtomixRegistry registry(ClassLoader classLoader) {
+    return ClasspathScanningRegistry.builder().withClassLoader(classLoader).build();
+  }
 
-    /**
-     * Returns the partition group types.
-     *
-     * @return the partition group types
-     */
-    PartitionGroupTypeRegistry partitionGroupTypes();
+  /**
+   * Returns the collection of registrations for the given type.
+   *
+   * @param type the type for which to return registrations
+   * @param <T>  the type for which to return registrations
+   * @return a collection of registrations for the given type
+   */
+  <T extends NamedType> Collection<T> getTypes(Class<T> type);
 
-    /**
-     * Returns the primitive types.
-     *
-     * @return the primitive types
-     */
-    PrimitiveTypeRegistry primitiveTypes();
-
-    /**
-     * Returns the primitive protocol types.
-     *
-     * @return the primitive protocol types
-     */
-    PrimitiveProtocolTypeRegistry protocolTypes();
-
-    /**
-     * Returns the registered profile types.
-     *
-     * @return the registered profile types
-     */
-    ProfileRegistry profiles();
+  /**
+   * Returns a named registration by type.
+   *
+   * @param type the registration type
+   * @param name the registration name
+   * @param <T>  the registration type
+   * @return the registration instance
+   */
+  <T extends NamedType> T getType(Class<T> type, String name);
 
 }

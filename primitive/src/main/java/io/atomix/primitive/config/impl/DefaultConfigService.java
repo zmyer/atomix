@@ -16,37 +16,40 @@
 package io.atomix.primitive.config.impl;
 
 import com.google.common.collect.Maps;
+import io.atomix.primitive.PrimitiveType;
 import io.atomix.primitive.config.ConfigService;
 import io.atomix.primitive.config.PrimitiveConfig;
 
 import java.util.Collection;
 import java.util.Map;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-
 /**
  * Default configuration service.
  */
 // TODO: 2018/7/30 by zmyer
 public class DefaultConfigService implements ConfigService {
-    private final Map<String, PrimitiveConfig> configs = Maps.newConcurrentMap();
+  private final Map<String, PrimitiveConfig> defaultConfigs = Maps.newConcurrentMap();
+  private final Map<String, PrimitiveConfig> configs = Maps.newConcurrentMap();
 
-    public DefaultConfigService(Collection<PrimitiveConfig> configs) {
-        configs.forEach(config -> this.configs.put(config.getName(), config));
-    }
+  public DefaultConfigService(Collection<PrimitiveConfig> defaultConfigs, Collection<PrimitiveConfig> configs) {
+    defaultConfigs.forEach(config -> this.defaultConfigs.put(((PrimitiveType) config.getType()).name(), config));
+    configs.forEach(config -> this.configs.put(config.getName(), config));
+  }
 
-    // TODO: 2018/8/1 by zmyer
-    @Override
-    @SuppressWarnings("unchecked")
-    public <C extends PrimitiveConfig<C>> C getConfig(String primitiveName) {
-        return (C) configs.get(primitiveName);
+  @Override
+  @SuppressWarnings("unchecked")
+  public <C extends PrimitiveConfig<C>> C getConfig(String primitiveName, PrimitiveType primitiveType) {
+    C config = (C) configs.get(primitiveName);
+    if (config != null) {
+      return config;
     }
-
-    // TODO: 2018/8/1 by zmyer
-    @Override
-    public PrimitiveConfig addConfig(PrimitiveConfig config) {
-        checkNotNull(config, "config cannot be null");
-        PrimitiveConfig previous = configs.putIfAbsent(config.getName(), config);
-        return previous != null ? previous : config;
+    if (primitiveType == null) {
+      return null;
     }
+    config = (C) defaultConfigs.get(primitiveType.name());
+    if (config != null) {
+      return config;
+    }
+    return (C) primitiveType.newConfig();
+  }
 }

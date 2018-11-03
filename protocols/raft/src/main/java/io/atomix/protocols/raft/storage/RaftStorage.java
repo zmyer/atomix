@@ -20,10 +20,13 @@ import io.atomix.protocols.raft.storage.log.entry.RaftLogEntry;
 import io.atomix.protocols.raft.storage.snapshot.SnapshotFile;
 import io.atomix.protocols.raft.storage.snapshot.SnapshotStore;
 import io.atomix.protocols.raft.storage.system.MetaStore;
+import io.atomix.storage.StorageException;
 import io.atomix.storage.StorageLevel;
+import io.atomix.storage.buffer.FileBuffer;
 import io.atomix.storage.journal.JournalSegmentDescriptor;
 import io.atomix.storage.journal.JournalSegmentFile;
 import io.atomix.storage.statistics.StorageStatistics;
+import io.atomix.utils.serializer.Namespace;
 import io.atomix.utils.serializer.Serializer;
 
 import java.io.File;
@@ -66,11 +69,13 @@ public class RaftStorage {
   private final String prefix;
   private final StorageLevel storageLevel;
   private final File directory;
-  private final Serializer serializer;
+  private final Namespace namespace;
   private final int maxSegmentSize;
+  private final int maxEntrySize;
   private final int maxEntriesPerSegment;
   private final boolean dynamicCompaction;
   private final double freeDiskBuffer;
+  private final double freeMemoryBuffer;
   private final boolean flushOnCommit;
   private final boolean retainStaleSnapshots;
   private final StorageStatistics statistics;
@@ -79,21 +84,25 @@ public class RaftStorage {
       String prefix,
       StorageLevel storageLevel,
       File directory,
-      Serializer serializer,
+      Namespace namespace,
       int maxSegmentSize,
+      int maxEntrySize,
       int maxEntriesPerSegment,
       boolean dynamicCompaction,
       double freeDiskBuffer,
+      double freeMemoryBuffer,
       boolean flushOnCommit,
       boolean retainStaleSnapshots) {
     this.prefix = prefix;
     this.storageLevel = storageLevel;
     this.directory = directory;
-    this.serializer = serializer;
+    this.namespace = namespace;
     this.maxSegmentSize = maxSegmentSize;
+    this.maxEntrySize = maxEntrySize;
     this.maxEntriesPerSegment = maxEntriesPerSegment;
     this.dynamicCompaction = dynamicCompaction;
     this.freeDiskBuffer = freeDiskBuffer;
+    this.freeMemoryBuffer = freeMemoryBuffer;
     this.flushOnCommit = flushOnCommit;
     this.retainStaleSnapshots = retainStaleSnapshots;
     this.statistics = new StorageStatistics(directory);
@@ -114,8 +123,8 @@ public class RaftStorage {
    *
    * @return The storage serializer.
    */
-  public Serializer serializer() {
-    return serializer;
+  public Namespace namespace() {
+    return namespace;
   }
 
   /**
@@ -161,7 +170,9 @@ public class RaftStorage {
    * that are allowed to be stored in any segment in a {@link RaftLog}.
    *
    * @return The maximum number of entries per segment.
+   * @deprecated since 3.0.2
    */
+  @Deprecated
   public int maxLogEntriesPerSegment() {
     return maxEntriesPerSegment;
   }
@@ -182,6 +193,15 @@ public class RaftStorage {
    */
   public double freeDiskBuffer() {
     return freeDiskBuffer;
+  }
+
+  /**
+   * Returns the percentage of memory space that must be available before log compaction is forced.
+   *
+   * @return the percentage of memory space that must be available before log compaction is forced
+   */
+  public double freeMemoryBuffer() {
+    return freeMemoryBuffer;
   }
 
   /**
@@ -216,6 +236,38 @@ public class RaftStorage {
   }
 
   /**
+   * Attempts to acquire a lock on the storage directory.
+   *
+   * @param id the ID with which to lock the directory
+   * @return indicates whether the lock was successfully acquired
+   */
+  public boolean lock(String id) {
+    File file = new File(directory, String.format(".%s.lock", prefix));
+    try {
+      if (file.createNewFile()) {
+        try (FileBuffer buffer = FileBuffer.allocate(file)) {
+          buffer.writeString(id).flush();
+        }
+        return true;
+      } else {
+        try (FileBuffer buffer = FileBuffer.allocate(file)) {
+          String lock = buffer.readString();
+          return lock != null && lock.equals(id);
+        }
+      }
+    } catch (IOException e) {
+      throw new StorageException("Failed to acquire storage lock");
+    }
+  }
+
+  /**
+   * Unlocks the storage directory.
+   */
+  public void unlock() {
+    deleteFiles(f -> f.getName().equals(String.format(".%s.lock", prefix)));
+  }
+
+  /**
    * Opens a new {@link MetaStore}, recovering metadata from disk if it exists.
    * <p>
    * The meta store will be loaded using based on the configured {@link StorageLevel}. If the storage level is persistent
@@ -224,7 +276,7 @@ public class RaftStorage {
    * @return The metastore.
    */
   public MetaStore openMetaStore() {
-    return new MetaStore(this, serializer);
+    return new MetaStore(this, Serializer.using(namespace));
   }
 
   /**
@@ -276,8 +328,9 @@ public class RaftStorage {
         .withName(prefix)
         .withDirectory(directory)
         .withStorageLevel(storageLevel)
-        .withSerializer(serializer)
+        .withNamespace(namespace)
         .withMaxSegmentSize(maxSegmentSize)
+        .withMaxEntrySize(maxEntrySize)
         .withMaxEntriesPerSegment(maxEntriesPerSegment)
         .withFlushOnCommit(flushOnCommit)
         .build();
@@ -334,22 +387,26 @@ public class RaftStorage {
    */
   public static class Builder implements io.atomix.utils.Builder<RaftStorage> {
     private static final String DEFAULT_PREFIX = "atomix";
-    private static final String DEFAULT_DIRECTORY = System.getProperty("user.dir");
+    private static final String DEFAULT_DIRECTORY = System.getProperty("atomix.data", System.getProperty("user.dir"));
     private static final int DEFAULT_MAX_SEGMENT_SIZE = 1024 * 1024 * 32;
+    private static final int DEFAULT_MAX_ENTRY_SIZE = 1024 * 1024; // 1MB
     private static final int DEFAULT_MAX_ENTRIES_PER_SEGMENT = 1024 * 1024;
     private static final boolean DEFAULT_DYNAMIC_COMPACTION = true;
     private static final double DEFAULT_FREE_DISK_BUFFER = .2;
+    private static final double DEFAULT_FREE_MEMORY_BUFFER = .2;
     private static final boolean DEFAULT_FLUSH_ON_COMMIT = true;
     private static final boolean DEFAULT_RETAIN_STALE_SNAPSHOTS = false;
 
     private String prefix = DEFAULT_PREFIX;
     private StorageLevel storageLevel = StorageLevel.DISK;
     private File directory = new File(DEFAULT_DIRECTORY);
-    private Serializer serializer;
+    private Namespace namespace;
     private int maxSegmentSize = DEFAULT_MAX_SEGMENT_SIZE;
+    private int maxEntrySize = DEFAULT_MAX_ENTRY_SIZE;
     private int maxEntriesPerSegment = DEFAULT_MAX_ENTRIES_PER_SEGMENT;
     private boolean dynamicCompaction = DEFAULT_DYNAMIC_COMPACTION;
     private double freeDiskBuffer = DEFAULT_FREE_DISK_BUFFER;
+    private double freeMemoryBuffer = DEFAULT_FREE_MEMORY_BUFFER;
     private boolean flushOnCommit = DEFAULT_FLUSH_ON_COMMIT;
     private boolean retainStaleSnapshots = DEFAULT_RETAIN_STALE_SNAPSHOTS;
 
@@ -411,14 +468,14 @@ public class RaftStorage {
     }
 
     /**
-     * Sets the storage serializer.
+     * Sets the storage namespace.
      *
-     * @param serializer The storage serializer.
+     * @param namespace The storage namespace.
      * @return The storage builder.
-     * @throws NullPointerException If the {@code serializer} is {@code null}
+     * @throws NullPointerException If the {@code namespace} is {@code null}
      */
-    public Builder withSerializer(Serializer serializer) {
-      this.serializer = checkNotNull(serializer, "serializer cannot be null");
+    public Builder withNamespace(Namespace namespace) {
+      this.namespace = checkNotNull(namespace, "namespace cannot be null");
       return this;
     }
 
@@ -442,6 +499,19 @@ public class RaftStorage {
     }
 
     /**
+     * Sets the maximum entry size in bytes, returning the builder for method chaining.
+     *
+     * @param maxEntrySize the maximum entry size in bytes
+     * @return the storage builder
+     * @throws IllegalArgumentException if the {@code maxEntrySize} is not positive
+     */
+    public Builder withMaxEntrySize(int maxEntrySize) {
+      checkArgument(maxEntrySize > 0, "maxEntrySize must be positive");
+      this.maxEntrySize = maxEntrySize;
+      return this;
+    }
+
+    /**
      * Sets the maximum number of allows entries per segment, returning the builder for method chaining.
      * <p>
      * The maximum entry count dictates when logs should roll over to new segments. As entries are written to
@@ -454,7 +524,9 @@ public class RaftStorage {
      * @return The storage builder.
      * @throws IllegalArgumentException If the {@code maxEntriesPerSegment} not greater than the default max entries per
      *                                  segment
+     * @deprecated since 3.0.2
      */
+    @Deprecated
     public Builder withMaxEntriesPerSegment(int maxEntriesPerSegment) {
       checkArgument(maxEntriesPerSegment > 0, "max entries per segment must be positive");
       checkArgument(maxEntriesPerSegment <= DEFAULT_MAX_ENTRIES_PER_SEGMENT,
@@ -499,6 +571,19 @@ public class RaftStorage {
       checkArgument(freeDiskBuffer > 0, "freeDiskBuffer must be positive");
       checkArgument(freeDiskBuffer < 1, "freeDiskBuffer must be less than 1");
       this.freeDiskBuffer = freeDiskBuffer;
+      return this;
+    }
+
+    /**
+     * Sets the percentage of free memory space that must be preserved before log compaction is forced.
+     *
+     * @param freeMemoryBuffer the free disk percentage
+     * @return the Raft log builder
+     */
+    public Builder withFreeMemoryBuffer(double freeMemoryBuffer) {
+      checkArgument(freeMemoryBuffer > 0, "freeMemoryBuffer must be positive");
+      checkArgument(freeMemoryBuffer < 1, "freeMemoryBuffer must be less than 1");
+      this.freeMemoryBuffer = freeMemoryBuffer;
       return this;
     }
 
@@ -573,11 +658,13 @@ public class RaftStorage {
           prefix,
           storageLevel,
           directory,
-          serializer,
+          namespace,
           maxSegmentSize,
+          maxEntrySize,
           maxEntriesPerSegment,
           dynamicCompaction,
           freeDiskBuffer,
+          freeMemoryBuffer,
           flushOnCommit,
           retainStaleSnapshots);
     }

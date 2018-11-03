@@ -17,38 +17,96 @@ package io.atomix.cluster.impl;
 
 import io.atomix.cluster.Member;
 import io.atomix.cluster.MemberId;
+import io.atomix.utils.Version;
 import io.atomix.utils.net.Address;
 
-import java.util.Map;
+import java.util.Properties;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Default cluster node.
  */
 // TODO: 2018/7/31 by zmyer
 public class StatefulMember extends Member {
-    private State state = State.INACTIVE;
+  private final Version version;
+  private final AtomicLong timestamp = new AtomicLong();
+  private volatile boolean active;
+  private volatile boolean reachable;
 
-    public StatefulMember(
-            MemberId id,
-            Address address,
-            String zone,
-            String rack,
-            String host,
-            Map<String, String> metadata) {
-        super(id, address, zone, rack, host, metadata);
-    }
+  public StatefulMember(MemberId id, Address address) {
+    super(id, address);
+    this.version = null;
+    timestamp.set(0);
+  }
 
-    /**
-     * Updates the node state.
-     *
-     * @param state the node state
-     */
-    void setState(State state) {
-        this.state = state;
-    }
+  public StatefulMember(
+      MemberId id,
+      Address address,
+      String zone,
+      String rack,
+      String host,
+      Properties properties,
+      Version version) {
+    super(id, address, zone, rack, host, properties);
+    this.version = version;
+    timestamp.set(1);
+  }
 
-    @Override
-    public State getState() {
-        return state;
-    }
+  @Override
+  public Version version() {
+    return version;
+  }
+
+  /**
+   * Returns the member logical timestamp.
+   *
+   * @return the member logical timestamp
+   */
+  public long getTimestamp() {
+    return timestamp.get();
+  }
+
+  /**
+   * Sets the member's logical timestamp.
+   *
+   * @param timestamp the member's logical timestamp
+   */
+  void setTimestamp(long timestamp) {
+    this.timestamp.accumulateAndGet(timestamp, Math::max);
+  }
+
+  /**
+   * Increments the member's timestamp.
+   */
+  void incrementTimestamp() {
+    timestamp.incrementAndGet();
+  }
+
+  /**
+   * Sets whether this member is an active member of the cluster.
+   *
+   * @param active whether this member is an active member of the cluster
+   */
+  void setActive(boolean active) {
+    this.active = active;
+  }
+
+  /**
+   * Sets whether this member is reachable.
+   *
+   * @param reachable whether this member is reachable
+   */
+  void setReachable(boolean reachable) {
+    this.reachable = reachable;
+  }
+
+  @Override
+  public boolean isActive() {
+    return active;
+  }
+
+  @Override
+  public boolean isReachable() {
+    return reachable;
+  }
 }

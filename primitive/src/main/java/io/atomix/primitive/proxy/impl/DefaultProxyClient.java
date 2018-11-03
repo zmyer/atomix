@@ -17,6 +17,7 @@ package io.atomix.primitive.proxy.impl;
 
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import com.google.common.io.BaseEncoding;
 import io.atomix.primitive.PrimitiveState;
 import io.atomix.primitive.PrimitiveType;
 import io.atomix.primitive.partition.PartitionId;
@@ -118,10 +119,15 @@ public class DefaultProxyClient<S> implements ProxyClient<S> {
         return partitioner.partition(key, partitionIds);
     }
 
-    @Override
-    public void addStateChangeListener(Consumer<PrimitiveState> listener) {
-        stateChangeListeners.add(listener);
-    }
+  @Override
+  public PartitionId getPartitionId(Object key) {
+    return partitioner.partition(BaseEncoding.base16().encode(serializer.encode(key)), partitionIds);
+  }
+
+  @Override
+  public void addStateChangeListener(Consumer<PrimitiveState> listener) {
+    stateChangeListeners.add(listener);
+  }
 
     @Override
     public void removeStateChangeListener(Consumer<PrimitiveState> listener) {
@@ -141,14 +147,23 @@ public class DefaultProxyClient<S> implements ProxyClient<S> {
                 .thenApply(v -> this);
     }
 
-    @Override
-    public CompletableFuture<Void> close() {
-        return Futures.allOf(partitions.values()
-                .stream()
-                .map(ProxySession::close)
-                .collect(Collectors.toList()))
-                .thenApply(v -> null);
-    }
+  @Override
+  public CompletableFuture<Void> delete() {
+    return Futures.allOf(partitions.values()
+        .stream()
+        .map(ProxySession::delete)
+        .collect(Collectors.toList()))
+        .thenApply(v -> null);
+  }
+
+  @Override
+  public CompletableFuture<Void> close() {
+    return Futures.allOf(partitions.values()
+        .stream()
+        .map(ProxySession::close)
+        .collect(Collectors.toList()))
+        .thenApply(v -> null);
+  }
 
     /**
      * Handles a partition proxy state change.

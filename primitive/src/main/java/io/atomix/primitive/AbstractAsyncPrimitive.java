@@ -89,10 +89,15 @@ public abstract class AbstractAsyncPrimitive<A extends AsyncPrimitive, S> implem
         return client.close();
     }
 
-    @Override
-    public String toString() {
-        return toStringHelper(this)
-                .add("proxy", client)
-                .toString();
-    }
+  @Override
+  public CompletableFuture<Void> delete() {
+    return client.delete().thenCompose(v -> registry.deletePrimitive(name()));
+  }
+
+  @Override
+  public String toString() {
+    return toStringHelper(this)
+        .add("proxy", client)
+        .toString();
+  }
 }

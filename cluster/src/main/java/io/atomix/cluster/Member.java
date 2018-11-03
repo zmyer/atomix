@@ -15,52 +15,50 @@
  */
 package io.atomix.cluster;
 
-import io.atomix.utils.config.Configured;
+import io.atomix.utils.Version;
 import io.atomix.utils.net.Address;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Objects;
+import java.util.Properties;
 
 import static com.google.common.base.MoreObjects.toStringHelper;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
- * Represents a controller instance as a member in a cluster.
+ * Represents a node as a member in a cluster.
  */
-// TODO: 2018/7/30 by zmyer
-public class Member implements Configured<MemberConfig> {
+public class Member extends Node {
 
-    /**
-     * Returns a new member builder with no ID.
-     *
-     * @return the member builder
-     */
-    public static Builder builder() {
-        return new Builder(null);
-    }
+  /**
+   * Returns a new member builder with no ID.
+   *
+   * @return the member builder
+   */
+  public static MemberBuilder builder() {
+    return new MemberBuilder(new MemberConfig());
+  }
 
-    /**
-     * Returns a new member builder.
-     *
-     * @param memberId the member identifier
-     * @return the member builder
-     * @throws NullPointerException if the member ID is null
-     */
-    public static Builder builder(String memberId) {
-        return builder(MemberId.from(memberId));
-    }
+  /**
+   * Returns a new member builder.
+   *
+   * @param memberId the member identifier
+   * @return the member builder
+   * @throws NullPointerException if the member ID is null
+   */
+  public static MemberBuilder builder(String memberId) {
+    return builder(MemberId.from(memberId));
+  }
 
-    /**
-     * Returns a new member builder.
-     *
-     * @param memberId the member identifier
-     * @return the member builder
-     * @throws NullPointerException if the member ID is null
-     */
-    public static Builder builder(MemberId memberId) {
-        return builder().withId(memberId);
-    }
+  /**
+   * Returns a new member builder.
+   *
+   * @param memberId the member identifier
+   * @return the member builder
+   * @throws NullPointerException if the member ID is null
+   */
+  public static MemberBuilder builder(MemberId memberId) {
+    return builder().withId(memberId);
+  }
 
     /**
      * Returns a new anonymous cluster member.
@@ -108,286 +106,152 @@ public class Member implements Configured<MemberConfig> {
                 .build();
     }
 
-    /**
-     * Represents the operational state of the instance.
-     */
-    public enum State {
+  private final MemberId id;
+  private final String zone;
+  private final String rack;
+  private final String host;
+  private final Properties properties;
 
-        /**
-         * Signifies that the instance is active and operating normally.
-         */
-        ACTIVE,
+  public Member(MemberConfig config) {
+    super(config);
+    this.id = config.getId();
+    this.zone = config.getZone();
+    this.rack = config.getRack();
+    this.host = config.getHost();
+    this.properties = new Properties();
+    properties.putAll(config.getProperties());
+  }
 
-        /**
-         * Signifies that the instance is inactive, which means either down or
-         * up, but not operational.
-         */
-        INACTIVE,
+  protected Member(MemberId id, Address address) {
+    this(id, address, null, null, null, new Properties());
+  }
+
+  protected Member(MemberId id, Address address, String zone, String rack, String host, Properties properties) {
+    super(id, address);
+    this.id = checkNotNull(id, "id cannot be null");
+    this.zone = zone;
+    this.rack = rack;
+    this.host = host;
+    this.properties = properties;
+  }
+
+  @Override
+  public MemberId id() {
+    return id;
+  }
+
+  /**
+   * Returns a boolean indicating whether this member is an active member of the cluster.
+   *
+   * @return indicates whether this member is an active member of the cluster
+   */
+  public boolean isActive() {
+    return false;
+  }
+
+  /**
+   * Returns the node reachability.
+   *
+   * @return the node reachability
+   */
+  public boolean isReachable() {
+    return false;
+  }
+
+  /**
+   * Returns the zone to which the member belongs.
+   *
+   * @return the zone to which the member belongs
+   */
+  public String zone() {
+    return zone;
+  }
+
+  /**
+   * Returns the rack to which the member belongs.
+   *
+   * @return the rack to which the member belongs
+   */
+  public String rack() {
+    return rack;
+  }
+
+  /**
+   * Returns the host to which the member belongs.
+   *
+   * @return the host to which the member belongs
+   */
+  public String host() {
+    return host;
+  }
+
+  /**
+   * Returns the member properties.
+   *
+   * @return the member properties
+   */
+  public Properties properties() {
+    return properties;
+  }
+
+  /**
+   * Returns the node version.
+   *
+   * @return the node version
+   */
+  public Version version() {
+    return null;
+  }
+
+  /**
+   * Returns the member timestamp.
+   *
+   * @return the member timestamp
+   */
+  public long timestamp() {
+    return 0;
+  }
+
+  @Override
+  public MemberConfig config() {
+    return new MemberConfig()
+        .setId(id())
+        .setAddress(address())
+        .setZone(zone())
+        .setRack(rack())
+        .setHost(host())
+        .setProperties(properties());
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(id(), address(), zone(), rack(), host(), properties());
+  }
+
+  @Override
+  public boolean equals(Object object) {
+    if (object instanceof Member) {
+      Member member = (Member) object;
+      return member.id().equals(id())
+          && member.address().equals(address())
+          && Objects.equals(member.zone(), zone())
+          && Objects.equals(member.rack(), rack())
+          && Objects.equals(member.host(), host())
+          && Objects.equals(member.properties(), properties());
     }
+    return false;
+  }
 
-    private final MemberId id;
-    private final Address address;
-    private final String zone;
-    private final String rack;
-    private final String host;
-    private final Map<String, String> metadata;
-
-    public Member(MemberConfig config) {
-        this.id = config.getId();
-        this.address = checkNotNull(config.getAddress(), "address cannot be null");
-        this.zone = config.getZone();
-        this.rack = config.getRack();
-        this.host = config.getHost();
-        this.metadata = new HashMap<>(config.getMetadata());
-    }
-
-    protected Member(MemberId id, Address address, String zone, String rack, String host,
-            Map<String, String> metadata) {
-        this.id = checkNotNull(id, "id cannot be null");
-        this.address = checkNotNull(address, "address cannot be null");
-        this.zone = zone;
-        this.rack = rack;
-        this.host = host;
-        this.metadata = new HashMap<>(metadata);
-    }
-
-    /**
-     * Returns the instance identifier.
-     *
-     * @return instance identifier
-     */
-    public MemberId id() {
-        return id;
-    }
-
-    /**
-     * Returns the node address.
-     *
-     * @return the node address
-     */
-    public Address address() {
-        return address;
-    }
-
-    /**
-     * Returns the node state.
-     *
-     * @return the node state
-     */
-    public State getState() {
-        throw new UnsupportedOperationException();
-    }
-
-    /**
-     * Returns the zone to which the node belongs.
-     *
-     * @return the zone to which the node belongs
-     */
-    public String zone() {
-        return zone;
-    }
-
-    /**
-     * Returns the rack to which the node belongs.
-     *
-     * @return the rack to which the node belongs
-     */
-    public String rack() {
-        return rack;
-    }
-
-    /**
-     * Returns the host to which the rack belongs.
-     *
-     * @return the host to which the rack belongs
-     */
-    public String host() {
-        return host;
-    }
-
-    /**
-     * Returns the node metadata.
-     *
-     * @return the node metadata
-     */
-    public Map<String, String> metadata() {
-        return metadata;
-    }
-
-    @Override
-    public MemberConfig config() {
-        return new MemberConfig()
-                .setId(id)
-                .setAddress(address)
-                .setZone(zone)
-                .setRack(rack)
-                .setHost(host)
-                .setMetadata(metadata);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(id);
-    }
-
-    @Override
-    public boolean equals(Object object) {
-        return object instanceof Member && ((Member) object).id.equals(id);
-    }
-
-    @Override
-    public String toString() {
-        return toStringHelper(this)
-                .add("id", id)
-                .add("address", address)
-                .add("zone", zone)
-                .add("rack", rack)
-                .add("host", host)
-                .add("metadata", metadata)
-                .omitNullValues()
-                .toString();
-    }
-
-    /**
-     * Member builder.
-     */
-    // TODO: 2018/7/30 by zmyer
-    public static class Builder implements io.atomix.utils.Builder<Member> {
-        protected final MemberConfig config = new MemberConfig();
-
-        protected Builder(MemberId id) {
-            if (id != null) {
-                config.setId(id);
-            }
-        }
-
-        /**
-         * Sets the member identifier.
-         *
-         * @param id the member identifier
-         * @return the member builder
-         */
-        public Builder withId(String id) {
-            return withId(MemberId.from(id));
-        }
-
-        /**
-         * Sets the member identifier.
-         *
-         * @param id the member identifier
-         * @return the member builder
-         */
-        public Builder withId(MemberId id) {
-            config.setId(id);
-            return this;
-        }
-
-        /**
-         * Sets the member address.
-         *
-         * @param address a host:port tuple
-         * @return the member builder
-         * @throws io.atomix.utils.net.MalformedAddressException if a valid {@link Address} cannot be constructed from the arguments
-         */
-        public Builder withAddress(String address) {
-            return withAddress(Address.from(address));
-        }
-
-        /**
-         * Sets the member host/port.
-         *
-         * @param host the host name
-         * @param port the port number
-         * @return the member builder
-         * @throws io.atomix.utils.net.MalformedAddressException if a valid {@link Address} cannot be constructed from the arguments
-         */
-        public Builder withAddress(String host, int port) {
-            return withAddress(Address.from(host, port));
-        }
-
-        /**
-         * Sets the member address using local host.
-         *
-         * @param port the port number
-         * @return the member builder
-         * @throws io.atomix.utils.net.MalformedAddressException if a valid {@link Address} cannot be constructed from the arguments
-         */
-        public Builder withAddress(int port) {
-            return withAddress(Address.from(port));
-        }
-
-        /**
-         * Sets the member address.
-         *
-         * @param address the member address
-         * @return the member builder
-         */
-        public Builder withAddress(Address address) {
-            config.setAddress(address);
-            return this;
-        }
-
-        /**
-         * Sets the zone to which the member belongs.
-         *
-         * @param zone the zone to which the member belongs
-         * @return the member builder
-         */
-        public Builder withZone(String zone) {
-            config.setZone(zone);
-            return this;
-        }
-
-        /**
-         * Sets the rack to which the member belongs.
-         *
-         * @param rack the rack to which the member belongs
-         * @return the member builder
-         */
-        public Builder withRack(String rack) {
-            config.setRack(rack);
-            return this;
-        }
-
-        /**
-         * Sets the host to which the member belongs.
-         *
-         * @param host the host to which the member belongs
-         * @return the member builder
-         */
-        public Builder withHost(String host) {
-            config.setHost(host);
-            return this;
-        }
-
-        /**
-         * Sets the member metadata.
-         *
-         * @param metadata the member metadata
-         * @return the member builder
-         * @throws NullPointerException if the tags are null
-         */
-        public Builder withMetadata(Map<String, String> metadata) {
-            config.setMetadata(metadata);
-            return this;
-        }
-
-        /**
-         * Adds metadata to the member.
-         *
-         * @param key   the metadata key to add
-         * @param value the metadata value to add
-         * @return the member builder
-         * @throws NullPointerException if the tag is null
-         */
-        public Builder addMetadata(String key, String value) {
-            config.addMetadata(key, value);
-            return this;
-        }
-
-        @Override
-        public Member build() {
-            return new Member(config);
-        }
-    }
+  @Override
+  public String toString() {
+    return toStringHelper(Member.class)
+        .add("id", id())
+        .add("address", address())
+        .add("zone", zone())
+        .add("rack", rack())
+        .add("host", host())
+        .add("properties", properties())
+        .omitNullValues()
+        .toString();
+  }
 }

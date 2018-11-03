@@ -21,10 +21,10 @@ import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.google.common.collect.Queues;
 import com.google.common.collect.Sets;
+import io.atomix.core.tree.AtomicDocumentTree;
+import io.atomix.core.tree.AtomicDocumentTreeType;
 import io.atomix.core.tree.DocumentPath;
-import io.atomix.core.tree.DocumentTree;
 import io.atomix.core.tree.DocumentTreeEvent;
-import io.atomix.core.tree.DocumentTreeType;
 import io.atomix.core.tree.IllegalDocumentModificationException;
 import io.atomix.core.tree.NoSuchDocumentPathException;
 import io.atomix.primitive.Ordering;
@@ -49,11 +49,11 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 /**
- * State Machine for {@link DocumentTreeProxy} resource.
+ * State Machine for {@link AtomicDocumentTreeProxy} resource.
  */
 public class DefaultDocumentTreeService extends AbstractPrimitiveService<DocumentTreeClient> implements DocumentTreeService {
   private final Serializer serializer = Serializer.using(Namespace.builder()
-      .register(DocumentTreeType.instance().namespace())
+      .register(AtomicDocumentTreeType.instance().namespace())
       .register(Versioned.class)
       .register(DocumentPath.class)
       .register(new LinkedHashMap().keySet().getClass())
@@ -61,30 +61,30 @@ public class DefaultDocumentTreeService extends AbstractPrimitiveService<Documen
       .register(Ordering.class)
       .register(SessionListenCommits.class)
       .register(SessionId.class)
-      .register(new com.esotericsoftware.kryo.Serializer<DefaultDocumentTree>() {
+      .register(new com.esotericsoftware.kryo.Serializer<DefaultAtomicDocumentTree>() {
         @Override
-        public void write(Kryo kryo, Output output, DefaultDocumentTree object) {
+        public void write(Kryo kryo, Output output, DefaultAtomicDocumentTree object) {
           kryo.writeObject(output, object.root);
         }
 
         @Override
         @SuppressWarnings("unchecked")
-        public DefaultDocumentTree read(Kryo kryo, Input input, Class<DefaultDocumentTree> type) {
-          return new DefaultDocumentTree(versionCounter::incrementAndGet,
+        public DefaultAtomicDocumentTree read(Kryo kryo, Input input, Class<DefaultAtomicDocumentTree> type) {
+          return new DefaultAtomicDocumentTree(versionCounter::incrementAndGet,
               kryo.readObject(input, DefaultDocumentTreeNode.class));
         }
-      }, DefaultDocumentTree.class)
+      }, DefaultAtomicDocumentTree.class)
       .register(DefaultDocumentTreeNode.class)
       .build());
 
   private Map<SessionId, SessionListenCommits> listeners = new HashMap<>();
   private AtomicLong versionCounter = new AtomicLong(0);
-  private DocumentTree<byte[]> docTree;
+  private AtomicDocumentTree<byte[]> docTree;
   private Set<DocumentPath> preparedKeys = Sets.newHashSet();
 
   public DefaultDocumentTreeService() {
-    super(DocumentTreeType.instance(), DocumentTreeClient.class);
-    this.docTree = new DefaultDocumentTree<>(versionCounter::incrementAndGet, Ordering.NATURAL);
+    super(AtomicDocumentTreeType.instance(), DocumentTreeClient.class);
+    this.docTree = new DefaultAtomicDocumentTree<>(versionCounter::incrementAndGet, Ordering.NATURAL);
   }
 
   @Override
@@ -156,10 +156,10 @@ public class DefaultDocumentTreeService extends AbstractPrimitiveService<Documen
       Versioned<byte[]> oldValue = docTree.get(path);
       if (oldValue == null) {
         docTree.set(path, value);
-        notifyListeners(new DocumentTreeEvent<>(path, DocumentTreeEvent.Type.CREATED, Optional.of(docTree.get(path)), Optional.empty()));
+        notifyListeners(new DocumentTreeEvent<>(DocumentTreeEvent.Type.CREATED, path, Optional.of(docTree.get(path)), Optional.empty()));
       } else if (!Arrays.equals(oldValue.value(), value)) {
         docTree.set(path, value);
-        notifyListeners(new DocumentTreeEvent<>(path, DocumentTreeEvent.Type.UPDATED, Optional.of(docTree.get(path)), Optional.of(oldValue)));
+        notifyListeners(new DocumentTreeEvent<>(DocumentTreeEvent.Type.UPDATED, path, Optional.of(docTree.get(path)), Optional.of(oldValue)));
       }
       return DocumentTreeResult.ok(oldValue);
     } catch (NoSuchDocumentPathException e) {
@@ -173,7 +173,7 @@ public class DefaultDocumentTreeService extends AbstractPrimitiveService<Documen
   public DocumentTreeResult<Void> create(DocumentPath path, byte[] value) {
     try {
       if (docTree.create(path, value)) {
-        notifyListeners(new DocumentTreeEvent<>(path, DocumentTreeEvent.Type.CREATED, Optional.of(docTree.get(path)), Optional.empty()));
+        notifyListeners(new DocumentTreeEvent<>(DocumentTreeEvent.Type.CREATED, path, Optional.of(docTree.get(path)), Optional.empty()));
         return DocumentTreeResult.ok(null);
       }
       return DocumentTreeResult.NOOP;
@@ -188,7 +188,7 @@ public class DefaultDocumentTreeService extends AbstractPrimitiveService<Documen
   public DocumentTreeResult<Void> createRecursive(DocumentPath path, byte[] value) {
     try {
       if (docTree.create(path, value)) {
-        notifyListeners(new DocumentTreeEvent<>(path, DocumentTreeEvent.Type.CREATED, Optional.of(docTree.get(path)), Optional.empty()));
+        notifyListeners(new DocumentTreeEvent<>(DocumentTreeEvent.Type.CREATED, path, Optional.of(docTree.get(path)), Optional.empty()));
         return DocumentTreeResult.ok(null);
       }
       return DocumentTreeResult.NOOP;
@@ -203,7 +203,7 @@ public class DefaultDocumentTreeService extends AbstractPrimitiveService<Documen
     try {
       Versioned<byte[]> oldValue = docTree.get(path);
       if (docTree.replace(path, newValue, version)) {
-        notifyListeners(new DocumentTreeEvent<>(path, DocumentTreeEvent.Type.UPDATED, Optional.of(docTree.get(path)), Optional.of(oldValue)));
+        notifyListeners(new DocumentTreeEvent<>(DocumentTreeEvent.Type.UPDATED, path, Optional.of(docTree.get(path)), Optional.of(oldValue)));
         return DocumentTreeResult.ok(null);
       }
       return DocumentTreeResult.NOOP;
@@ -220,7 +220,7 @@ public class DefaultDocumentTreeService extends AbstractPrimitiveService<Documen
         return DocumentTreeResult.NOOP;
       } else if (oldValue.value() != null && currentValue != null && Arrays.equals(oldValue.value(), currentValue)) {
         docTree.set(path, newValue);
-        notifyListeners(new DocumentTreeEvent<>(path, DocumentTreeEvent.Type.UPDATED, Optional.of(docTree.get(path)), Optional.of(oldValue)));
+        notifyListeners(new DocumentTreeEvent<>(DocumentTreeEvent.Type.UPDATED, path, Optional.of(docTree.get(path)), Optional.of(oldValue)));
         return DocumentTreeResult.ok(null);
       }
       return DocumentTreeResult.NOOP;
@@ -232,8 +232,8 @@ public class DefaultDocumentTreeService extends AbstractPrimitiveService<Documen
   @Override
   public DocumentTreeResult<Versioned<byte[]>> removeNode(DocumentPath path) {
     try {
-      Versioned<byte[]> result = docTree.removeNode(path);
-      notifyListeners(new DocumentTreeEvent<>(path, DocumentTreeEvent.Type.DELETED, Optional.empty(), Optional.of(result)));
+      Versioned<byte[]> result = docTree.remove(path);
+      notifyListeners(new DocumentTreeEvent<>(DocumentTreeEvent.Type.DELETED, path, Optional.empty(), Optional.of(result)));
       return DocumentTreeResult.ok(result);
     } catch (IllegalDocumentModificationException e) {
       return DocumentTreeResult.illegalModification();
@@ -245,16 +245,16 @@ public class DefaultDocumentTreeService extends AbstractPrimitiveService<Documen
   @Override
   public void clear() {
     Queue<DocumentPath> toClearQueue = Queues.newArrayDeque();
-    Map<String, Versioned<byte[]>> topLevelChildren = docTree.getChildren(DocumentPath.from("root"));
+    Map<String, Versioned<byte[]>> topLevelChildren = docTree.getChildren(DocumentPath.ROOT);
     toClearQueue.addAll(topLevelChildren.keySet()
         .stream()
-        .map(name -> new DocumentPath(name, DocumentPath.from("root")))
+        .map(name -> new DocumentPath(name, DocumentPath.ROOT))
         .collect(Collectors.toList()));
     while (!toClearQueue.isEmpty()) {
       DocumentPath path = toClearQueue.remove();
       Map<String, Versioned<byte[]>> children = docTree.getChildren(path);
       if (children.size() == 0) {
-        docTree.removeNode(path);
+        docTree.remove(path);
       } else {
         children.keySet().forEach(name -> toClearQueue.add(new DocumentPath(name, path)));
         toClearQueue.add(path);

@@ -24,17 +24,11 @@ import io.atomix.utils.serializer.NamespaceConfig;
 /**
  * Primitive configuration.
  */
-// TODO: 2018/7/30 by zmyer
-public abstract class PrimitiveConfig<C extends PrimitiveConfig<C>>
-        implements TypedConfig<C, PrimitiveType>, NamedConfig<C> {
-    private static final int DEFAULT_CACHE_SIZE = 1000;
-
-    private String name;
-    private NamespaceConfig namespaceConfig;
-    private PrimitiveProtocolConfig protocolConfig;
-    private boolean cacheEnabled = false;
-    private int cacheSize = DEFAULT_CACHE_SIZE;
-    private boolean readOnly = false;
+public abstract class PrimitiveConfig<C extends PrimitiveConfig<C>> implements TypedConfig<PrimitiveType>, NamedConfig<C> {
+  private String name;
+  private NamespaceConfig namespaceConfig;
+  private PrimitiveProtocolConfig protocolConfig;
+  private boolean readOnly = false;
 
     @Override
     public String getName() {
@@ -90,65 +84,14 @@ public abstract class PrimitiveConfig<C extends PrimitiveConfig<C>>
         return (C) this;
     }
 
-    /**
-     * Enables caching for the primitive.
-     *
-     * @return the primitive configuration
-     */
-    public C setCacheEnabled() {
-        return setCacheEnabled(true);
-    }
-
-    /**
-     * Sets whether caching is enabled.
-     *
-     * @param cacheEnabled whether caching is enabled
-     * @return the primitive configuration
-     */
-    @SuppressWarnings("unchecked")
-    public C setCacheEnabled(boolean cacheEnabled) {
-        this.cacheEnabled = cacheEnabled;
-        return (C) this;
-    }
-
-    /**
-     * Returns whether caching is enabled.
-     *
-     * @return whether caching is enabled
-     */
-    public boolean isCacheEnabled() {
-        return cacheEnabled;
-    }
-
-    /**
-     * Sets the cache size.
-     *
-     * @param cacheSize the cache size
-     * @return the primitive configuration
-     */
-    @SuppressWarnings("unchecked")
-    public C setCacheSize(int cacheSize) {
-        this.cacheSize = cacheSize;
-        return (C) this;
-    }
-
-    /**
-     * Returns the cache size.
-     *
-     * @return the cache size
-     */
-    public int getCacheSize() {
-        return cacheSize;
-    }
-
-    /**
-     * Sets the primitive to read-only.
-     *
-     * @return the primitive configuration
-     */
-    public C setReadOnly() {
-        return setReadOnly(true);
-    }
+  /**
+   * Sets the primitive to read-only.
+   *
+   * @return the primitive configuration
+   */
+  public C setReadOnly() {
+    return setReadOnly(true);
+  }
 
     /**
      * Sets whether the primitive is read-only.

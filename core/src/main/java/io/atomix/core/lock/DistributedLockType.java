@@ -15,12 +15,10 @@
  */
 package io.atomix.core.lock;
 
+import io.atomix.core.lock.impl.DefaultDistributedLockBuilder;
 import io.atomix.core.lock.impl.DefaultDistributedLockService;
-import io.atomix.core.lock.impl.DistributedLockProxyBuilder;
-import io.atomix.core.lock.impl.DistributedLockResource;
 import io.atomix.primitive.PrimitiveManagementService;
 import io.atomix.primitive.PrimitiveType;
-import io.atomix.primitive.resource.PrimitiveResource;
 import io.atomix.primitive.service.PrimitiveService;
 import io.atomix.primitive.service.ServiceConfig;
 
@@ -53,19 +51,13 @@ public class DistributedLockType implements PrimitiveType<DistributedLockBuilder
   }
 
   @Override
-  @SuppressWarnings("unchecked")
-  public PrimitiveResource newResource(DistributedLock primitive) {
-    return new DistributedLockResource(primitive.async());
-  }
-
-  @Override
   public DistributedLockConfig newConfig() {
     return new DistributedLockConfig();
   }
 
   @Override
   public DistributedLockBuilder newBuilder(String name, DistributedLockConfig config, PrimitiveManagementService managementService) {
-    return new DistributedLockProxyBuilder(name, config, managementService);
+    return new DefaultDistributedLockBuilder(name, config, managementService);
   }
 
   @Override

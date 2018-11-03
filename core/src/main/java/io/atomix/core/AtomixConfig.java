@@ -16,6 +16,7 @@
 package io.atomix.core;
 
 import io.atomix.cluster.ClusterConfig;
+import io.atomix.core.profile.ProfileConfig;
 import io.atomix.primitive.config.PrimitiveConfig;
 import io.atomix.primitive.partition.PartitionGroupConfig;
 import io.atomix.utils.config.Config;
@@ -37,8 +38,11 @@ public class AtomixConfig implements Config {
   private boolean enableShutdownHook;
   private PartitionGroupConfig managementGroup;
   private Map<String, PartitionGroupConfig<?>> partitionGroups = new HashMap<>();
+  private Map<String, PrimitiveConfig> primitiveDefaults = new HashMap<>();
   private Map<String, PrimitiveConfig> primitives = new HashMap<>();
-  private List<String> profiles = new ArrayList<>();
+  private List<ProfileConfig> profiles = new ArrayList<>();
+  private boolean typeRegistrationRequired = false;
+  private boolean compatibleSerialization = false;
 
   /**
    * Returns the cluster configuration.
@@ -134,6 +138,38 @@ public class AtomixConfig implements Config {
   }
 
   /**
+   * Returns the primitive default configurations.
+   *
+   * @return the primitive default configurations
+   */
+  public Map<String, PrimitiveConfig> getPrimitiveDefaults() {
+    return primitiveDefaults;
+  }
+
+  /**
+   * Sets the primitive default configurations.
+   *
+   * @param primitiveDefaults the primitive default configurations
+   * @return the Atomix configuration
+   */
+  public AtomixConfig setPrimitiveDefaults(Map<String, PrimitiveConfig> primitiveDefaults) {
+    this.primitiveDefaults = primitiveDefaults;
+    return this;
+  }
+
+  /**
+   * Returns a default primitive configuration.
+   *
+   * @param name the primitive name
+   * @param <C>  the configuration type
+   * @return the primitive configuration
+   */
+  @SuppressWarnings("unchecked")
+  public <C extends PrimitiveConfig<C>> C getPrimitiveDefault(String name) {
+    return (C) primitiveDefaults.get(name);
+  }
+
+  /**
    * Returns the primitive configurations.
    *
    * @return the primitive configurations
@@ -182,7 +218,7 @@ public class AtomixConfig implements Config {
    *
    * @return the Atomix profile
    */
-  public List<String> getProfiles() {
+  public List<ProfileConfig> getProfiles() {
     return profiles;
   }
 
@@ -192,7 +228,7 @@ public class AtomixConfig implements Config {
    * @param profiles the profiles
    * @return the Atomix configuration
    */
-  public AtomixConfig setProfiles(List<String> profiles) {
+  public AtomixConfig setProfiles(List<ProfileConfig> profiles) {
     this.profiles = profiles;
     return this;
   }
@@ -203,8 +239,48 @@ public class AtomixConfig implements Config {
    * @param profile the profile to add
    * @return the Atomix configuration
    */
-  public AtomixConfig addProfile(String profile) {
+  public AtomixConfig addProfile(ProfileConfig profile) {
     profiles.add(checkNotNull(profile, "profile cannot be null"));
+    return this;
+  }
+
+  /**
+   * Returns whether serializable type registration is required for user types.
+   *
+   * @return whether serializable type registration is required for user types
+   */
+  public boolean isTypeRegistrationRequired() {
+    return typeRegistrationRequired;
+  }
+
+  /**
+   * Sets whether serializable type registration is required for user types.
+   *
+   * @param typeRegistrationRequired whether serializable type registration is required for user types
+   * @return the Atomix configuration
+   */
+  public AtomixConfig setTypeRegistrationRequired(boolean typeRegistrationRequired) {
+    this.typeRegistrationRequired = typeRegistrationRequired;
+    return this;
+  }
+
+  /**
+   * Returns whether compatible serialization is enabled for user types.
+   *
+   * @return whether compatible serialization is enabled for user types
+   */
+  public boolean isCompatibleSerialization() {
+    return compatibleSerialization;
+  }
+
+  /**
+   * Sets whether compatible serialization is enabled for user types.
+   *
+   * @param compatibleSerialization whether compatible serialization is enabled for user types
+   * @return the Atomix configuration
+   */
+  public AtomixConfig setCompatibleSerialization(boolean compatibleSerialization) {
+    this.compatibleSerialization = compatibleSerialization;
     return this;
   }
 }

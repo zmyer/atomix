@@ -27,9 +27,12 @@ import io.atomix.primitive.partition.PartitionGroupConfig;
 import io.atomix.primitive.partition.PartitionId;
 import io.atomix.primitive.partition.PartitionManagementService;
 import io.atomix.primitive.protocol.PrimitiveProtocol;
+import io.atomix.primitive.protocol.ProxyProtocol;
 import io.atomix.protocols.backup.MultiPrimaryProtocol;
 import io.atomix.utils.concurrent.BlockingAwareThreadPoolContextFactory;
 import io.atomix.utils.concurrent.ThreadContextFactory;
+import io.atomix.utils.serializer.Namespace;
+import io.atomix.utils.serializer.Namespaces;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -72,10 +75,18 @@ public class PrimaryBackupPartitionGroup implements ManagedPartitionGroup {
             return NAME;
         }
 
-        @Override
-        public PrimaryBackupPartitionGroupConfig newConfig() {
-            return new PrimaryBackupPartitionGroupConfig();
-        }
+    @Override
+    public Namespace namespace() {
+      return Namespace.builder()
+          .nextId(Namespaces.BEGIN_USER_CUSTOM_ID + 200)
+          .register(PrimaryBackupPartitionGroupConfig.class)
+          .build();
+    }
+
+    @Override
+    public PrimaryBackupPartitionGroupConfig newConfig() {
+      return new PrimaryBackupPartitionGroupConfig();
+    }
 
         @Override
         public ManagedPartitionGroup newPartitionGroup(PrimaryBackupPartitionGroupConfig config) {
@@ -132,14 +143,14 @@ public class PrimaryBackupPartitionGroup implements ManagedPartitionGroup {
         return config;
     }
 
-    @Override
-    public PrimitiveProtocol newProtocol() {
-        return MultiPrimaryProtocol.builder(name)
-                .withRecovery(Recovery.RECOVER)
-                .withBackups(2)
-                .withReplication(Replication.SYNCHRONOUS)
-                .build();
-    }
+  @Override
+  public ProxyProtocol newProtocol() {
+    return MultiPrimaryProtocol.builder(name)
+        .withRecovery(Recovery.RECOVER)
+        .withBackups(2)
+        .withReplication(Replication.SYNCHRONOUS)
+        .build();
+  }
 
     @Override
     public PrimaryBackupPartition getPartition(PartitionId partitionId) {
@@ -157,33 +168,31 @@ public class PrimaryBackupPartitionGroup implements ManagedPartitionGroup {
         return sortedPartitionIds;
     }
 
-    // TODO: 2018/8/1 by zmyer
-    @Override
-    public CompletableFuture<ManagedPartitionGroup> join(PartitionManagementService managementService) {
-        threadFactory = new BlockingAwareThreadPoolContextFactory("atomix-" + name() + "-%d",
-                Runtime.getRuntime().availableProcessors() * 2, LOGGER);
-        final List<CompletableFuture<Partition>> futures = partitions.values().stream()
-                .map(p -> p.join(managementService, threadFactory))
-                .collect(Collectors.toList());
-        return CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()])).thenApply(v -> {
-            LOGGER.info("Started");
-            return this;
-        });
-    }
+  @Override
+  public CompletableFuture<ManagedPartitionGroup> join(PartitionManagementService managementService) {
+    int threadPoolSize = Math.max(Math.min(Runtime.getRuntime().availableProcessors() * 2, 32), 4);
+    threadFactory = new BlockingAwareThreadPoolContextFactory("atomix-" + name() + "-%d", threadPoolSize, LOGGER);
+    List<CompletableFuture<Partition>> futures = partitions.values().stream()
+        .map(p -> p.join(managementService, threadFactory))
+        .collect(Collectors.toList());
+    return CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()])).thenApply(v -> {
+      LOGGER.info("Started");
+      return this;
+    });
+  }
 
-    // TODO: 2018/8/1 by zmyer
-    @Override
-    public CompletableFuture<ManagedPartitionGroup> connect(PartitionManagementService managementService) {
-        threadFactory = new BlockingAwareThreadPoolContextFactory("atomix-" + name() + "-%d",
-                Runtime.getRuntime().availableProcessors() * 2, LOGGER);
-        final List<CompletableFuture<Partition>> futures = partitions.values().stream()
-                .map(p -> p.connect(managementService, threadFactory))
-                .collect(Collectors.toList());
-        return CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()])).thenApply(v -> {
-            LOGGER.info("Started");
-            return this;
-        });
-    }
+  @Override
+  public CompletableFuture<ManagedPartitionGroup> connect(PartitionManagementService managementService) {
+    int threadPoolSize = Math.max(Math.min(Runtime.getRuntime().availableProcessors() * 2, 32), 4);
+    threadFactory = new BlockingAwareThreadPoolContextFactory("atomix-" + name() + "-%d", threadPoolSize, LOGGER);
+    List<CompletableFuture<Partition>> futures = partitions.values().stream()
+        .map(p -> p.connect(managementService, threadFactory))
+        .collect(Collectors.toList());
+    return CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()])).thenApply(v -> {
+      LOGGER.info("Started");
+      return this;
+    });
+  }
 
     @Override
     public CompletableFuture<Void> close() {

@@ -15,43 +15,25 @@
  */
 package io.atomix.core.election;
 
-import io.atomix.cluster.MemberId;
-import io.atomix.primitive.DistributedPrimitiveBuilder;
+import io.atomix.core.cache.CachedPrimitiveBuilder;
 import io.atomix.primitive.PrimitiveManagementService;
-import io.atomix.utils.serializer.Namespace;
-import io.atomix.utils.serializer.Namespaces;
-import io.atomix.utils.serializer.Serializer;
-import io.atomix.utils.serializer.NamespaceConfig;
+import io.atomix.primitive.protocol.PrimitiveProtocol;
+import io.atomix.primitive.protocol.ProxyCompatibleBuilder;
+import io.atomix.primitive.protocol.ProxyProtocol;
 
 /**
  * Builder for constructing new {@link AsyncLeaderElector} instances.
  */
 public abstract class LeaderElectorBuilder<T>
-    extends DistributedPrimitiveBuilder<LeaderElectorBuilder<T>, LeaderElectorConfig, LeaderElector<T>> {
-  public LeaderElectorBuilder(String name, LeaderElectorConfig config, PrimitiveManagementService managementService) {
+    extends CachedPrimitiveBuilder<LeaderElectorBuilder<T>, LeaderElectorConfig, LeaderElector<T>>
+    implements ProxyCompatibleBuilder<LeaderElectorBuilder<T>> {
+
+  protected LeaderElectorBuilder(String name, LeaderElectorConfig config, PrimitiveManagementService managementService) {
     super(LeaderElectorType.instance(), name, config, managementService);
   }
 
   @Override
-  public Serializer serializer() {
-    Serializer serializer = this.serializer;
-    if (serializer == null) {
-      NamespaceConfig config = this.config.getNamespaceConfig();
-      if (config == null) {
-        serializer = Serializer.using(Namespace.builder()
-            .register(Namespaces.BASIC)
-            .register(MemberId.class)
-            .register(MemberId.Type.class)
-            .build());
-      } else {
-        serializer = Serializer.using(Namespace.builder()
-            .register(Namespaces.BASIC)
-            .register(MemberId.class)
-            .register(MemberId.Type.class)
-            .register(new Namespace(config))
-            .build());
-      }
-    }
-    return serializer;
+  public LeaderElectorBuilder<T> withProtocol(ProxyProtocol protocol) {
+    return withProtocol((PrimitiveProtocol) protocol);
   }
 }

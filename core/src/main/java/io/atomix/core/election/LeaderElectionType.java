@@ -15,12 +15,10 @@
  */
 package io.atomix.core.election;
 
+import io.atomix.core.election.impl.DefaultLeaderElectionBuilder;
 import io.atomix.core.election.impl.DefaultLeaderElectionService;
-import io.atomix.core.election.impl.LeaderElectionProxyBuilder;
-import io.atomix.core.election.impl.LeaderElectionResource;
 import io.atomix.primitive.PrimitiveManagementService;
 import io.atomix.primitive.PrimitiveType;
-import io.atomix.primitive.resource.PrimitiveResource;
 import io.atomix.primitive.service.PrimitiveService;
 import io.atomix.primitive.service.ServiceConfig;
 import io.atomix.utils.serializer.Namespace;
@@ -66,22 +64,15 @@ public class LeaderElectionType<T>
         return new DefaultLeaderElectionService();
     }
 
-    @Override
-    @SuppressWarnings("unchecked")
-    public PrimitiveResource newResource(LeaderElection<T> primitive) {
-        return new LeaderElectionResource((AsyncLeaderElection<String>) primitive.async());
-    }
+  @Override
+  public LeaderElectionConfig newConfig() {
+    return new LeaderElectionConfig();
+  }
 
-    @Override
-    public LeaderElectionConfig newConfig() {
-        return new LeaderElectionConfig();
-    }
-
-    @Override
-    public LeaderElectionBuilder<T> newBuilder(String name, LeaderElectionConfig config,
-            PrimitiveManagementService managementService) {
-        return new LeaderElectionProxyBuilder<>(name, config, managementService);
-    }
+  @Override
+  public LeaderElectionBuilder<T> newBuilder(String name, LeaderElectionConfig config, PrimitiveManagementService managementService) {
+    return new DefaultLeaderElectionBuilder<>(name, config, managementService);
+  }
 
     @Override
     public String toString() {

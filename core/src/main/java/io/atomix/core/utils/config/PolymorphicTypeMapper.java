@@ -16,15 +16,30 @@
 package io.atomix.core.utils.config;
 
 import io.atomix.core.AtomixRegistry;
+import io.atomix.utils.ConfiguredType;
+import io.atomix.utils.config.TypedConfig;
 
 /**
  * Polymorphic type mapper.
  */
-public abstract class PolymorphicTypeMapper<T> {
-  private final Class<? super T> typedClass;
+public class PolymorphicTypeMapper {
+  private final String typePath;
+  private final Class<? extends TypedConfig> configClass;
+  private final Class<? extends ConfiguredType> typeClass;
 
-  protected PolymorphicTypeMapper(Class<? super T> typedClass) {
-    this.typedClass = typedClass;
+  public PolymorphicTypeMapper(String typePath, Class<? extends TypedConfig> configClass, Class<? extends ConfiguredType> typeClass) {
+    this.typePath = typePath;
+    this.configClass = configClass;
+    this.typeClass = typeClass;
+  }
+
+  /**
+   * Returns the polymorphic configuration class.
+   *
+   * @return the polymorphic configuration class
+   */
+  public Class<? extends TypedConfig> getConfigClass() {
+    return configClass;
   }
 
   /**
@@ -32,8 +47,8 @@ public abstract class PolymorphicTypeMapper<T> {
    *
    * @return the polymorphic type
    */
-  public Class<? super T> getTypedClass() {
-    return typedClass;
+  public Class<? extends ConfiguredType> getTypeClass() {
+    return typeClass;
   }
 
   /**
@@ -42,7 +57,7 @@ public abstract class PolymorphicTypeMapper<T> {
    * @return the type path
    */
   public String getTypePath() {
-    return "type";
+    return typePath;
   }
 
   /**
@@ -52,5 +67,8 @@ public abstract class PolymorphicTypeMapper<T> {
    * @param type     the type name
    * @return the concrete configuration class
    */
-  public abstract Class<? extends T> getConcreteClass(AtomixRegistry registry, String type);
+  @SuppressWarnings("unchecked")
+  public Class<? extends TypedConfig<?>> getConcreteClass(AtomixRegistry registry, String type) {
+    return (Class<? extends TypedConfig<?>>) registry.getType(typeClass, type).newConfig().getClass();
+  }
 }
