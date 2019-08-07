@@ -95,27 +95,27 @@ public class BlockingAwareSessionClient extends DelegatingSessionClient {
         return connectFuture;
     }
 
-  @Override
-  public CompletableFuture<Void> close() {
-    if (closeFuture == null) {
-      synchronized (this) {
+    @Override
+    public CompletableFuture<Void> close() {
         if (closeFuture == null) {
-          closeFuture = orderedFuture(asyncFuture(super.close(), context));
+            synchronized (this) {
+                if (closeFuture == null) {
+                    closeFuture = orderedFuture(asyncFuture(super.close(), context));
+                }
+            }
         }
-      }
+        return closeFuture;
     }
-    return closeFuture;
-  }
 
-  @Override
-  public CompletableFuture<Void> delete() {
-    if (closeFuture == null) {
-      synchronized (this) {
+    @Override
+    public CompletableFuture<Void> delete() {
         if (closeFuture == null) {
-          closeFuture = orderedFuture(asyncFuture(super.delete(), context));
+            synchronized (this) {
+                if (closeFuture == null) {
+                    closeFuture = orderedFuture(asyncFuture(super.delete(), context));
+                }
+            }
         }
-      }
+        return closeFuture;
     }
-    return closeFuture;
-  }
 }

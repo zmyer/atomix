@@ -18,6 +18,7 @@ package io.atomix.cluster.messaging.impl;
 /**
  * Base class for internal messages.
  */
+// TODO: 2018/12/06 by zmyer
 public abstract class ProtocolMessage {
 
     /**
@@ -50,23 +51,23 @@ public abstract class ProtocolMessage {
          */
         public static Type forId(int id) {
             switch (id) {
-            case 1:
-                return REQUEST;
-            case 2:
-                return REPLY;
-            default:
-                throw new IllegalArgumentException("Unknown status ID " + id);
+                case 1:
+                    return REQUEST;
+                case 2:
+                    return REPLY;
+                default:
+                    throw new IllegalArgumentException("Unknown status ID " + id);
             }
         }
     }
 
-  private final long id;
-  private final byte[] payload;
+    private final long id;
+    private final byte[] payload;
 
-  protected ProtocolMessage(long id, byte[] payload) {
-    this.id = id;
-    this.payload = payload;
-  }
+    protected ProtocolMessage(long id, byte[] payload) {
+        this.id = id;
+        this.payload = payload;
+    }
 
     public abstract Type type();
 
@@ -78,9 +79,9 @@ public abstract class ProtocolMessage {
         return type() == Type.REPLY;
     }
 
-  public long id() {
-    return id;
-  }
+    public long id() {
+        return id;
+    }
 
     public byte[] payload() {
         return payload;

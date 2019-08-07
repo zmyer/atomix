@@ -107,15 +107,15 @@ public class DelegatingSessionClient implements SessionClient {
         return session.close();
     }
 
-  @Override
-  public CompletableFuture<Void> delete() {
-    return session.delete();
-  }
+    @Override
+    public CompletableFuture<Void> delete() {
+        return session.delete();
+    }
 
-  @Override
-  public String toString() {
-    return toStringHelper(this)
-        .add("client", session)
-        .toString();
-  }
+    @Override
+    public String toString() {
+        return toStringHelper(this)
+                .add("client", session)
+                .toString();
+    }
 }

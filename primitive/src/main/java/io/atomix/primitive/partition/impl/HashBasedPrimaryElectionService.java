@@ -55,7 +55,8 @@ public class HashBasedPrimaryElectionService
 
     // TODO: 2018/7/31 by zmyer
     public HashBasedPrimaryElectionService(ClusterMembershipService clusterMembershipService,
-            PartitionGroupMembershipService groupMembershipService, ClusterCommunicationService messagingService) {
+                                           PartitionGroupMembershipService groupMembershipService,
+                                           ClusterCommunicationService messagingService) {
         this.clusterMembershipService = clusterMembershipService;
         this.groupMembershipService = groupMembershipService;
         this.messagingService = messagingService;

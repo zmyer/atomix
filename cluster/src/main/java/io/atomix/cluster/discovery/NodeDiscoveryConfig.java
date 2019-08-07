@@ -20,5 +20,6 @@ import io.atomix.utils.config.TypedConfig;
 /**
  * Node discovery configuration.
  */
+// TODO: 2018/12/06 by zmyer
 public abstract class NodeDiscoveryConfig implements TypedConfig<NodeDiscoveryProvider.Type> {
 }

@@ -24,23 +24,24 @@ import java.util.concurrent.CompletableFuture;
  * once an {@link ClusterEventService} subscription has been propagated. The subscription context can be used to
  * unsubscribe the node from the given {@link #topic()} by calling {@link #close()}.
  */
+// TODO: 2018/12/07 by zmyer
 public interface Subscription {
 
-  /**
-   * Returns the subscription topic.
-   *
-   * @return the topic to which the subscriber is subscribed
-   */
-  String topic();
+    /**
+     * Returns the subscription topic.
+     *
+     * @return the topic to which the subscriber is subscribed
+     */
+    String topic();
 
-  /**
-   * Closes the subscription, causing it to be unregistered.
-   * <p>
-   * When the subscription is closed, the subscriber will be unregistered and the change will be propagated to all
-   * the members of the cluster. The returned future will be completed once the change has been propagated to all nodes.
-   *
-   * @return a future to be completed once the subscription has been closed
-   */
-  CompletableFuture<Void> close();
+    /**
+     * Closes the subscription, causing it to be unregistered.
+     * <p>
+     * When the subscription is closed, the subscriber will be unregistered and the change will be propagated to all
+     * the members of the cluster. The returned future will be completed once the change has been propagated to all nodes.
+     *
+     * @return a future to be completed once the subscription has been closed
+     */
+    CompletableFuture<Void> close();
 
 }

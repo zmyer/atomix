@@ -30,23 +30,23 @@ import static com.google.common.base.Preconditions.checkNotNull;
 public class PartitionId extends AbstractIdentifier<Integer> implements Comparable<PartitionId> {
     private final String group;
 
-  /**
-   * Creates a partition identifier from an integer.
-   *
-   * @param group the group identifier
-   * @param id input integer
-   */
-  public PartitionId(String group, int id) {
-    super(id);
-    this.group = checkNotNull(group, "group cannot be null");
-    Preconditions.checkArgument(id >= 0, "partition id must be non-negative");
-  }
+    /**
+     * Creates a partition identifier from an integer.
+     *
+     * @param group the group identifier
+     * @param id    input integer
+     */
+    public PartitionId(String group, int id) {
+        super(id);
+        this.group = checkNotNull(group, "group cannot be null");
+        Preconditions.checkArgument(id >= 0, "partition id must be non-negative");
+    }
 
     /**
      * Creates a partition identifier from an integer.
      *
      * @param group the group identifier
-     * @param id input integer
+     * @param id    input integer
      * @return partition identification
      */
     public static PartitionId from(String group, int id) {

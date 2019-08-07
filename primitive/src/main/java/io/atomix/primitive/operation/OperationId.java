@@ -47,7 +47,7 @@ public interface OperationId extends Identifier<String> {
     /**
      * Returns a new operation identifier.
      *
-     * @param id the operation name
+     * @param id   the operation name
      * @param type the operation type
      * @return the operation identifier
      */

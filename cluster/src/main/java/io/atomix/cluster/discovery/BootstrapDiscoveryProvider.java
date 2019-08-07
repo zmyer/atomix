@@ -44,83 +44,85 @@ import static com.google.common.base.Preconditions.checkNotNull;
  * flapping of membership following a {@link ClusterMembershipEvent.Type#MEMBER_ADDED} event, the implementation attempts
  * to heartbeat all newly discovered peers before triggering a {@link ClusterMembershipEvent.Type#MEMBER_REMOVED} event.
  */
+// TODO: 2018/12/06 by zmyer
 public class BootstrapDiscoveryProvider
-    extends AbstractListenerManager<NodeDiscoveryEvent, NodeDiscoveryEventListener>
-    implements NodeDiscoveryProvider {
+        extends AbstractListenerManager<NodeDiscoveryEvent, NodeDiscoveryEventListener>
+        implements NodeDiscoveryProvider {
 
-  public static final Type TYPE = new Type();
+    public static final Type TYPE = new Type();
 
-  /**
-   * Creates a new bootstrap provider builder.
-   *
-   * @return a new bootstrap provider builder
-   */
-  public static BootstrapDiscoveryBuilder builder() {
-    return new BootstrapDiscoveryBuilder();
-  }
+    /**
+     * Creates a new bootstrap provider builder.
+     *
+     * @return a new bootstrap provider builder
+     */
+    public static BootstrapDiscoveryBuilder builder() {
+        return new BootstrapDiscoveryBuilder();
+    }
 
-  /**
-   * Bootstrap member location provider type.
-   */
-  public static class Type implements NodeDiscoveryProvider.Type<BootstrapDiscoveryConfig> {
-    private static final String NAME = "bootstrap";
+    /**
+     * Bootstrap member location provider type.
+     */
+    public static class Type implements NodeDiscoveryProvider.Type<BootstrapDiscoveryConfig> {
+        private static final String NAME = "bootstrap";
 
-    @Override
-    public String name() {
-      return NAME;
+        @Override
+        public String name() {
+            return NAME;
+        }
+
+        @Override
+        public BootstrapDiscoveryConfig newConfig() {
+            return new BootstrapDiscoveryConfig();
+        }
+
+        @Override
+        public NodeDiscoveryProvider newProvider(BootstrapDiscoveryConfig config) {
+            return new BootstrapDiscoveryProvider(config);
+        }
+    }
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(BootstrapDiscoveryProvider.class);
+
+    private final ImmutableSet<Node> bootstrapNodes;
+    private final BootstrapDiscoveryConfig config;
+
+    public BootstrapDiscoveryProvider(Node... bootstrapNodes) {
+        this(Arrays.asList(bootstrapNodes));
+    }
+
+    public BootstrapDiscoveryProvider(Collection<Node> bootstrapNodes) {
+        this(new BootstrapDiscoveryConfig().setNodes(bootstrapNodes.stream()
+                .map(node -> new NodeConfig().setId(node.id())
+                        .setAddress(node.address()))
+                .collect(Collectors.toList())));
+    }
+
+    BootstrapDiscoveryProvider(BootstrapDiscoveryConfig config) {
+        this.config = checkNotNull(config);
+        this.bootstrapNodes = ImmutableSet.copyOf(config.getNodes().stream().map(Node::new).collect(Collectors.toList()));
     }
 
     @Override
-    public BootstrapDiscoveryConfig newConfig() {
-      return new BootstrapDiscoveryConfig();
+    public BootstrapDiscoveryConfig config() {
+        return config;
     }
 
     @Override
-    public NodeDiscoveryProvider newProvider(BootstrapDiscoveryConfig config) {
-      return new BootstrapDiscoveryProvider(config);
+    public Set<Node> getNodes() {
+        return bootstrapNodes;
     }
-  }
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(BootstrapDiscoveryProvider.class);
+    // TODO: 2018/12/06 by zmyer
+    @Override
+    public CompletableFuture<Void> join(BootstrapService bootstrap, Node localNode) {
+        LOGGER.info("Joined");
+        return CompletableFuture.completedFuture(null);
+    }
 
-  private final ImmutableSet<Node> bootstrapNodes;
-  private final BootstrapDiscoveryConfig config;
-
-  public BootstrapDiscoveryProvider(Node... bootstrapNodes) {
-    this(Arrays.asList(bootstrapNodes));
-  }
-
-  public BootstrapDiscoveryProvider(Collection<Node> bootstrapNodes) {
-    this(new BootstrapDiscoveryConfig().setNodes(bootstrapNodes.stream()
-        .map(node -> new NodeConfig().setId(node.id())
-            .setAddress(node.address()))
-        .collect(Collectors.toList())));
-  }
-
-  BootstrapDiscoveryProvider(BootstrapDiscoveryConfig config) {
-    this.config = checkNotNull(config);
-    this.bootstrapNodes = ImmutableSet.copyOf(config.getNodes().stream().map(Node::new).collect(Collectors.toList()));
-  }
-
-  @Override
-  public BootstrapDiscoveryConfig config() {
-    return config;
-  }
-
-  @Override
-  public Set<Node> getNodes() {
-    return bootstrapNodes;
-  }
-
-  @Override
-  public CompletableFuture<Void> join(BootstrapService bootstrap, Node localNode) {
-    LOGGER.info("Joined");
-    return CompletableFuture.completedFuture(null);
-  }
-
-  @Override
-  public CompletableFuture<Void> leave(Node localNode) {
-    LOGGER.info("Left");
-    return CompletableFuture.completedFuture(null);
-  }
+    @Override
+    public CompletableFuture<Void> leave(Node localNode) {
+        LOGGER.info("Left");
+        return CompletableFuture.completedFuture(null);
+    }
 }

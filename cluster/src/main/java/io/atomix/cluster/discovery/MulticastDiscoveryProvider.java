@@ -50,137 +50,143 @@ import static io.atomix.utils.concurrent.Threads.namedThreads;
  * determined by each node broadcasting to a multicast group, and phi accrual failure detectors are used to detect nodes
  * joining and leaving the cluster.
  */
+// TODO: 2018/12/06 by zmyer
 public class MulticastDiscoveryProvider
-    extends AbstractListenerManager<NodeDiscoveryEvent, NodeDiscoveryEventListener>
-    implements NodeDiscoveryProvider {
+        extends AbstractListenerManager<NodeDiscoveryEvent, NodeDiscoveryEventListener>
+        implements NodeDiscoveryProvider {
 
-  public static final Type TYPE = new Type();
+    public static final Type TYPE = new Type();
 
-  /**
-   * Returns a new multicast member location provider builder.
-   *
-   * @return a new multicast location provider builder
-   */
-  public static MulticastDiscoveryBuilder builder() {
-    return new MulticastDiscoveryBuilder();
-  }
+    /**
+     * Returns a new multicast member location provider builder.
+     *
+     * @return a new multicast location provider builder
+     */
+    public static MulticastDiscoveryBuilder builder() {
+        return new MulticastDiscoveryBuilder();
+    }
 
-  /**
-   * Broadcast member location provider type.
-   */
-  public static class Type implements NodeDiscoveryProvider.Type<MulticastDiscoveryConfig> {
-    private static final String NAME = "multicast";
+    /**
+     * Broadcast member location provider type.
+     */
+    public static class Type implements NodeDiscoveryProvider.Type<MulticastDiscoveryConfig> {
+        private static final String NAME = "multicast";
 
-    @Override
-    public String name() {
-      return NAME;
+        @Override
+        public String name() {
+            return NAME;
+        }
+
+        @Override
+        public MulticastDiscoveryConfig newConfig() {
+            return new MulticastDiscoveryConfig();
+        }
+
+        @Override
+        public NodeDiscoveryProvider newProvider(MulticastDiscoveryConfig config) {
+            return new MulticastDiscoveryProvider(config);
+        }
+    }
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(MulticastDiscoveryProvider.class);
+    private static final Serializer SERIALIZER = Serializer.builder()
+            .addType(Node.class)
+            .addType(NodeId.class)
+            .addSerializer(new AddressSerializer(), Address.class)
+            .build();
+
+    private static final String DISCOVERY_SUBJECT = "atomix-discovery";
+
+    private final MulticastDiscoveryConfig config;
+    private volatile BootstrapService bootstrap;
+
+    private final ScheduledExecutorService broadcastScheduler = Executors.newSingleThreadScheduledExecutor(
+            namedThreads("atomix-cluster-broadcast", LOGGER));
+    private volatile ScheduledFuture<?> broadcastFuture;
+    private final Consumer<byte[]> broadcastListener =
+            message -> broadcastScheduler.execute(() -> handleBroadcastMessage(message));
+
+    private final Map<NodeId, Node> nodes = Maps.newConcurrentMap();
+    private final AtomicLongMap<NodeId> updateTimes = AtomicLongMap.create();
+
+    public MulticastDiscoveryProvider() {
+        this(new MulticastDiscoveryConfig());
+    }
+
+    public MulticastDiscoveryProvider(MulticastDiscoveryConfig config) {
+        this.config = checkNotNull(config);
     }
 
     @Override
-    public MulticastDiscoveryConfig newConfig() {
-      return new MulticastDiscoveryConfig();
+    public MulticastDiscoveryConfig config() {
+        return config;
     }
 
     @Override
-    public NodeDiscoveryProvider newProvider(MulticastDiscoveryConfig config) {
-      return new MulticastDiscoveryProvider(config);
+    public Set<Node> getNodes() {
+        return ImmutableSet.copyOf(nodes.values());
     }
-  }
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(MulticastDiscoveryProvider.class);
-  private static final Serializer SERIALIZER = Serializer.builder()
-      .addType(Node.class)
-      .addType(NodeId.class)
-      .addSerializer(new AddressSerializer(), Address.class)
-      .build();
-
-  private static final String DISCOVERY_SUBJECT = "atomix-discovery";
-
-  private final MulticastDiscoveryConfig config;
-  private volatile BootstrapService bootstrap;
-
-  private final ScheduledExecutorService broadcastScheduler = Executors.newSingleThreadScheduledExecutor(
-      namedThreads("atomix-cluster-broadcast", LOGGER));
-  private volatile ScheduledFuture<?> broadcastFuture;
-  private final Consumer<byte[]> broadcastListener = message -> broadcastScheduler.execute(() -> handleBroadcastMessage(message));
-
-  private final Map<NodeId, Node> nodes = Maps.newConcurrentMap();
-  private final AtomicLongMap<NodeId> updateTimes = AtomicLongMap.create();
-
-  public MulticastDiscoveryProvider() {
-    this(new MulticastDiscoveryConfig());
-  }
-
-  public MulticastDiscoveryProvider(MulticastDiscoveryConfig config) {
-    this.config = checkNotNull(config);
-  }
-
-  @Override
-  public MulticastDiscoveryConfig config() {
-    return config;
-  }
-
-  @Override
-  public Set<Node> getNodes() {
-    return ImmutableSet.copyOf(nodes.values());
-  }
-
-  private void handleBroadcastMessage(byte[] message) {
-    Node node = SERIALIZER.decode(message);
-    Node oldNode = nodes.put(node.id(), node);
-    if (oldNode != null && !oldNode.id().equals(node.id())) {
-      post(new NodeDiscoveryEvent(NodeDiscoveryEvent.Type.LEAVE, oldNode));
-      post(new NodeDiscoveryEvent(NodeDiscoveryEvent.Type.JOIN, node));
-    } else if (oldNode == null) {
-      post(new NodeDiscoveryEvent(NodeDiscoveryEvent.Type.JOIN, node));
+    // TODO: 2018/12/06 by zmyer
+    private void handleBroadcastMessage(byte[] message) {
+        Node node = SERIALIZER.decode(message);
+        Node oldNode = nodes.put(node.id(), node);
+        if (oldNode != null && !oldNode.id().equals(node.id())) {
+            post(new NodeDiscoveryEvent(NodeDiscoveryEvent.Type.LEAVE, oldNode));
+            post(new NodeDiscoveryEvent(NodeDiscoveryEvent.Type.JOIN, node));
+        } else if (oldNode == null) {
+            post(new NodeDiscoveryEvent(NodeDiscoveryEvent.Type.JOIN, node));
+        }
+        updateTimes.put(node.id(), System.currentTimeMillis());
     }
-    updateTimes.put(node.id(), System.currentTimeMillis());
-  }
 
-  private void broadcastNode(Node localNode) {
-    bootstrap.getBroadcastService().broadcast(DISCOVERY_SUBJECT, SERIALIZER.encode(localNode));
-    expireNodes();
-  }
-
-  private void expireNodes() {
-    Iterator<Map.Entry<NodeId, Node>> iterator = nodes.entrySet().iterator();
-    while (iterator.hasNext()) {
-      Map.Entry<NodeId, Node> entry = iterator.next();
-      if (System.currentTimeMillis() - updateTimes.get(entry.getKey()) > config.getFailureTimeout().toMillis()) {
-        iterator.remove();
-        post(new NodeDiscoveryEvent(NodeDiscoveryEvent.Type.LEAVE, entry.getValue()));
-      }
+    // TODO: 2018/12/06 by zmyer
+    private void broadcastNode(Node localNode) {
+        bootstrap.getBroadcastService().broadcast(DISCOVERY_SUBJECT, SERIALIZER.encode(localNode));
+        expireNodes();
     }
-  }
 
-  @Override
-  public CompletableFuture<Void> join(BootstrapService bootstrap, Node localNode) {
-    if (nodes.putIfAbsent(localNode.id(), localNode) == null) {
-      this.bootstrap = bootstrap;
-      post(new NodeDiscoveryEvent(NodeDiscoveryEvent.Type.JOIN, localNode));
-      bootstrap.getBroadcastService().addListener(DISCOVERY_SUBJECT, broadcastListener);
-      broadcastFuture = broadcastScheduler.scheduleAtFixedRate(
-          () -> broadcastNode(localNode),
-          config.getBroadcastInterval().toMillis(),
-          config.getBroadcastInterval().toMillis(),
-          TimeUnit.MILLISECONDS);
-      broadcastNode(localNode);
-      LOGGER.info("Joined");
+    // TODO: 2018/12/06 by zmyer
+    private void expireNodes() {
+        Iterator<Map.Entry<NodeId, Node>> iterator = nodes.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<NodeId, Node> entry = iterator.next();
+            if (System.currentTimeMillis() - updateTimes.get(entry.getKey()) > config.getFailureTimeout().toMillis()) {
+                iterator.remove();
+                post(new NodeDiscoveryEvent(NodeDiscoveryEvent.Type.LEAVE, entry.getValue()));
+            }
+        }
     }
-    return CompletableFuture.completedFuture(null);
-  }
 
-  @Override
-  public CompletableFuture<Void> leave(Node localNode) {
-    if (nodes.remove(localNode.id()) != null) {
-      post(new NodeDiscoveryEvent(NodeDiscoveryEvent.Type.LEAVE, localNode));
-      bootstrap.getBroadcastService().removeListener(DISCOVERY_SUBJECT, broadcastListener);
-      ScheduledFuture<?> broadcastFuture = this.broadcastFuture;
-      if (broadcastFuture != null) {
-        broadcastFuture.cancel(false);
-      }
-      LOGGER.info("Left");
+    // TODO: 2018/12/06 by zmyer
+    @Override
+    public CompletableFuture<Void> join(BootstrapService bootstrap, Node localNode) {
+        if (nodes.putIfAbsent(localNode.id(), localNode) == null) {
+            this.bootstrap = bootstrap;
+            post(new NodeDiscoveryEvent(NodeDiscoveryEvent.Type.JOIN, localNode));
+            bootstrap.getBroadcastService().addListener(DISCOVERY_SUBJECT, broadcastListener);
+            broadcastFuture = broadcastScheduler.scheduleAtFixedRate(
+                    () -> broadcastNode(localNode),
+                    config.getBroadcastInterval().toMillis(),
+                    config.getBroadcastInterval().toMillis(),
+                    TimeUnit.MILLISECONDS);
+            broadcastNode(localNode);
+            LOGGER.info("Joined");
+        }
+        return CompletableFuture.completedFuture(null);
     }
-    return CompletableFuture.completedFuture(null);
-  }
+
+    @Override
+    public CompletableFuture<Void> leave(Node localNode) {
+        if (nodes.remove(localNode.id()) != null) {
+            post(new NodeDiscoveryEvent(NodeDiscoveryEvent.Type.LEAVE, localNode));
+            bootstrap.getBroadcastService().removeListener(DISCOVERY_SUBJECT, broadcastListener);
+            ScheduledFuture<?> broadcastFuture = this.broadcastFuture;
+            if (broadcastFuture != null) {
+                broadcastFuture.cancel(false);
+            }
+            LOGGER.info("Left");
+        }
+        return CompletableFuture.completedFuture(null);
+    }
 }

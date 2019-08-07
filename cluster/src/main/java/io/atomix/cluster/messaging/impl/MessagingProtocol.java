@@ -21,27 +21,28 @@ import io.netty.handler.codec.MessageToByteEncoder;
 /**
  * Messaging protocol.
  */
+// TODO: 2018/12/06 by zmyer
 public interface MessagingProtocol {
 
-  /**
-   * Returns the protocol version.
-   *
-   * @return the protocol version
-   */
-  ProtocolVersion version();
+    /**
+     * Returns the protocol version.
+     *
+     * @return the protocol version
+     */
+    ProtocolVersion version();
 
-  /**
-   * Returns a new message encoder.
-   *
-   * @return a new message encoder
-   */
-  MessageToByteEncoder<Object> newEncoder();
+    /**
+     * Returns a new message encoder.
+     *
+     * @return a new message encoder
+     */
+    MessageToByteEncoder<Object> newEncoder();
 
-  /**
-   * Returns a new message decoder.
-   *
-   * @return a new message decoder
-   */
-  ByteToMessageDecoder newDecoder();
+    /**
+     * Returns a new message decoder.
+     *
+     * @return a new message decoder
+     */
+    ByteToMessageDecoder newDecoder();
 
 }

@@ -23,10 +23,10 @@ import io.atomix.utils.ConfiguredType;
 // TODO: 2018/7/30 by zmyer
 public interface PrimitiveProtocol {
 
-  /**
-   * Distributed primitive protocol type.
-   */
-  interface Type<C extends PrimitiveProtocolConfig<C>> extends ConfiguredType<C>, Comparable<Type<C>> {
+    /**
+     * Distributed primitive protocol type.
+     */
+    interface Type<C extends PrimitiveProtocolConfig<C>> extends ConfiguredType<C>, Comparable<Type<C>> {
 
         /**
          * Creates a new protocol instance.

@@ -27,43 +27,44 @@ import static com.google.common.base.MoreObjects.toStringHelper;
 /**
  * Session ID generator primitive type.
  */
+// TODO: 2018/12/07 by zmyer
 public class SessionIdGeneratorType implements PrimitiveType {
-  private static final String NAME = "SESSION_ID_GENERATOR";
-  private static final SessionIdGeneratorType TYPE = new SessionIdGeneratorType();
+    private static final String NAME = "SESSION_ID_GENERATOR";
+    private static final SessionIdGeneratorType TYPE = new SessionIdGeneratorType();
 
-  /**
-   * Returns a new session ID generator type.
-   *
-   * @return a new session ID generator type
-   */
-  public static SessionIdGeneratorType instance() {
-    return TYPE;
-  }
+    /**
+     * Returns a new session ID generator type.
+     *
+     * @return a new session ID generator type
+     */
+    public static SessionIdGeneratorType instance() {
+        return TYPE;
+    }
 
-  @Override
-  public String name() {
-    return NAME;
-  }
+    @Override
+    public String name() {
+        return NAME;
+    }
 
-  @Override
-  public PrimitiveService newService(ServiceConfig config) {
-    return new SessionIdGeneratorService();
-  }
+    @Override
+    public PrimitiveService newService(ServiceConfig config) {
+        return new SessionIdGeneratorService();
+    }
 
-  @Override
-  public PrimitiveConfig newConfig() {
-    throw new UnsupportedOperationException();
-  }
+    @Override
+    public PrimitiveConfig newConfig() {
+        throw new UnsupportedOperationException();
+    }
 
-  @Override
-  public PrimitiveBuilder newBuilder(String name, PrimitiveConfig config, PrimitiveManagementService managementService) {
-    throw new UnsupportedOperationException();
-  }
+    @Override
+    public PrimitiveBuilder newBuilder(String name, PrimitiveConfig config, PrimitiveManagementService managementService) {
+        throw new UnsupportedOperationException();
+    }
 
-  @Override
-  public String toString() {
-    return toStringHelper(this)
-        .add("name", name())
-        .toString();
-  }
+    @Override
+    public String toString() {
+        return toStringHelper(this)
+                .add("name", name())
+                .toString();
+    }
 }

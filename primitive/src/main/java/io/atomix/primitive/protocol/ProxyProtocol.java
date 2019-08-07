@@ -23,29 +23,30 @@ import io.atomix.primitive.service.ServiceConfig;
 /**
  * State machine replication-based primitive protocol.
  */
+// TODO: 2018/12/07 by zmyer
 public interface ProxyProtocol extends PrimitiveProtocol {
 
-  /**
-   * Returns the protocol partition group name.
-   *
-   * @return the protocol partition group name
-   */
-  String group();
+    /**
+     * Returns the protocol partition group name.
+     *
+     * @return the protocol partition group name
+     */
+    String group();
 
-  /**
-   * Returns a new primitive proxy for the given partition group.
-   *
-   * @param primitiveName    the primitive name
-   * @param primitiveType    the primitive type
-   * @param serviceType      the primitive service type
-   * @param serviceConfig    the service configuration
-   * @param partitionService the partition service
-   * @return the proxy for the given partition group
-   */
-  <S> ProxyClient<S> newProxy(
-      String primitiveName,
-      PrimitiveType primitiveType,
-      Class<S> serviceType,
-      ServiceConfig serviceConfig,
-      PartitionService partitionService);
+    /**
+     * Returns a new primitive proxy for the given partition group.
+     *
+     * @param primitiveName    the primitive name
+     * @param primitiveType    the primitive type
+     * @param serviceType      the primitive service type
+     * @param serviceConfig    the service configuration
+     * @param partitionService the partition service
+     * @return the proxy for the given partition group
+     */
+    <S> ProxyClient<S> newProxy(
+            String primitiveName,
+            PrimitiveType primitiveType,
+            Class<S> serviceType,
+            ServiceConfig serviceConfig,
+            PartitionService partitionService);
 }

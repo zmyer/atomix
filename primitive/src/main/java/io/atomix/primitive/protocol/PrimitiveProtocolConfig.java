@@ -20,5 +20,7 @@ import io.atomix.utils.config.TypedConfig;
 /**
  * Primitive protocol configuration.
  */
-public abstract class PrimitiveProtocolConfig<C extends PrimitiveProtocolConfig<C>> implements TypedConfig<PrimitiveProtocol.Type> {
+// TODO: 2018/12/07 by zmyer
+public abstract class PrimitiveProtocolConfig<C extends PrimitiveProtocolConfig<C>>
+        implements TypedConfig<PrimitiveProtocol.Type> {
 }

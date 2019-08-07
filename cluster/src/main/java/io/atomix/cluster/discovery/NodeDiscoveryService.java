@@ -23,13 +23,14 @@ import java.util.Set;
 /**
  * Node discovery service.
  */
+// TODO: 2018/12/06 by zmyer
 public interface NodeDiscoveryService extends ListenerService<NodeDiscoveryEvent, NodeDiscoveryEventListener> {
 
-  /**
-   * Returns the set of active nodes.
-   *
-   * @return the set of active nodes
-   */
-  Set<Node> getNodes();
+    /**
+     * Returns the set of active nodes.
+     *
+     * @return the set of active nodes
+     */
+    Set<Node> getNodes();
 
 }

@@ -22,33 +22,33 @@ package io.atomix.utils.serializer;
 // TODO: 2018/7/30 by zmyer
 public interface Serializer {
 
-  /**
-   * Creates a new serializer builder.
-   *
-   * @return a new serializer builder
-   */
-  static SerializerBuilder builder() {
-    return new SerializerBuilder();
-  }
+    /**
+     * Creates a new serializer builder.
+     *
+     * @return a new serializer builder
+     */
+    static SerializerBuilder builder() {
+        return new SerializerBuilder();
+    }
 
-  /**
-   * Creates a new serializer builder.
-   *
-   * @param name the serializer name
-   * @return a new serializer builder
-   */
-  static SerializerBuilder builder(String name) {
-    return new SerializerBuilder(name);
-  }
+    /**
+     * Creates a new serializer builder.
+     *
+     * @param name the serializer name
+     * @return a new serializer builder
+     */
+    static SerializerBuilder builder(String name) {
+        return new SerializerBuilder(name);
+    }
 
-  /**
-   * Serialize the specified object.
-   *
-   * @param object object to serialize.
-   * @param <T>    encoded type
-   * @return serialized bytes.
-   */
-  <T> byte[] encode(T object);
+    /**
+     * Serialize the specified object.
+     *
+     * @param object object to serialize.
+     * @param <T>    encoded type
+     * @return serialized bytes.
+     */
+    <T> byte[] encode(T object);
 
     /**
      * Deserialize the specified bytes.

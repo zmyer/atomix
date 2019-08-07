@@ -28,40 +28,40 @@ import java.util.concurrent.Executor;
  */
 public interface DistributedMap<K, V> extends SyncPrimitive, Map<K, V> {
 
-  /**
-   * Registers the specified listener to be notified whenever the map is updated.
-   *
-   * @param listener listener to notify about map events
-   */
-  default void addListener(MapEventListener<K, V> listener) {
-    addListener(listener, MoreExecutors.directExecutor());
-  }
+    /**
+     * Registers the specified listener to be notified whenever the map is updated.
+     *
+     * @param listener listener to notify about map events
+     */
+    default void addListener(MapEventListener<K, V> listener) {
+        addListener(listener, MoreExecutors.directExecutor());
+    }
 
-  /**
-   * Registers the specified listener to be notified whenever the map is updated.
-   *
-   * @param listener listener to notify about map events
-   * @param executor executor to use for handling incoming map events
-   */
-  void addListener(MapEventListener<K, V> listener, Executor executor);
+    /**
+     * Registers the specified listener to be notified whenever the map is updated.
+     *
+     * @param listener listener to notify about map events
+     * @param executor executor to use for handling incoming map events
+     */
+    void addListener(MapEventListener<K, V> listener, Executor executor);
 
-  /**
-   * Unregisters the specified listener such that it will no longer
-   * receive map change notifications.
-   *
-   * @param listener listener to unregister
-   */
-  void removeListener(MapEventListener<K, V> listener);
+    /**
+     * Unregisters the specified listener such that it will no longer
+     * receive map change notifications.
+     *
+     * @param listener listener to unregister
+     */
+    void removeListener(MapEventListener<K, V> listener);
 
-  @Override
-  DistributedSet<K> keySet();
+    @Override
+    DistributedSet<K> keySet();
 
-  @Override
-  DistributedSet<Entry<K, V>> entrySet();
+    @Override
+    DistributedSet<Entry<K, V>> entrySet();
 
-  @Override
-  DistributedCollection<V> values();
+    @Override
+    DistributedCollection<V> values();
 
-  @Override
-  AsyncDistributedMap<K, V> async();
+    @Override
+    AsyncDistributedMap<K, V> async();
 }

@@ -21,6 +21,7 @@ import io.atomix.utils.misc.ArraySizeHashPrinter;
 /**
  * Internal reply message.
  */
+// TODO: 2018/12/06 by zmyer
 public final class ProtocolReply extends ProtocolMessage {
 
     /**
@@ -73,16 +74,16 @@ public final class ProtocolReply extends ProtocolMessage {
          */
         public static Status forId(int id) {
             switch (id) {
-            case 0:
-                return OK;
-            case 1:
-                return ERROR_NO_HANDLER;
-            case 2:
-                return ERROR_HANDLER_EXCEPTION;
-            case 3:
-                return PROTOCOL_EXCEPTION;
-            default:
-                throw new IllegalArgumentException("Unknown status ID " + id);
+                case 0:
+                    return OK;
+                case 1:
+                    return ERROR_NO_HANDLER;
+                case 2:
+                    return ERROR_HANDLER_EXCEPTION;
+                case 3:
+                    return PROTOCOL_EXCEPTION;
+                default:
+                    throw new IllegalArgumentException("Unknown status ID " + id);
             }
         }
     }

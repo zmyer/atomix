@@ -31,49 +31,50 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * Default node discovery service.
  */
+// TODO: 2018/12/06 by zmyer
 public class DefaultNodeDiscoveryService
-    extends AbstractListenerManager<NodeDiscoveryEvent, NodeDiscoveryEventListener>
-    implements ManagedNodeDiscoveryService {
+        extends AbstractListenerManager<NodeDiscoveryEvent, NodeDiscoveryEventListener>
+        implements ManagedNodeDiscoveryService {
 
-  private final BootstrapService bootstrapService;
-  private final Node localNode;
-  private final NodeDiscoveryProvider provider;
-  private final AtomicBoolean started = new AtomicBoolean();
-  private final NodeDiscoveryEventListener discoveryEventListener = this::post;
+    private final BootstrapService bootstrapService;
+    private final Node localNode;
+    private final NodeDiscoveryProvider provider;
+    private final AtomicBoolean started = new AtomicBoolean();
+    private final NodeDiscoveryEventListener discoveryEventListener = this::post;
 
-  public DefaultNodeDiscoveryService(BootstrapService bootstrapService, Node localNode, NodeDiscoveryProvider provider) {
-    this.bootstrapService = bootstrapService;
-    this.localNode = localNode;
-    this.provider = provider;
-  }
-
-  @Override
-  public Set<Node> getNodes() {
-    return provider.getNodes();
-  }
-
-  @Override
-  public CompletableFuture<NodeDiscoveryService> start() {
-    if (started.compareAndSet(false, true)) {
-      provider.addListener(discoveryEventListener);
-      Node node = Node.builder().withId(localNode.id().id()).withAddress(localNode.address()).build();
-      return provider.join(bootstrapService, node).thenApply(v -> this);
+    public DefaultNodeDiscoveryService(BootstrapService bootstrapService, Node localNode, NodeDiscoveryProvider provider) {
+        this.bootstrapService = bootstrapService;
+        this.localNode = localNode;
+        this.provider = provider;
     }
-    return CompletableFuture.completedFuture(this);
-  }
 
-  @Override
-  public boolean isRunning() {
-    return started.get();
-  }
-
-  @Override
-  public CompletableFuture<Void> stop() {
-    if (started.compareAndSet(true, false)) {
-      return provider.leave(localNode).thenRun(() -> {
-        provider.removeListener(discoveryEventListener);
-      });
+    @Override
+    public Set<Node> getNodes() {
+        return provider.getNodes();
     }
-    return CompletableFuture.completedFuture(null);
-  }
+
+    @Override
+    public CompletableFuture<NodeDiscoveryService> start() {
+        if (started.compareAndSet(false, true)) {
+            provider.addListener(discoveryEventListener);
+            Node node = Node.builder().withId(localNode.id().id()).withAddress(localNode.address()).build();
+            return provider.join(bootstrapService, node).thenApply(v -> this);
+        }
+        return CompletableFuture.completedFuture(this);
+    }
+
+    @Override
+    public boolean isRunning() {
+        return started.get();
+    }
+
+    @Override
+    public CompletableFuture<Void> stop() {
+        if (started.compareAndSet(true, false)) {
+            return provider.leave(localNode).thenRun(() -> {
+                provider.removeListener(discoveryEventListener);
+            });
+        }
+        return CompletableFuture.completedFuture(null);
+    }
 }

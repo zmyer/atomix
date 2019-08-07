@@ -24,27 +24,28 @@ import io.atomix.cluster.messaging.UnicastService;
  * <p>
  * This service provides the low level APIs that can be used to bootstrap a cluster.
  */
+// TODO: 2018/12/06 by zmyer
 public interface BootstrapService {
 
-  /**
-   * Returns the cluster messaging service.
-   *
-   * @return the cluster messaging service
-   */
-  MessagingService getMessagingService();
+    /**
+     * Returns the cluster messaging service.
+     *
+     * @return the cluster messaging service
+     */
+    MessagingService getMessagingService();
 
-  /**
-   * Returns the cluster unicast service.
-   *
-   * @return the cluster unicast service
-   */
-  UnicastService getUnicastService();
+    /**
+     * Returns the cluster unicast service.
+     *
+     * @return the cluster unicast service
+     */
+    UnicastService getUnicastService();
 
-  /**
-   * Returns the cluster broadcast service
-   *
-   * @return the cluster broadcast service
-   */
-  BroadcastService getBroadcastService();
+    /**
+     * Returns the cluster broadcast service
+     *
+     * @return the cluster broadcast service
+     */
+    BroadcastService getBroadcastService();
 
 }

@@ -47,34 +47,34 @@ public class DefaultClusterMembershipService
 
     private static final Logger LOGGER = getLogger(DefaultClusterMembershipService.class);
 
-  private static final String HEARTBEAT_MESSAGE = "atomix-cluster-membership";
+    private static final String HEARTBEAT_MESSAGE = "atomix-cluster-membership";
 
-  private final ManagedNodeDiscoveryService discoveryService;
-  private final BootstrapService bootstrapService;
-  private final GroupMembershipProtocol protocol;
+    private final ManagedNodeDiscoveryService discoveryService;
+    private final BootstrapService bootstrapService;
+    private final GroupMembershipProtocol protocol;
 
-  private final AtomicBoolean started = new AtomicBoolean();
-  private final StatefulMember localMember;
-  private final GroupMembershipEventListener membershipEventListener = this::handleMembershipEvent;
+    private final AtomicBoolean started = new AtomicBoolean();
+    private final StatefulMember localMember;
+    private final GroupMembershipEventListener membershipEventListener = this::handleMembershipEvent;
 
-  public DefaultClusterMembershipService(
-      Member localMember,
-      Version version,
-      ManagedNodeDiscoveryService discoveryService,
-      BootstrapService bootstrapService,
-      GroupMembershipProtocol protocol) {
-    this.discoveryService = checkNotNull(discoveryService, "discoveryService cannot be null");
-    this.bootstrapService = checkNotNull(bootstrapService, "bootstrapService cannot be null");
-    this.protocol = checkNotNull(protocol, "protocol cannot be null");
-    this.localMember = new StatefulMember(
-        localMember.id(),
-        localMember.address(),
-        localMember.zone(),
-        localMember.rack(),
-        localMember.host(),
-        localMember.properties(),
-        version);
-  }
+    public DefaultClusterMembershipService(
+            Member localMember,
+            Version version,
+            ManagedNodeDiscoveryService discoveryService,
+            BootstrapService bootstrapService,
+            GroupMembershipProtocol protocol) {
+        this.discoveryService = checkNotNull(discoveryService, "discoveryService cannot be null");
+        this.bootstrapService = checkNotNull(bootstrapService, "bootstrapService cannot be null");
+        this.protocol = checkNotNull(protocol, "protocol cannot be null");
+        this.localMember = new StatefulMember(
+                localMember.id(),
+                localMember.address(),
+                localMember.zone(),
+                localMember.rack(),
+                localMember.host(),
+                localMember.properties(),
+                version);
+    }
 
     // TODO: 2018/7/31 by zmyer
     @Override
@@ -82,57 +82,59 @@ public class DefaultClusterMembershipService
         return localMember;
     }
 
-  @Override
-  public Set<Member> getMembers() {
-    return protocol.getMembers();
-  }
-
-  @Override
-  public Member getMember(MemberId memberId) {
-    return protocol.getMember(memberId);
-  }
-
-  /**
-   * Handles a group membership event.
-   */
-  private void handleMembershipEvent(GroupMembershipEvent event) {
-    post(new ClusterMembershipEvent(ClusterMembershipEvent.Type.valueOf(event.type().name()), event.member()));
-  }
-
-  @Override
-  public CompletableFuture<ClusterMembershipService> start() {
-    if (started.compareAndSet(false, true)) {
-      protocol.addListener(membershipEventListener);
-      return discoveryService.start().thenCompose(v -> {
-        localMember.setActive(true);
-        localMember.setReachable(true);
-        return protocol.join(bootstrapService, discoveryService, localMember);
-      }).thenApply(v -> {
-        LOGGER.info("Started");
-        return this;
-      });
+    @Override
+    public Set<Member> getMembers() {
+        return protocol.getMembers();
     }
-    return CompletableFuture.completedFuture(null);
-  }
+
+    @Override
+    public Member getMember(MemberId memberId) {
+        return protocol.getMember(memberId);
+    }
+
+    /**
+     * Handles a group membership event.
+     */
+    // TODO: 2018/12/06 by zmyer
+    private void handleMembershipEvent(GroupMembershipEvent event) {
+        post(new ClusterMembershipEvent(ClusterMembershipEvent.Type.valueOf(event.type().name()), event.member()));
+    }
+
+    // TODO: 2018/12/06 by zmyer
+    @Override
+    public CompletableFuture<ClusterMembershipService> start() {
+        if (started.compareAndSet(false, true)) {
+            protocol.addListener(membershipEventListener);
+            return discoveryService.start().thenCompose(v -> {
+                localMember.setActive(true);
+                localMember.setReachable(true);
+                return protocol.join(bootstrapService, discoveryService, localMember);
+            }).thenApply(v -> {
+                LOGGER.info("Started");
+                return this;
+            });
+        }
+        return CompletableFuture.completedFuture(null);
+    }
 
     @Override
     public boolean isRunning() {
         return started.get();
     }
 
-  @Override
-  public CompletableFuture<Void> stop() {
-    if (started.compareAndSet(true, false)) {
-      return protocol.leave(localMember)
-          .thenCompose(v -> discoveryService.stop())
-          .thenRun(() -> {
-            localMember.setActive(false);
-            localMember.setReachable(false);
-            bootstrapService.getMessagingService().unregisterHandler(HEARTBEAT_MESSAGE);
-            protocol.removeListener(membershipEventListener);
-            LOGGER.info("Stopped");
-          });
+    @Override
+    public CompletableFuture<Void> stop() {
+        if (started.compareAndSet(true, false)) {
+            return protocol.leave(localMember)
+                    .thenCompose(v -> discoveryService.stop())
+                    .thenRun(() -> {
+                        localMember.setActive(false);
+                        localMember.setReachable(false);
+                        bootstrapService.getMessagingService().unregisterHandler(HEARTBEAT_MESSAGE);
+                        protocol.removeListener(membershipEventListener);
+                        LOGGER.info("Stopped");
+                    });
+        }
+        return CompletableFuture.completedFuture(null);
     }
-    return CompletableFuture.completedFuture(null);
-  }
 }

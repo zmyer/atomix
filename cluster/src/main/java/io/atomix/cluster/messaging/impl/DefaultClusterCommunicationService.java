@@ -60,7 +60,7 @@ public class DefaultClusterCommunicationService implements ManagedClusterCommuni
 
     // TODO: 2018/7/31 by zmyer
     public DefaultClusterCommunicationService(ClusterMembershipService membershipService,
-            MessagingService messagingService) {
+                                              MessagingService messagingService) {
         this.membershipService = checkNotNull(membershipService, "clusterService cannot be null");
         this.messagingService = checkNotNull(messagingService, "messagingService cannot be null");
     }
@@ -141,7 +141,7 @@ public class DefaultClusterCommunicationService implements ManagedClusterCommuni
 
     // TODO: 2018/7/31 by zmyer
     private CompletableFuture<byte[]> sendAndReceive(String subject, byte[] payload, MemberId toMemberId,
-            Duration timeout) {
+                                                     Duration timeout) {
         final Member member = membershipService.getMember(toMemberId);
         if (member == null) {
             return Futures.exceptionalFuture(CONNECT_EXCEPTION);
@@ -157,10 +157,10 @@ public class DefaultClusterCommunicationService implements ManagedClusterCommuni
     // TODO: 2018/7/31 by zmyer
     @Override
     public <M, R> CompletableFuture<Void> subscribe(String subject,
-            Function<byte[], M> decoder,
-            Function<M, R> handler,
-            Function<R, byte[]> encoder,
-            Executor executor) {
+                                                    Function<byte[], M> decoder,
+                                                    Function<M, R> handler,
+                                                    Function<R, byte[]> encoder,
+                                                    Executor executor) {
         messagingService.registerHandler(subject,
                 new InternalMessageResponder<M, R>(decoder, encoder, m -> {
                     final CompletableFuture<R> responseFuture = new CompletableFuture<>();
@@ -179,9 +179,9 @@ public class DefaultClusterCommunicationService implements ManagedClusterCommuni
     // TODO: 2018/8/1 by zmyer
     @Override
     public <M, R> CompletableFuture<Void> subscribe(String subject,
-            Function<byte[], M> decoder,
-            Function<M, CompletableFuture<R>> handler,
-            Function<R, byte[]> encoder) {
+                                                    Function<byte[], M> decoder,
+                                                    Function<M, CompletableFuture<R>> handler,
+                                                    Function<R, byte[]> encoder) {
         messagingService.registerHandler(subject, new InternalMessageResponder<>(decoder, encoder, handler));
         return CompletableFuture.completedFuture(null);
     }
@@ -189,9 +189,9 @@ public class DefaultClusterCommunicationService implements ManagedClusterCommuni
     // TODO: 2018/7/31 by zmyer
     @Override
     public <M> CompletableFuture<Void> subscribe(String subject,
-            Function<byte[], M> decoder,
-            Consumer<M> handler,
-            Executor executor) {
+                                                 Function<byte[], M> decoder,
+                                                 Consumer<M> handler,
+                                                 Executor executor) {
         messagingService.registerHandler(subject,
                 new InternalMessageConsumer<>(decoder, handler),
                 executor);
@@ -200,7 +200,7 @@ public class DefaultClusterCommunicationService implements ManagedClusterCommuni
 
     @Override
     public <M> CompletableFuture<Void> subscribe(String subject, Function<byte[], M> decoder,
-            BiConsumer<Address, M> handler, Executor executor) {
+                                                 BiConsumer<Address, M> handler, Executor executor) {
         messagingService.registerHandler(subject,
                 new InternalMessageBiConsumer<>(decoder, handler),
                 executor);
@@ -239,8 +239,8 @@ public class DefaultClusterCommunicationService implements ManagedClusterCommuni
 
         // TODO: 2018/7/31 by zmyer
         InternalMessageResponder(Function<byte[], M> decoder,
-                Function<R, byte[]> encoder,
-                Function<M, CompletableFuture<R>> handler) {
+                                 Function<R, byte[]> encoder,
+                                 Function<M, CompletableFuture<R>> handler) {
             this.decoder = decoder;
             this.encoder = encoder;
             this.handler = handler;

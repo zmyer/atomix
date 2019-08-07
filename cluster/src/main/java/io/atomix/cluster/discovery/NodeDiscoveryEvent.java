@@ -21,37 +21,38 @@ import io.atomix.utils.event.AbstractEvent;
 /**
  * Node discovery event.
  */
+// TODO: 2018/12/06 by zmyer
 public class NodeDiscoveryEvent extends AbstractEvent<NodeDiscoveryEvent.Type, Node> {
 
-  /**
-   * Node discovery event type.
-   */
-  public enum Type {
     /**
-     * Indicates that the node joined the cluster.
+     * Node discovery event type.
      */
-    JOIN,
+    public enum Type {
+        /**
+         * Indicates that the node joined the cluster.
+         */
+        JOIN,
+
+        /**
+         * Indicates that the node left the cluster.
+         */
+        LEAVE,
+    }
+
+    public NodeDiscoveryEvent(Type type, Node subject) {
+        super(type, subject);
+    }
+
+    public NodeDiscoveryEvent(Type type, Node subject, long time) {
+        super(type, subject, time);
+    }
 
     /**
-     * Indicates that the node left the cluster.
+     * Returns the node.
+     *
+     * @return the node
      */
-    LEAVE,
-  }
-
-  public NodeDiscoveryEvent(Type type, Node subject) {
-    super(type, subject);
-  }
-
-  public NodeDiscoveryEvent(Type type, Node subject, long time) {
-    super(type, subject, time);
-  }
-
-  /**
-   * Returns the node.
-   *
-   * @return the node
-   */
-  public Node node() {
-    return subject();
-  }
+    public Node node() {
+        return subject();
+    }
 }

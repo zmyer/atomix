@@ -32,17 +32,17 @@ import java.util.List;
 // TODO: 2018/7/30 by zmyer
 public interface PartitionGroup extends Configured<PartitionGroupConfig> {
 
-  /**
-   * Partition group type.
-   */
-  interface Type<C extends PartitionGroupConfig<C>> extends ConfiguredType<C> {
-
     /**
-     * Returns the partition group namespace.
-     *
-     * @return the partition group namespace
+     * Partition group type.
      */
-    Namespace namespace();
+    interface Type<C extends PartitionGroupConfig<C>> extends ConfiguredType<C> {
+
+        /**
+         * Returns the partition group namespace.
+         *
+         * @return the partition group namespace
+         */
+        Namespace namespace();
 
         /**
          * Creates a new partition group instance.
@@ -74,12 +74,12 @@ public interface PartitionGroup extends Configured<PartitionGroupConfig> {
      */
     PrimitiveProtocol.Type protocol();
 
-  /**
-   * Returns a new primitive protocol.
-   *
-   * @return a new primitive protocol
-   */
-  ProxyProtocol newProtocol();
+    /**
+     * Returns a new primitive protocol.
+     *
+     * @return a new primitive protocol
+     */
+    ProxyProtocol newProtocol();
 
     /**
      * Returns a partition by ID.

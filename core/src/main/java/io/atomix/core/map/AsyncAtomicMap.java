@@ -59,6 +59,7 @@ import java.util.function.Predicate;
  * the returned future will be {@link CompletableFuture#complete completed} when the
  * operation finishes.
  */
+// TODO: 2018/12/07 by zmyer
 public interface AsyncAtomicMap<K, V> extends AsyncPrimitive, Transactional<MapUpdate<K, V>> {
 
     @Override
@@ -264,38 +265,38 @@ public interface AsyncAtomicMap<K, V> extends AsyncPrimitive, Transactional<MapU
      */
     CompletableFuture<Void> clear();
 
-  /**
-   * Returns a Set view of the keys contained in this map.
-   * This method differs from the behavior of java.util.Map.keySet() in that
-   * what is returned is a unmodifiable snapshot view of the keys in the ConsistentMap.
-   * Attempts to modify the returned set, whether direct or via its iterator,
-   * result in an UnsupportedOperationException.
-   *
-   * @return a set of the keys contained in this map
-   */
-  AsyncDistributedSet<K> keySet();
+    /**
+     * Returns a Set view of the keys contained in this map.
+     * This method differs from the behavior of java.util.Map.keySet() in that
+     * what is returned is a unmodifiable snapshot view of the keys in the ConsistentMap.
+     * Attempts to modify the returned set, whether direct or via its iterator,
+     * result in an UnsupportedOperationException.
+     *
+     * @return a set of the keys contained in this map
+     */
+    AsyncDistributedSet<K> keySet();
 
-  /**
-   * Returns the collection of values (and associated versions) contained in this map.
-   * This method differs from the behavior of java.util.Map.values() in that
-   * what is returned is a unmodifiable snapshot view of the values in the ConsistentMap.
-   * Attempts to modify the returned collection, whether direct or via its iterator,
-   * result in an UnsupportedOperationException.
-   *
-   * @return a collection of the values (and associated versions) contained in this map
-   */
-  AsyncDistributedCollection<Versioned<V>> values();
+    /**
+     * Returns the collection of values (and associated versions) contained in this map.
+     * This method differs from the behavior of java.util.Map.values() in that
+     * what is returned is a unmodifiable snapshot view of the values in the ConsistentMap.
+     * Attempts to modify the returned collection, whether direct or via its iterator,
+     * result in an UnsupportedOperationException.
+     *
+     * @return a collection of the values (and associated versions) contained in this map
+     */
+    AsyncDistributedCollection<Versioned<V>> values();
 
-  /**
-   * Returns the set of entries contained in this map.
-   * This method differs from the behavior of java.util.Map.entrySet() in that
-   * what is returned is a unmodifiable snapshot view of the entries in the ConsistentMap.
-   * Attempts to modify the returned set, whether direct or via its iterator,
-   * result in an UnsupportedOperationException.
-   *
-   * @return set of entries contained in this map.
-   */
-  AsyncDistributedSet<Entry<K, Versioned<V>>> entrySet();
+    /**
+     * Returns the set of entries contained in this map.
+     * This method differs from the behavior of java.util.Map.entrySet() in that
+     * what is returned is a unmodifiable snapshot view of the entries in the ConsistentMap.
+     * Attempts to modify the returned set, whether direct or via its iterator,
+     * result in an UnsupportedOperationException.
+     *
+     * @return set of entries contained in this map.
+     */
+    AsyncDistributedSet<Entry<K, Versioned<V>>> entrySet();
 
     /**
      * If the specified key is not already associated with a value associates
@@ -376,39 +377,39 @@ public interface AsyncAtomicMap<K, V> extends AsyncPrimitive, Transactional<MapU
      */
     CompletableFuture<Boolean> replace(K key, long oldVersion, V newValue);
 
-  /**
-   * Registers the specified listener to be notified whenever the map is updated.
-   *
-   * @param listener listener to notify about map events
-   * @return future that will be completed when the operation finishes
-   */
-  default CompletableFuture<Void> addListener(AtomicMapEventListener<K, V> listener) {
-    return addListener(listener, MoreExecutors.directExecutor());
-  }
+    /**
+     * Registers the specified listener to be notified whenever the map is updated.
+     *
+     * @param listener listener to notify about map events
+     * @return future that will be completed when the operation finishes
+     */
+    default CompletableFuture<Void> addListener(AtomicMapEventListener<K, V> listener) {
+        return addListener(listener, MoreExecutors.directExecutor());
+    }
 
-  /**
-   * Registers the specified listener to be notified whenever the map is updated.
-   *
-   * @param listener listener to notify about map events
-   * @param executor executor to use for handling incoming map events
-   * @return future that will be completed when the operation finishes
-   */
-  CompletableFuture<Void> addListener(AtomicMapEventListener<K, V> listener, Executor executor);
+    /**
+     * Registers the specified listener to be notified whenever the map is updated.
+     *
+     * @param listener listener to notify about map events
+     * @param executor executor to use for handling incoming map events
+     * @return future that will be completed when the operation finishes
+     */
+    CompletableFuture<Void> addListener(AtomicMapEventListener<K, V> listener, Executor executor);
 
-  /**
-   * Unregisters the specified listener such that it will no longer
-   * receive map change notifications.
-   *
-   * @param listener listener to unregister
-   * @return future that will be completed when the operation finishes
-   */
-  CompletableFuture<Void> removeListener(AtomicMapEventListener<K, V> listener);
+    /**
+     * Unregisters the specified listener such that it will no longer
+     * receive map change notifications.
+     *
+     * @param listener listener to unregister
+     * @return future that will be completed when the operation finishes
+     */
+    CompletableFuture<Void> removeListener(AtomicMapEventListener<K, V> listener);
 
-  @Override
-  default AtomicMap<K, V> sync() {
-    return sync(Duration.ofMillis(DistributedPrimitive.DEFAULT_OPERATION_TIMEOUT_MILLIS));
-  }
+    @Override
+    default AtomicMap<K, V> sync() {
+        return sync(Duration.ofMillis(DistributedPrimitive.DEFAULT_OPERATION_TIMEOUT_MILLIS));
+    }
 
-  @Override
-  AtomicMap<K, V> sync(Duration operationTimeout);
+    @Override
+    AtomicMap<K, V> sync(Duration operationTimeout);
 }

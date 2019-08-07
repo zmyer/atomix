@@ -22,6 +22,7 @@ import io.atomix.utils.net.Address;
 /**
  * Internal request message.
  */
+// TODO: 2018/12/06 by zmyer
 public final class ProtocolRequest extends ProtocolMessage {
     private final Address sender;
     private final String subject;

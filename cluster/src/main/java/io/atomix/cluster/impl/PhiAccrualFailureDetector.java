@@ -27,10 +27,10 @@ import static com.google.common.base.Preconditions.checkArgument;
  */
 // TODO: 2018/7/31 by zmyer
 public class PhiAccrualFailureDetector {
-  // Default value
-  private static final int DEFAULT_WINDOW_SIZE = 250;
-  private static final int DEFAULT_MIN_SAMPLES = 25;
-  private static final double DEFAULT_PHI_FACTOR = 1.0 / Math.log(10.0);
+    // Default value
+    private static final int DEFAULT_WINDOW_SIZE = 250;
+    private static final int DEFAULT_MIN_SAMPLES = 25;
+    private static final double DEFAULT_PHI_FACTOR = 1.0 / Math.log(10.0);
 
     private final int minSamples;
     private final double phiFactor;
@@ -82,57 +82,57 @@ public class PhiAccrualFailureDetector {
         report(System.currentTimeMillis());
     }
 
-  /**
-   * Report a new heart beat for the specified node id.
-   *
-   * @param arrivalTime arrival time
-   */
-  public void report(long arrivalTime) {
-    checkArgument(arrivalTime >= 0, "arrivalTime must not be negative");
-    long latestHeartbeat = history.latestHeartbeatTime();
-    history.samples().addValue(arrivalTime - latestHeartbeat);
-    history.setLatestHeartbeatTime(arrivalTime);
-  }
-
-  /**
-   * Compute phi for the specified node id.
-   *
-   * @return phi value
-   */
-  public double phi() {
-    long latestHeartbeat = history.latestHeartbeatTime();
-    DescriptiveStatistics samples = history.samples();
-    if (samples.getN() < minSamples) {
-      return 0.0;
+    /**
+     * Report a new heart beat for the specified node id.
+     *
+     * @param arrivalTime arrival time
+     */
+    public void report(long arrivalTime) {
+        checkArgument(arrivalTime >= 0, "arrivalTime must not be negative");
+        long latestHeartbeat = history.latestHeartbeatTime();
+        history.samples().addValue(arrivalTime - latestHeartbeat);
+        history.setLatestHeartbeatTime(arrivalTime);
     }
-    return computePhi(samples, latestHeartbeat, System.currentTimeMillis());
-  }
 
-  /**
-   * Computes the phi value from the given samples.
-   * <p>
-   * The original phi value in Hayashibara's paper is calculated based on a normal distribution.
-   * Here, we calculate it based on an exponential distribution.
-   *
-   * @param samples       the samples from which to compute phi
-   * @param lastHeartbeat the last heartbeat
-   * @param currentTime   the current time
-   * @return phi
-   */
-  private double computePhi(DescriptiveStatistics samples, long lastHeartbeat, long currentTime) {
-    long size = samples.getN();
-    long t = currentTime - lastHeartbeat;
-    return (size > 0)
-        ? phiFactor * t / samples.getMean()
-        : 100;
-  }
+    /**
+     * Compute phi for the specified node id.
+     *
+     * @return phi value
+     */
+    public double phi() {
+        long latestHeartbeat = history.latestHeartbeatTime();
+        DescriptiveStatistics samples = history.samples();
+        if (samples.getN() < minSamples) {
+            return 0.0;
+        }
+        return computePhi(samples, latestHeartbeat, System.currentTimeMillis());
+    }
 
-  /**
-   * Stores the history of heartbeats for a node.
-   */
-  private static class History {
-    private final DescriptiveStatistics samples;
-    long lastHeartbeatTime = System.currentTimeMillis();
+    /**
+     * Computes the phi value from the given samples.
+     * <p>
+     * The original phi value in Hayashibara's paper is calculated based on a normal distribution.
+     * Here, we calculate it based on an exponential distribution.
+     *
+     * @param samples       the samples from which to compute phi
+     * @param lastHeartbeat the last heartbeat
+     * @param currentTime   the current time
+     * @return phi
+     */
+    private double computePhi(DescriptiveStatistics samples, long lastHeartbeat, long currentTime) {
+        long size = samples.getN();
+        long t = currentTime - lastHeartbeat;
+        return (size > 0)
+                ? phiFactor * t / samples.getMean()
+                : 100;
+    }
+
+    /**
+     * Stores the history of heartbeats for a node.
+     */
+    private static class History {
+        private final DescriptiveStatistics samples;
+        long lastHeartbeatTime = System.currentTimeMillis();
 
         private History(int windowSize) {
             this.samples = new DescriptiveStatistics(windowSize);
@@ -146,8 +146,8 @@ public class PhiAccrualFailureDetector {
             return lastHeartbeatTime;
         }
 
-    void setLatestHeartbeatTime(long value) {
-      lastHeartbeatTime = value;
+        void setLatestHeartbeatTime(long value) {
+            lastHeartbeatTime = value;
+        }
     }
-  }
 }

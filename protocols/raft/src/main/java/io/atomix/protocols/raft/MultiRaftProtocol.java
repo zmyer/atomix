@@ -33,36 +33,37 @@ import static com.google.common.base.Preconditions.checkNotNull;
 /**
  * Multi-Raft protocol.
  */
+// TODO: 2018/12/07 by zmyer
 public class MultiRaftProtocol implements ProxyProtocol {
-  public static final Type TYPE = new Type();
+    public static final Type TYPE = new Type();
 
-  /**
-   * Returns an instance of the multi-Raft protocol with the default configuration.
-   *
-   * @return an instance of the multi-Raft protocol with the default configuration
-   */
-  public static MultiRaftProtocol instance() {
-    return new MultiRaftProtocol(new MultiRaftProtocolConfig());
-  }
+    /**
+     * Returns an instance of the multi-Raft protocol with the default configuration.
+     *
+     * @return an instance of the multi-Raft protocol with the default configuration
+     */
+    public static MultiRaftProtocol instance() {
+        return new MultiRaftProtocol(new MultiRaftProtocolConfig());
+    }
 
-  /**
-   * Returns a new multi-Raft protocol builder.
-   *
-   * @return a new multi-Raft protocol builder
-   */
-  public static MultiRaftProtocolBuilder builder() {
-    return new MultiRaftProtocolBuilder(new MultiRaftProtocolConfig());
-  }
+    /**
+     * Returns a new multi-Raft protocol builder.
+     *
+     * @return a new multi-Raft protocol builder
+     */
+    public static MultiRaftProtocolBuilder builder() {
+        return new MultiRaftProtocolBuilder(new MultiRaftProtocolConfig());
+    }
 
-  /**
-   * Returns a new multi-Raft protocol builder.
-   *
-   * @param group the partition group
-   * @return the multi-Raft protocol builder
-   */
-  public static MultiRaftProtocolBuilder builder(String group) {
-    return new MultiRaftProtocolBuilder(new MultiRaftProtocolConfig().setGroup(group));
-  }
+    /**
+     * Returns a new multi-Raft protocol builder.
+     *
+     * @param group the partition group
+     * @return the multi-Raft protocol builder
+     */
+    public static MultiRaftProtocolBuilder builder(String group) {
+        return new MultiRaftProtocolBuilder(new MultiRaftProtocolConfig().setGroup(group));
+    }
 
     /**
      * Multi-Raft protocol type.
@@ -102,22 +103,22 @@ public class MultiRaftProtocol implements ProxyProtocol {
         return config.getGroup();
     }
 
-  @Override
-  public <S> ProxyClient<S> newProxy(String primitiveName, PrimitiveType primitiveType, Class<S> serviceType, ServiceConfig serviceConfig, PartitionService partitionService) {
-    Collection<SessionClient> partitions = partitionService.getPartitionGroup(this)
-        .getPartitions()
-        .stream()
-        .map(partition -> ((RaftPartition) partition).getClient()
-            .sessionBuilder(primitiveName, primitiveType, serviceConfig)
-            .withMinTimeout(config.getMinTimeout())
-            .withMaxTimeout(config.getMaxTimeout())
-            .withReadConsistency(config.getReadConsistency())
-            .withCommunicationStrategy(config.getCommunicationStrategy())
-            .withRecoveryStrategy(config.getRecoveryStrategy())
-            .withMaxRetries(config.getMaxRetries())
-            .withRetryDelay(config.getRetryDelay())
-            .build())
-        .collect(Collectors.toList());
-    return new DefaultProxyClient<>(primitiveName, primitiveType, this, serviceType, partitions, config.getPartitioner());
-  }
+    @Override
+    public <S> ProxyClient<S> newProxy(String primitiveName, PrimitiveType primitiveType, Class<S> serviceType, ServiceConfig serviceConfig, PartitionService partitionService) {
+        Collection<SessionClient> partitions = partitionService.getPartitionGroup(this)
+                .getPartitions()
+                .stream()
+                .map(partition -> ((RaftPartition) partition).getClient()
+                        .sessionBuilder(primitiveName, primitiveType, serviceConfig)
+                        .withMinTimeout(config.getMinTimeout())
+                        .withMaxTimeout(config.getMaxTimeout())
+                        .withReadConsistency(config.getReadConsistency())
+                        .withCommunicationStrategy(config.getCommunicationStrategy())
+                        .withRecoveryStrategy(config.getRecoveryStrategy())
+                        .withMaxRetries(config.getMaxRetries())
+                        .withRetryDelay(config.getRetryDelay())
+                        .build())
+                .collect(Collectors.toList());
+        return new DefaultProxyClient<>(primitiveName, primitiveType, this, serviceType, partitions, config.getPartitioner());
+    }
 }

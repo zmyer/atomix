@@ -26,37 +26,38 @@ import io.atomix.primitive.protocol.ProxyProtocol;
  * @param <K> type for map key
  * @param <V> type for map value
  */
+// TODO: 2018/12/07 by zmyer
 public abstract class AtomicMapBuilder<K, V>
-    extends MapBuilder<AtomicMapBuilder<K, V>, AtomicMapConfig, AtomicMap<K, V>, K, V>
-    implements ProxyCompatibleBuilder<AtomicMapBuilder<K, V>> {
+        extends MapBuilder<AtomicMapBuilder<K, V>, AtomicMapConfig, AtomicMap<K, V>, K, V>
+        implements ProxyCompatibleBuilder<AtomicMapBuilder<K, V>> {
 
-  protected AtomicMapBuilder(String name, AtomicMapConfig config, PrimitiveManagementService managementService) {
-    super(AtomicMapType.instance(), name, config, managementService);
-  }
+    protected AtomicMapBuilder(String name, AtomicMapConfig config, PrimitiveManagementService managementService) {
+        super(AtomicMapType.instance(), name, config, managementService);
+    }
 
-  /**
-   * Enables null values in the map.
-   *
-   * @return this builder
-   */
-  public AtomicMapBuilder<K, V> withNullValues() {
-    config.setNullValues();
-    return this;
-  }
+    /**
+     * Enables null values in the map.
+     *
+     * @return this builder
+     */
+    public AtomicMapBuilder<K, V> withNullValues() {
+        config.setNullValues();
+        return this;
+    }
 
-  /**
-   * Sets whether null values are allowed.
-   *
-   * @param nullValues whether null values are allowed
-   * @return this builder
-   */
-  public AtomicMapBuilder<K, V> withNullValues(boolean nullValues) {
-    config.setNullValues(nullValues);
-    return this;
-  }
+    /**
+     * Sets whether null values are allowed.
+     *
+     * @param nullValues whether null values are allowed
+     * @return this builder
+     */
+    public AtomicMapBuilder<K, V> withNullValues(boolean nullValues) {
+        config.setNullValues(nullValues);
+        return this;
+    }
 
-  @Override
-  public AtomicMapBuilder<K, V> withProtocol(ProxyProtocol protocol) {
-    return withProtocol((PrimitiveProtocol) protocol);
-  }
+    @Override
+    public AtomicMapBuilder<K, V> withProtocol(ProxyProtocol protocol) {
+        return withProtocol((PrimitiveProtocol) protocol);
+    }
 }

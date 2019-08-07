@@ -29,55 +29,56 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Group membership protocol.
  */
+// TODO: 2018/12/06 by zmyer
 public interface GroupMembershipProtocol
-    extends ListenerService<GroupMembershipEvent, GroupMembershipEventListener>,
-    Configured<GroupMembershipProtocolConfig> {
-
-  /**
-   * Group membership protocol type.
-   */
-  interface Type<C extends GroupMembershipProtocolConfig> extends ConfiguredType<C> {
+        extends ListenerService<GroupMembershipEvent, GroupMembershipEventListener>,
+        Configured<GroupMembershipProtocolConfig> {
 
     /**
-     * Creates a new instance of the protocol.
-     *
-     * @param config the protocol configuration
-     * @return the protocol instance
+     * Group membership protocol type.
      */
-    GroupMembershipProtocol newProtocol(C config);
-  }
+    interface Type<C extends GroupMembershipProtocolConfig> extends ConfiguredType<C> {
 
-  /**
-   * Returns the set of current cluster members.
-   *
-   * @return set of cluster members
-   */
-  Set<Member> getMembers();
+        /**
+         * Creates a new instance of the protocol.
+         *
+         * @param config the protocol configuration
+         * @return the protocol instance
+         */
+        GroupMembershipProtocol newProtocol(C config);
+    }
 
-  /**
-   * Returns the specified member.
-   *
-   * @param memberId the member identifier
-   * @return the member or {@code null} if no node with the given identifier exists
-   */
-  Member getMember(MemberId memberId);
+    /**
+     * Returns the set of current cluster members.
+     *
+     * @return set of cluster members
+     */
+    Set<Member> getMembers();
 
-  /**
-   * Joins the cluster.
-   *
-   * @param bootstrap the bootstrap service
-   * @param discovery the discovery service
-   * @param localMember the local member info
-   * @return a future to be completed once the join is complete
-   */
-  CompletableFuture<Void> join(BootstrapService bootstrap, NodeDiscoveryService discovery, Member localMember);
+    /**
+     * Returns the specified member.
+     *
+     * @param memberId the member identifier
+     * @return the member or {@code null} if no node with the given identifier exists
+     */
+    Member getMember(MemberId memberId);
 
-  /**
-   * Leaves the cluster.
-   *
-   * @param localMember the local member info
-   * @return a future to be completed once the leave is complete
-   */
-  CompletableFuture<Void> leave(Member localMember);
+    /**
+     * Joins the cluster.
+     *
+     * @param bootstrap   the bootstrap service
+     * @param discovery   the discovery service
+     * @param localMember the local member info
+     * @return a future to be completed once the join is complete
+     */
+    CompletableFuture<Void> join(BootstrapService bootstrap, NodeDiscoveryService discovery, Member localMember);
+
+    /**
+     * Leaves the cluster.
+     *
+     * @param localMember the local member info
+     * @return a future to be completed once the leave is complete
+     */
+    CompletableFuture<Void> leave(Member localMember);
 
 }

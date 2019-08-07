@@ -94,6 +94,7 @@ public class SingleThreadContext extends AbstractThreadContext {
     /**
      * Gets the thread from a single threaded executor service.
      */
+    // TODO: 2018/12/07 by zmyer
     protected static AtomixThread getThread(ExecutorService executor) {
         final AtomicReference<AtomixThread> thread = new AtomicReference<>();
         try {

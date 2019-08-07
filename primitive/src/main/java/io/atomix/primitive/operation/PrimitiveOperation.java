@@ -31,7 +31,7 @@ public class PrimitiveOperation {
     /**
      * Creates a new primitive operation with a simplified identifier and a null value.
      *
-     * @param id    the operation identifier
+     * @param id the operation identifier
      * @return the primitive operation
      */
     public static PrimitiveOperation operation(OperationId id) {

@@ -43,44 +43,45 @@ import static com.google.common.base.Preconditions.checkNotNull;
  * @param <B> builder type
  * @param <P> primitive type
  */
-public abstract class PrimitiveBuilder<B extends PrimitiveBuilder<B, C, P>, C extends PrimitiveConfig, P extends SyncPrimitive> implements Builder<P> {
-  protected final PrimitiveType type;
-  protected final String name;
-  protected final C config;
-  protected PrimitiveProtocol protocol;
-  protected Serializer serializer;
-  protected final PrimitiveManagementService managementService;
+public abstract class PrimitiveBuilder<B extends PrimitiveBuilder<B, C, P>,
+        C extends PrimitiveConfig, P extends SyncPrimitive> implements Builder<P> {
+    protected final PrimitiveType type;
+    protected final String name;
+    protected final C config;
+    protected PrimitiveProtocol protocol;
+    protected Serializer serializer;
+    protected final PrimitiveManagementService managementService;
 
-  public PrimitiveBuilder(PrimitiveType type, String name, C config, PrimitiveManagementService managementService) {
-    this.type = checkNotNull(type, "type cannot be null");
-    this.name = checkNotNull(name, "name cannot be null");
-    this.config = checkNotNull(config, "config cannot be null");
-    this.managementService = checkNotNull(managementService, "managementService cannot be null");
-  }
+    public PrimitiveBuilder(PrimitiveType type, String name, C config, PrimitiveManagementService managementService) {
+        this.type = checkNotNull(type, "type cannot be null");
+        this.name = checkNotNull(name, "name cannot be null");
+        this.config = checkNotNull(config, "config cannot be null");
+        this.managementService = checkNotNull(managementService, "managementService cannot be null");
+    }
 
-  /**
-   * Sets the primitive protocol.
-   *
-   * @param protocol the primitive protocol
-   * @return the primitive builder
-   */
-  @SuppressWarnings("unchecked")
-  protected B withProtocol(PrimitiveProtocol protocol) {
-    this.protocol = protocol;
-    return (B) this;
-  }
+    /**
+     * Sets the primitive protocol.
+     *
+     * @param protocol the primitive protocol
+     * @return the primitive builder
+     */
+    @SuppressWarnings("unchecked")
+    protected B withProtocol(PrimitiveProtocol protocol) {
+        this.protocol = protocol;
+        return (B) this;
+    }
 
-  /**
-   * Sets the primitive serializer.
-   *
-   * @param serializer the primitive serializer
-   * @return the primitive builder
-   */
-  @SuppressWarnings("unchecked")
-  public B withSerializer(Serializer serializer) {
-    this.serializer = checkNotNull(serializer);
-    return (B) this;
-  }
+    /**
+     * Sets the primitive serializer.
+     *
+     * @param serializer the primitive serializer
+     * @return the primitive builder
+     */
+    @SuppressWarnings("unchecked")
+    public B withSerializer(Serializer serializer) {
+        this.serializer = checkNotNull(serializer);
+        return (B) this;
+    }
 
     /**
      * Sets the primitive to read-only.
@@ -105,113 +106,113 @@ public abstract class PrimitiveBuilder<B extends PrimitiveBuilder<B, C, P>, C ex
         return (B) this;
     }
 
-  /**
-   * Returns the primitive protocol.
-   *
-   * @return the primitive protocol
-   */
-  protected PrimitiveProtocol protocol() {
-    PrimitiveProtocol protocol = this.protocol;
-    if (protocol == null) {
-      PrimitiveProtocolConfig<?> protocolConfig = config.getProtocolConfig();
-      if (protocolConfig == null) {
-        Collection<PartitionGroup> partitionGroups = managementService.getPartitionService().getPartitionGroups();
-        if (partitionGroups.size() == 1) {
-          protocol = partitionGroups.iterator().next().newProtocol();
-        } else {
-          String groups = Joiner.on(", ").join(partitionGroups.stream()
-              .map(group -> group.name())
-              .collect(Collectors.toList()));
-          throw new ConfigurationException(String.format("Primitive protocol is ambiguous: %d partition groups found (%s)", partitionGroups.size(), groups));
+    /**
+     * Returns the primitive protocol.
+     *
+     * @return the primitive protocol
+     */
+    protected PrimitiveProtocol protocol() {
+        PrimitiveProtocol protocol = this.protocol;
+        if (protocol == null) {
+            PrimitiveProtocolConfig<?> protocolConfig = config.getProtocolConfig();
+            if (protocolConfig == null) {
+                Collection<PartitionGroup> partitionGroups = managementService.getPartitionService().getPartitionGroups();
+                if (partitionGroups.size() == 1) {
+                    protocol = partitionGroups.iterator().next().newProtocol();
+                } else {
+                    String groups = Joiner.on(", ").join(partitionGroups.stream()
+                            .map(group -> group.name())
+                            .collect(Collectors.toList()));
+                    throw new ConfigurationException(String.format("Primitive protocol is ambiguous: %d partition groups found (%s)", partitionGroups.size(), groups));
+                }
+            } else {
+                protocol = protocolConfig.getType().newProtocol(protocolConfig);
+            }
         }
-      } else {
-        protocol = protocolConfig.getType().newProtocol(protocolConfig);
-      }
+        return protocol;
     }
-    return protocol;
-  }
 
-  /**
-   * Returns the protocol serializer.
-   *
-   * @return the protocol serializer
-   */
-  protected Serializer serializer() {
-    Serializer serializer = this.serializer;
-    if (serializer == null) {
-      synchronized (this) {
-        serializer = this.serializer;
+    /**
+     * Returns the protocol serializer.
+     *
+     * @return the protocol serializer
+     */
+    protected Serializer serializer() {
+        Serializer serializer = this.serializer;
         if (serializer == null) {
-          NamespaceConfig config = this.config.getNamespaceConfig();
-          if (config == null) {
-            serializer = Serializer.using(Namespaces.BASIC);
-          } else {
-            serializer = Serializer.using(Namespace.builder()
-                .register(Namespaces.BASIC)
-                .nextId(Namespaces.BEGIN_USER_CUSTOM_ID)
-                .register(new Namespace(config))
-                .build());
-          }
-          this.serializer = serializer;
+            synchronized (this) {
+                serializer = this.serializer;
+                if (serializer == null) {
+                    NamespaceConfig config = this.config.getNamespaceConfig();
+                    if (config == null) {
+                        serializer = Serializer.using(Namespaces.BASIC);
+                    } else {
+                        serializer = Serializer.using(Namespace.builder()
+                                .register(Namespaces.BASIC)
+                                .nextId(Namespaces.BEGIN_USER_CUSTOM_ID)
+                                .register(new Namespace(config))
+                                .build());
+                    }
+                    this.serializer = serializer;
+                }
+            }
         }
-      }
+        return serializer;
     }
-    return serializer;
-  }
 
-  protected <S> CompletableFuture<ProxyClient<S>> newProxy(Class<S> serviceType, ServiceConfig config) {
-    PrimitiveProtocol protocol = protocol();
-    if (protocol instanceof ProxyProtocol) {
-      return CompletableFuture.completedFuture(((ProxyProtocol) protocol)
-          .newProxy(name, type, serviceType, config, managementService.getPartitionService()));
+    protected <S> CompletableFuture<ProxyClient<S>> newProxy(Class<S> serviceType, ServiceConfig config) {
+        PrimitiveProtocol protocol = protocol();
+        if (protocol instanceof ProxyProtocol) {
+            return CompletableFuture.completedFuture(((ProxyProtocol) protocol)
+                    .newProxy(name, type, serviceType, config, managementService.getPartitionService()));
+        }
+        return Futures.exceptionalFuture(new UnsupportedOperationException());
     }
-    return Futures.exceptionalFuture(new UnsupportedOperationException());
-  }
 
-  /**
-   * Builds a new instance of the primitive.
-   * <p>
-   * The returned instance will be distinct from all other instances of the same primitive on this node, with a
-   * distinct session, ordering guarantees, memory, etc.
-   *
-   * @return a new instance of the primitive
-   */
-  @Override
-  public P build() {
-    return buildAsync().join();
-  }
+    /**
+     * Builds a new instance of the primitive.
+     * <p>
+     * The returned instance will be distinct from all other instances of the same primitive on this node, with a
+     * distinct session, ordering guarantees, memory, etc.
+     *
+     * @return a new instance of the primitive
+     */
+    @Override
+    public P build() {
+        return buildAsync().join();
+    }
 
-  /**
-   * Builds a new instance of the primitive asynchronously.
-   * <p>
-   * The returned instance will be distinct from all other instances of the same primitive on this node, with a
-   * distinct session, ordering guarantees, memory, etc.
-   *
-   * @return asynchronous distributed primitive
-   */
-  public abstract CompletableFuture<P> buildAsync();
+    /**
+     * Builds a new instance of the primitive asynchronously.
+     * <p>
+     * The returned instance will be distinct from all other instances of the same primitive on this node, with a
+     * distinct session, ordering guarantees, memory, etc.
+     *
+     * @return asynchronous distributed primitive
+     */
+    public abstract CompletableFuture<P> buildAsync();
 
-  /**
-   * Gets or builds a singleton instance of the primitive.
-   * <p>
-   * The returned primitive will be shared by all {@code get()} calls for the named primitive. If no instance has yet
-   * been constructed, the instance will be built from this builder's configuration.
-   *
-   * @return a singleton instance of the primitive
-   */
-  public P get() {
-    return getAsync().join();
-  }
+    /**
+     * Gets or builds a singleton instance of the primitive.
+     * <p>
+     * The returned primitive will be shared by all {@code get()} calls for the named primitive. If no instance has yet
+     * been constructed, the instance will be built from this builder's configuration.
+     *
+     * @return a singleton instance of the primitive
+     */
+    public P get() {
+        return getAsync().join();
+    }
 
-  /**
-   * Gets or builds a singleton instance of the primitive asynchronously.
-   * <p>
-   * The returned primitive will be shared by all {@code get()} calls for the named primitive. If no instance has yet
-   * been constructed, the instance will be built from this builder's configuration.
-   *
-   * @return a singleton instance of the primitive
-   */
-  public CompletableFuture<P> getAsync() {
-    return managementService.getPrimitiveCache().getPrimitive(name, this::buildAsync);
-  }
+    /**
+     * Gets or builds a singleton instance of the primitive asynchronously.
+     * <p>
+     * The returned primitive will be shared by all {@code get()} calls for the named primitive. If no instance has yet
+     * been constructed, the instance will be built from this builder's configuration.
+     *
+     * @return a singleton instance of the primitive
+     */
+    public CompletableFuture<P> getAsync() {
+        return managementService.getPrimitiveCache().getPrimitive(name, this::buildAsync);
+    }
 }

@@ -35,10 +35,10 @@ import static io.atomix.utils.serializer.serializers.DefaultSerializers.BASIC;
  * and received based on arbitrary {@link String} message subjects. Direct messages are sent using the {@link MemberId}
  * to which to send the message. This API supports several types of messaging:
  * <ul>
- *   <li>{@link #broadcast(String, Object)} broadcasts a message to all cluster members</li>
- *   <li>{@link #multicast(String, Object, Set)} sends the message to all provided members</li>
- *   <li>{@link #unicast(String, Object, MemberId)} sends a unicast message directly to the given member</li>
- *   <li>{@link #send(String, Object, MemberId)} sends a message directly to the given member and awaits a reply</li>
+ * <li>{@link #broadcast(String, Object)} broadcasts a message to all cluster members</li>
+ * <li>{@link #multicast(String, Object, Set)} sends the message to all provided members</li>
+ * <li>{@link #unicast(String, Object, MemberId)} sends a unicast message directly to the given member</li>
+ * <li>{@link #send(String, Object, MemberId)} sends a message directly to the given member and awaits a reply</li>
  * </ul>
  * To register to listen for messages, use one of the {@link #subscribe(String, Consumer, Executor)} methods:
  * <pre>
@@ -52,104 +52,104 @@ import static io.atomix.utils.serializer.serializers.DefaultSerializers.BASIC;
 // TODO: 2018/7/31 by zmyer
 public interface ClusterCommunicationService {
 
-  /**
-   * Broadcasts a message to all members.
-   *
-   * @param subject  message subject
-   * @param message message to send
-   * @param <M>     message type
-   */
-  default <M> void broadcast(String subject, M message) {
-    broadcast(subject, message, BASIC::encode);
-  }
+    /**
+     * Broadcasts a message to all members.
+     *
+     * @param subject message subject
+     * @param message message to send
+     * @param <M>     message type
+     */
+    default <M> void broadcast(String subject, M message) {
+        broadcast(subject, message, BASIC::encode);
+    }
 
-  /**
-   * Broadcasts a message to all members.
-   *
-   * @param subject  message subject
-   * @param message message to send
-   * @param encoder function for encoding message to byte[]
-   * @param <M>     message type
-   */
-  <M> void broadcast(String subject, M message, Function<M, byte[]> encoder);
+    /**
+     * Broadcasts a message to all members.
+     *
+     * @param subject message subject
+     * @param message message to send
+     * @param encoder function for encoding message to byte[]
+     * @param <M>     message type
+     */
+    <M> void broadcast(String subject, M message, Function<M, byte[]> encoder);
 
-  /**
-   * Broadcasts a message to all members including self.
-   *
-   * @param subject  message subject
-   * @param message message to send
-   * @param <M>     message type
-   */
-  default <M> void broadcastIncludeSelf(String subject, M message) {
-    broadcastIncludeSelf(subject, message, BASIC::encode);
-  }
+    /**
+     * Broadcasts a message to all members including self.
+     *
+     * @param subject message subject
+     * @param message message to send
+     * @param <M>     message type
+     */
+    default <M> void broadcastIncludeSelf(String subject, M message) {
+        broadcastIncludeSelf(subject, message, BASIC::encode);
+    }
 
-  /**
-   * Broadcasts a message to all members including self.
-   *
-   * @param subject  message subject
-   * @param message message to send
-   * @param encoder function for encoding message to byte[]
-   * @param <M>     message type
-   */
-  <M> void broadcastIncludeSelf(String subject, M message, Function<M, byte[]> encoder);
+    /**
+     * Broadcasts a message to all members including self.
+     *
+     * @param subject message subject
+     * @param message message to send
+     * @param encoder function for encoding message to byte[]
+     * @param <M>     message type
+     */
+    <M> void broadcastIncludeSelf(String subject, M message, Function<M, byte[]> encoder);
 
-  /**
-   * Sends a message to the specified member.
-   *
-   * @param subject  message subject
-   * @param message  message to send
-   * @param toMemberId destination node identifier
-   * @param <M>      message type
-   * @return future that is completed when the message is sent
-   */
-  default <M> CompletableFuture<Void> unicast(String subject, M message, MemberId toMemberId) {
-    return unicast(subject, message, BASIC::encode, toMemberId);
-  }
+    /**
+     * Sends a message to the specified member.
+     *
+     * @param subject    message subject
+     * @param message    message to send
+     * @param toMemberId destination node identifier
+     * @param <M>        message type
+     * @return future that is completed when the message is sent
+     */
+    default <M> CompletableFuture<Void> unicast(String subject, M message, MemberId toMemberId) {
+        return unicast(subject, message, BASIC::encode, toMemberId);
+    }
 
-  /**
-   * Sends a message to the specified member.
-   *
-   * @param subject  message subject
-   * @param message  message to send
-   * @param encoder  function for encoding message to byte[]
-   * @param toMemberId destination node identifier
-   * @param <M>      message type
-   * @return future that is completed when the message is sent
-   */
-  <M> CompletableFuture<Void> unicast(String subject, M message, Function<M, byte[]> encoder, MemberId toMemberId);
+    /**
+     * Sends a message to the specified member.
+     *
+     * @param subject    message subject
+     * @param message    message to send
+     * @param encoder    function for encoding message to byte[]
+     * @param toMemberId destination node identifier
+     * @param <M>        message type
+     * @return future that is completed when the message is sent
+     */
+    <M> CompletableFuture<Void> unicast(String subject, M message, Function<M, byte[]> encoder, MemberId toMemberId);
 
-  /**
-   * Multicasts a message to a set of members.
-   *
-   * @param subject  message subject
-   * @param message message to send
-   * @param memberIds recipient node identifiers
-   * @param <M>     message type
-   */
-  default <M> void multicast(String subject, M message, Set<MemberId> memberIds) {
-    multicast(subject, message, BASIC::encode, memberIds);
-  }
+    /**
+     * Multicasts a message to a set of members.
+     *
+     * @param subject   message subject
+     * @param message   message to send
+     * @param memberIds recipient node identifiers
+     * @param <M>       message type
+     */
+    default <M> void multicast(String subject, M message, Set<MemberId> memberIds) {
+        multicast(subject, message, BASIC::encode, memberIds);
+    }
 
-  /**
-   * Multicasts a message to a set of members.
-   *
-   * @param subject  message subject
-   * @param message message to send
-   * @param encoder function for encoding message to byte[]
-   * @param memberIds recipient node identifiers
-   * @param <M>     message type
-   */
-  <M> void multicast(String subject, M message, Function<M, byte[]> encoder, Set<MemberId> memberIds);
+    /**
+     * Multicasts a message to a set of members.
+     *
+     * @param subject   message subject
+     * @param message   message to send
+     * @param encoder   function for encoding message to byte[]
+     * @param memberIds recipient node identifiers
+     * @param <M>       message type
+     */
+    <M> void multicast(String subject, M message, Function<M, byte[]> encoder, Set<MemberId> memberIds);
 
     /**
      * Sends a message and expects a reply.
      *
-     * @param subject  message subject
-     * @param message  message to send
+     * @param subject    message subject
+     * @param message    message to send
      * @param toMemberId recipient node identifier
-     * @param <M>      request type
-     * @param <R>      reply type
+     * @param <M>        request type
+     * @param <R>        reply type
      * @return reply future
      */
     default <M, R> CompletableFuture<R> send(
@@ -162,12 +162,12 @@ public interface ClusterCommunicationService {
     /**
      * Sends a message and expects a reply.
      *
-     * @param subject  message subject
-     * @param message  message to send
+     * @param subject    message subject
+     * @param message    message to send
      * @param toMemberId recipient node identifier
-     * @param timeout  response timeout
-     * @param <M>      request type
-     * @param <R>      reply type
+     * @param timeout    response timeout
+     * @param <M>        request type
+     * @param <R>        reply type
      * @return reply future
      */
     default <M, R> CompletableFuture<R> send(
@@ -181,13 +181,13 @@ public interface ClusterCommunicationService {
     /**
      * Sends a message and expects a reply.
      *
-     * @param subject  message subject
-     * @param message  message to send
-     * @param encoder  function for encoding request to byte[]
-     * @param decoder  function for decoding response from byte[]
+     * @param subject    message subject
+     * @param message    message to send
+     * @param encoder    function for encoding request to byte[]
+     * @param decoder    function for decoding response from byte[]
      * @param toMemberId recipient node identifier
-     * @param <M>      request type
-     * @param <R>      reply type
+     * @param <M>        request type
+     * @param <R>        reply type
      * @return reply future
      */
     // TODO: 2018/7/31 by zmyer
@@ -203,14 +203,14 @@ public interface ClusterCommunicationService {
     /**
      * Sends a message and expects a reply.
      *
-     * @param subject  message subject
-     * @param message  message to send
-     * @param encoder  function for encoding request to byte[]
-     * @param decoder  function for decoding response from byte[]
+     * @param subject    message subject
+     * @param message    message to send
+     * @param encoder    function for encoding request to byte[]
+     * @param decoder    function for decoding response from byte[]
      * @param toMemberId recipient node identifier
-     * @param timeout  response timeout
-     * @param <M>      request type
-     * @param <R>      reply type
+     * @param timeout    response timeout
+     * @param <M>        request type
+     * @param <R>        reply type
      * @return reply future
      */
     <M, R> CompletableFuture<R> send(
@@ -250,6 +250,7 @@ public interface ClusterCommunicationService {
      * @param <R>      reply message type
      * @return future to be completed once the subscription has been propagated
      */
+    // TODO: 2018/12/07 by zmyer
     <M, R> CompletableFuture<Void> subscribe(
             String subject,
             Function<byte[], M> decoder,
@@ -266,6 +267,7 @@ public interface ClusterCommunicationService {
      * @param <R>     reply message type
      * @return future to be completed once the subscription has been propagated
      */
+    // TODO: 2018/12/07 by zmye
     default <M, R> CompletableFuture<Void> subscribe(
             String subject,
             Function<M, CompletableFuture<R>> handler) {

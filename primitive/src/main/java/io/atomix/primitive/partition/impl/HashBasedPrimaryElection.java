@@ -62,10 +62,10 @@ public class HashBasedPrimaryElection
     private static final Logger LOGGER = LoggerFactory.getLogger(HashBasedPrimaryElection.class);
     private static final long BROADCAST_INTERVAL = 5000;
 
-  private static final Serializer SERIALIZER = Serializer.using(Namespace.builder()
-      .register(Namespaces.BASIC)
-      .register(MemberId.class)
-      .build());
+    private static final Serializer SERIALIZER = Serializer.using(Namespace.builder()
+            .register(Namespaces.BASIC)
+            .register(MemberId.class)
+            .build());
 
     private final PartitionId partitionId;
     private final ClusterMembershipService clusterMembershipService;
@@ -77,17 +77,17 @@ public class HashBasedPrimaryElection
     private final ScheduledFuture<?> broadcastFuture;
     private volatile PrimaryTerm currentTerm;
 
-  private final PartitionGroupMembershipEventListener groupMembershipEventListener = new PartitionGroupMembershipEventListener() {
-    @Override
-    public void event(PartitionGroupMembershipEvent event) {
-      recomputeTerm(event.membership());
-    }
+    private final PartitionGroupMembershipEventListener groupMembershipEventListener = new PartitionGroupMembershipEventListener() {
+        @Override
+        public void event(PartitionGroupMembershipEvent event) {
+            recomputeTerm(event.membership());
+        }
 
-                @Override
-                public boolean isRelevant(final PartitionGroupMembershipEvent event) {
-                    return event.membership().group().equals(partitionId.group());
-                }
-            };
+        @Override
+        public boolean isRelevant(final PartitionGroupMembershipEvent event) {
+            return event.membership().group().equals(partitionId.group());
+        }
+    };
 
     // TODO: 2018/7/31 by zmyer
     public HashBasedPrimaryElection(
@@ -185,14 +185,14 @@ public class HashBasedPrimaryElection
             return;
         }
 
-    // Create a list of candidates based on the availability of members in the group.
-    List<GroupMember> candidates = new ArrayList<>();
-    for (MemberId memberId : membership.members()) {
-      Member member = clusterMembershipService.getMember(memberId);
-      if (member != null && member.isReachable()) {
-        candidates.add(new GroupMember(memberId, MemberGroupId.from(memberId.id())));
-      }
-    }
+        // Create a list of candidates based on the availability of members in the group.
+        List<GroupMember> candidates = new ArrayList<>();
+        for (MemberId memberId : membership.members()) {
+            Member member = clusterMembershipService.getMember(memberId);
+            if (member != null && member.isReachable()) {
+                candidates.add(new GroupMember(memberId, MemberGroupId.from(memberId.id())));
+            }
+        }
 
         // Sort the candidates by a hash of their member ID.
         candidates.sort((a, b) -> {

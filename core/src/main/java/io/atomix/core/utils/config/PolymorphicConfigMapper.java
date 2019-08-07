@@ -35,76 +35,77 @@ import static com.google.common.base.Preconditions.checkNotNull;
 /**
  * Polymorphic configuration mapper.
  */
+// TODO: 2018/12/06 by zmyer
 public class PolymorphicConfigMapper extends ConfigMapper {
-  private final AtomixRegistry registry;
-  private final Collection<PolymorphicTypeMapper> polymorphicTypes;
+    private final AtomixRegistry registry;
+    private final Collection<PolymorphicTypeMapper> polymorphicTypes;
 
     public PolymorphicConfigMapper(ClassLoader classLoader, AtomixRegistry registry) {
         this(classLoader, registry, Collections.emptyList());
     }
 
-  public PolymorphicConfigMapper(ClassLoader classLoader, AtomixRegistry registry, PolymorphicTypeMapper... mappers) {
-    this(classLoader, registry, Arrays.asList(mappers));
-  }
-
-  public PolymorphicConfigMapper(ClassLoader classLoader, AtomixRegistry registry, Collection<PolymorphicTypeMapper> mappers) {
-    super(classLoader);
-    this.registry = checkNotNull(registry);
-    this.polymorphicTypes = mappers;
-  }
-
-  @Override
-  @SuppressWarnings("unchecked")
-  protected <T> T newInstance(Config config, String key, Class<T> clazz) {
-    T instance;
-
-    // If the class is a polymorphic type, look up the type mapper and get the concrete type.
-    if (isPolymorphicType(clazz)) {
-      PolymorphicTypeMapper typeMapper = polymorphicTypes.stream()
-          .filter(mapper -> mapper.getConfigClass().isAssignableFrom(clazz))
-          .filter(mapper -> (mapper.getTypePath() != null && config.hasPath(mapper.getTypePath())) || mapper.getTypePath() == null)
-          .findFirst()
-          .orElse(null);
-      if (typeMapper == null) {
-        throw new ConfigurationException("Cannot instantiate abstract type " + clazz.getName());
-      }
-
-      String typeName = typeMapper.getTypePath() != null ? config.getString(typeMapper.getTypePath()) : key;
-      Class<? extends TypedConfig<?>> concreteClass = typeMapper.getConcreteClass(registry, typeName);
-      try {
-        instance = (T) concreteClass.newInstance();
-      } catch (InstantiationException | IllegalAccessException e) {
-        throw new ConfigurationException(concreteClass.getName() + " needs a public no-args constructor to be used as a bean", e);
-      }
-    } else {
-      try {
-        instance = clazz.newInstance();
-      } catch (InstantiationException | IllegalAccessException e) {
-        throw new ConfigurationException(clazz.getName() + " needs a public no-args constructor to be used as a bean", e);
-      }
+    public PolymorphicConfigMapper(ClassLoader classLoader, AtomixRegistry registry, PolymorphicTypeMapper... mappers) {
+        this(classLoader, registry, Arrays.asList(mappers));
     }
-    return instance;
-  }
 
-  @Override
-  protected void checkRemainingProperties(Set<String> propertyNames, String path, Class<?> clazz) {
-    Properties properties = System.getProperties();
-    Set<String> cleanNames = propertyNames
-        .stream()
-        .filter(propertyName -> !isPolymorphicType(clazz) || !polymorphicTypes.stream().anyMatch(type -> Objects.equals(type.getTypePath(), propertyName)))
-        .map(propertyName -> toPath(path, propertyName))
-        .filter(propertyName -> !properties.containsKey(propertyName))
-        .filter(propertyName -> properties.entrySet().stream().noneMatch(entry -> entry.getKey().toString().startsWith(propertyName + ".")))
-        .collect(Collectors.toSet());
-    if (!cleanNames.isEmpty()) {
-      throw new ConfigurationException("Unknown properties present in configuration: " + Joiner.on(", ").join(cleanNames));
+    public PolymorphicConfigMapper(ClassLoader classLoader, AtomixRegistry registry, Collection<PolymorphicTypeMapper> mappers) {
+        super(classLoader);
+        this.registry = checkNotNull(registry);
+        this.polymorphicTypes = mappers;
     }
-  }
 
-  /**
-   * Returns a boolean indicating whether the given class is a polymorphic type.
-   */
-  private boolean isPolymorphicType(Class<?> clazz) {
-    return polymorphicTypes.stream().anyMatch(polymorphicType -> polymorphicType.getConfigClass() == clazz);
-  }
+    @Override
+    @SuppressWarnings("unchecked")
+    protected <T> T newInstance(Config config, String key, Class<T> clazz) {
+        T instance;
+
+        // If the class is a polymorphic type, look up the type mapper and get the concrete type.
+        if (isPolymorphicType(clazz)) {
+            PolymorphicTypeMapper typeMapper = polymorphicTypes.stream()
+                    .filter(mapper -> mapper.getConfigClass().isAssignableFrom(clazz))
+                    .filter(mapper -> mapper.getTypePath() == null || config.hasPath(mapper.getTypePath()))
+                    .findFirst()
+                    .orElse(null);
+            if (typeMapper == null) {
+                throw new ConfigurationException("Cannot instantiate abstract type " + clazz.getName());
+            }
+
+            String typeName = typeMapper.getTypePath() != null ? config.getString(typeMapper.getTypePath()) : key;
+            Class<? extends TypedConfig<?>> concreteClass = typeMapper.getConcreteClass(registry, typeName);
+            try {
+                instance = (T) concreteClass.newInstance();
+            } catch (InstantiationException | IllegalAccessException e) {
+                throw new ConfigurationException(concreteClass.getName() + " needs a public no-args constructor to be used as a bean", e);
+            }
+        } else {
+            try {
+                instance = clazz.newInstance();
+            } catch (InstantiationException | IllegalAccessException e) {
+                throw new ConfigurationException(clazz.getName() + " needs a public no-args constructor to be used as a bean", e);
+            }
+        }
+        return instance;
+    }
+
+    @Override
+    protected void checkRemainingProperties(Set<String> propertyNames, String path, Class<?> clazz) {
+        Properties properties = System.getProperties();
+        Set<String> cleanNames = propertyNames
+                .stream()
+                .filter(propertyName -> !isPolymorphicType(clazz) || !polymorphicTypes.stream().anyMatch(type -> Objects.equals(type.getTypePath(), propertyName)))
+                .map(propertyName -> toPath(path, propertyName))
+                .filter(propertyName -> !properties.containsKey(propertyName))
+                .filter(propertyName -> properties.entrySet().stream().noneMatch(entry -> entry.getKey().toString().startsWith(propertyName + ".")))
+                .collect(Collectors.toSet());
+        if (!cleanNames.isEmpty()) {
+            throw new ConfigurationException("Unknown properties present in configuration: " + Joiner.on(", ").join(cleanNames));
+        }
+    }
+
+    /**
+     * Returns a boolean indicating whether the given class is a polymorphic type.
+     */
+    private boolean isPolymorphicType(Class<?> clazz) {
+        return polymorphicTypes.stream().anyMatch(polymorphicType -> polymorphicType.getConfigClass() == clazz);
+    }
 }

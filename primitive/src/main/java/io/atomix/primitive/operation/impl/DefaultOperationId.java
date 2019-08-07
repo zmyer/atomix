@@ -24,32 +24,33 @@ import static com.google.common.base.MoreObjects.toStringHelper;
 /**
  * Raft operation identifier.
  */
+// TODO: 2018/12/07 by zmyer
 public class DefaultOperationId extends AbstractIdentifier<String> implements OperationId {
-  private final OperationType type;
+    private final OperationType type;
 
-  protected DefaultOperationId() {
-    this.type = null;
-  }
+    protected DefaultOperationId() {
+        this.type = null;
+    }
 
-  public DefaultOperationId(String id, OperationType type) {
-    super(id);
-    this.type = type;
-  }
+    public DefaultOperationId(String id, OperationType type) {
+        super(id);
+        this.type = type;
+    }
 
-  /**
-   * Returns the operation type.
-   *
-   * @return the operation type
-   */
-  public OperationType type() {
-    return type;
-  }
+    /**
+     * Returns the operation type.
+     *
+     * @return the operation type
+     */
+    public OperationType type() {
+        return type;
+    }
 
-  @Override
-  public String toString() {
-    return toStringHelper(this)
-        .add("id", id())
-        .add("type", type())
-        .toString();
-  }
+    @Override
+    public String toString() {
+        return toStringHelper(this)
+                .add("id", id())
+                .add("type", type())
+                .toString();
+    }
 }

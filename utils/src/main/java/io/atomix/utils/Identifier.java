@@ -18,12 +18,13 @@ package io.atomix.utils;
 /**
  * Abstract identifier backed by another value, e.g. string, int.
  */
+// TODO: 2018/12/07 by zmyer
 public interface Identifier<T extends Comparable<T>> {
 
-  /**
-   * Returns the backing identifier value.
-   *
-   * @return identifier
-   */
-  T id();
+    /**
+     * Returns the backing identifier value.
+     *
+     * @return identifier
+     */
+    T id();
 }

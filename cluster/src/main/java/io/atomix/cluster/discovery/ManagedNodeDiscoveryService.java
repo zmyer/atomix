@@ -20,5 +20,6 @@ import io.atomix.utils.Managed;
 /**
  * Managed node discovery service.
  */
+// TODO: 2018/12/06 by zmyer
 public interface ManagedNodeDiscoveryService extends NodeDiscoveryService, Managed<NodeDiscoveryService> {
 }

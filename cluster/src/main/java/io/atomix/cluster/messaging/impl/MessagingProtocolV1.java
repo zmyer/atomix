@@ -22,25 +22,26 @@ import io.netty.handler.codec.MessageToByteEncoder;
 /**
  * V1 messaging protocol.
  */
+// TODO: 2018/12/06 by zmyer
 public class MessagingProtocolV1 implements MessagingProtocol {
-  private final Address address;
+    private final Address address;
 
-  MessagingProtocolV1(Address address) {
-    this.address = address;
-  }
+    MessagingProtocolV1(Address address) {
+        this.address = address;
+    }
 
-  @Override
-  public ProtocolVersion version() {
-    return ProtocolVersion.V1;
-  }
+    @Override
+    public ProtocolVersion version() {
+        return ProtocolVersion.V1;
+    }
 
-  @Override
-  public MessageToByteEncoder<Object> newEncoder() {
-    return new MessageEncoderV1(address);
-  }
+    @Override
+    public MessageToByteEncoder<Object> newEncoder() {
+        return new MessageEncoderV1(address);
+    }
 
-  @Override
-  public ByteToMessageDecoder newDecoder() {
-    return new MessageDecoderV1();
-  }
+    @Override
+    public ByteToMessageDecoder newDecoder() {
+        return new MessageDecoderV1();
+    }
 }

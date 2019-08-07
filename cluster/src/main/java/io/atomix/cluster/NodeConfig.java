@@ -21,67 +21,68 @@ import io.atomix.utils.net.Address;
 /**
  * Node configuration.
  */
+// TODO: 2018/12/06 by zmyer
 public class NodeConfig implements Config {
-  private NodeId id = NodeId.anonymous();
-  private Address address;
+    private NodeId id = NodeId.anonymous();
+    private Address address;
 
-  /**
-   * Returns the node identifier.
-   *
-   * @return the node identifier
-   */
-  public NodeId getId() {
-    return id;
-  }
+    /**
+     * Returns the node identifier.
+     *
+     * @return the node identifier
+     */
+    public NodeId getId() {
+        return id;
+    }
 
-  /**
-   * Sets the node identifier.
-   *
-   * @param id the node identifier
-   * @return the node configuration
-   */
-  public NodeConfig setId(String id) {
-    return setId(id != null ? NodeId.from(id) : null);
-  }
+    /**
+     * Sets the node identifier.
+     *
+     * @param id the node identifier
+     * @return the node configuration
+     */
+    public NodeConfig setId(String id) {
+        return setId(id != null ? NodeId.from(id) : null);
+    }
 
-  /**
-   * Sets the node identifier.
-   *
-   * @param id the node identifier
-   * @return the node configuration
-   */
-  public NodeConfig setId(NodeId id) {
-    this.id = id != null ? id : NodeId.anonymous();
-    return this;
-  }
+    /**
+     * Sets the node identifier.
+     *
+     * @param id the node identifier
+     * @return the node configuration
+     */
+    public NodeConfig setId(NodeId id) {
+        this.id = id != null ? id : NodeId.anonymous();
+        return this;
+    }
 
-  /**
-   * Returns the node address.
-   *
-   * @return the node address
-   */
-  public Address getAddress() {
-    return address;
-  }
+    /**
+     * Returns the node address.
+     *
+     * @return the node address
+     */
+    public Address getAddress() {
+        return address;
+    }
 
-  /**
-   * Sets the node address.
-   *
-   * @param address the node address
-   * @return the node configuration
-   */
-  public NodeConfig setAddress(String address) {
-    return setAddress(Address.from(address));
-  }
+    /**
+     * Sets the node address.
+     *
+     * @param address the node address
+     * @return the node configuration
+     */
+    public NodeConfig setAddress(String address) {
+        return setAddress(Address.from(address));
+    }
 
-  /**
-   * Sets the node address.
-   *
-   * @param address the node address
-   * @return the node configuration
-   */
-  public NodeConfig setAddress(Address address) {
-    this.address = address;
-    return this;
-  }
+    /**
+     * Sets the node address.
+     *
+     * @param address the node address
+     * @return the node configuration
+     */
+    public NodeConfig setAddress(Address address) {
+        this.address = address;
+        return this;
+    }
 }

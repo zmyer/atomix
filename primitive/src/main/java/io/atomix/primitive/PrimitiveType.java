@@ -25,7 +25,9 @@ import io.atomix.utils.serializer.Namespaces;
 /**
  * Primitive type.
  */
-public interface PrimitiveType<B extends PrimitiveBuilder, C extends PrimitiveConfig, P extends SyncPrimitive> extends ConfiguredType<C> {
+// TODO: 2018/12/06 by zmyer
+public interface PrimitiveType<B extends PrimitiveBuilder, C extends PrimitiveConfig, P extends SyncPrimitive>
+        extends ConfiguredType<C> {
 
     /**
      * Returns the primitive type namespace.
@@ -39,13 +41,13 @@ public interface PrimitiveType<B extends PrimitiveBuilder, C extends PrimitiveCo
                 .build();
     }
 
-  /**
-   * Returns a new instance of the primitive configuration.
-   *
-   * @return a new instance of the primitive configuration
-   */
-  @Override
-  C newConfig();
+    /**
+     * Returns a new instance of the primitive configuration.
+     *
+     * @return a new instance of the primitive configuration
+     */
+    @Override
+    C newConfig();
 
     /**
      * Returns a new primitive builder.
@@ -57,11 +59,11 @@ public interface PrimitiveType<B extends PrimitiveBuilder, C extends PrimitiveCo
      */
     B newBuilder(String primitiveName, C config, PrimitiveManagementService managementService);
 
-  /**
-   * Creates a new service instance from the given configuration.
-   *
-   * @param config the service configuration
-   * @return the service instance
-   */
-  PrimitiveService newService(ServiceConfig config);
+    /**
+     * Creates a new service instance from the given configuration.
+     *
+     * @param config the service configuration
+     * @return the service instance
+     */
+    PrimitiveService newService(ServiceConfig config);
 }

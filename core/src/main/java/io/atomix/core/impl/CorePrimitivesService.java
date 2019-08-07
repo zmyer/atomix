@@ -115,44 +115,46 @@ import static com.google.common.base.Preconditions.checkNotNull;
  */
 // TODO: 2018/7/30 by zmyer
 public class CorePrimitivesService implements ManagedPrimitivesService {
-  private static final Logger LOGGER = LoggerFactory.getLogger(CorePrimitivesService.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(CorePrimitivesService.class);
 
-  private final PrimitiveManagementService managementService;
-  private final ManagedPrimitiveRegistry primitiveRegistry;
-  private final ManagedTransactionService transactionService;
-  private final ConfigService configService;
-  private final PrimitiveCache cache;
-  private final AtomixRegistry registry;
-  private final AtomicBoolean started = new AtomicBoolean();
+    private final PrimitiveManagementService managementService;
+    private final ManagedPrimitiveRegistry primitiveRegistry;
+    private final ManagedTransactionService transactionService;
+    private final ConfigService configService;
+    private final PrimitiveCache cache;
+    private final AtomixRegistry registry;
+    private final AtomicBoolean started = new AtomicBoolean();
 
-  public CorePrimitivesService(
-      ScheduledExecutorService executorService,
-      ClusterMembershipService membershipService,
-      ClusterCommunicationService communicationService,
-      ClusterEventService eventService,
-      SerializationService serializationService,
-      PartitionService partitionService,
-      PrimitiveCache primitiveCache,
-      AtomixRegistry registry,
-      ConfigService configService) {
-    this.cache = checkNotNull(primitiveCache);
-    this.registry = checkNotNull(registry);
-    this.primitiveRegistry = new CorePrimitiveRegistry(partitionService, new DefaultPrimitiveTypeRegistry(registry.getTypes(PrimitiveType.class)));
-    this.managementService = new CorePrimitiveManagementService(
-        executorService,
-        membershipService,
-        communicationService,
-        eventService,
-        serializationService,
-        partitionService,
-        primitiveCache,
-        primitiveRegistry,
-        new DefaultPrimitiveTypeRegistry(registry.getTypes(PrimitiveType.class)),
-        new DefaultPrimitiveProtocolTypeRegistry(registry.getTypes(PrimitiveProtocol.Type.class)),
-        new DefaultPartitionGroupTypeRegistry(registry.getTypes(PartitionGroup.Type.class)));
-    this.transactionService = new CoreTransactionService(managementService);
-    this.configService = checkNotNull(configService);
-  }
+    // TODO: 2018/12/07 by zmyer
+    public CorePrimitivesService(
+            ScheduledExecutorService executorService,
+            ClusterMembershipService membershipService,
+            ClusterCommunicationService communicationService,
+            ClusterEventService eventService,
+            SerializationService serializationService,
+            PartitionService partitionService,
+            PrimitiveCache primitiveCache,
+            AtomixRegistry registry,
+            ConfigService configService) {
+        this.cache = checkNotNull(primitiveCache);
+        this.registry = checkNotNull(registry);
+        this.primitiveRegistry = new CorePrimitiveRegistry(partitionService,
+                new DefaultPrimitiveTypeRegistry(registry.getTypes(PrimitiveType.class)));
+        this.managementService = new CorePrimitiveManagementService(
+                executorService,
+                membershipService,
+                communicationService,
+                eventService,
+                serializationService,
+                partitionService,
+                primitiveCache,
+                primitiveRegistry,
+                new DefaultPrimitiveTypeRegistry(registry.getTypes(PrimitiveType.class)),
+                new DefaultPrimitiveProtocolTypeRegistry(registry.getTypes(PrimitiveProtocol.Type.class)),
+                new DefaultPartitionGroupTypeRegistry(registry.getTypes(PartitionGroup.Type.class)));
+        this.transactionService = new CoreTransactionService(managementService);
+        this.configService = checkNotNull(configService);
+    }
 
     /**
      * Returns the primitive transaction service.
@@ -168,180 +170,180 @@ public class CorePrimitivesService implements ManagedPrimitivesService {
         return new DefaultTransactionBuilder(name, new TransactionConfig(), managementService, transactionService);
     }
 
-  @Override
-  public <K, V> DistributedMap<K, V> getMap(String name) {
-    return getPrimitive(name, DistributedMapType.instance());
-  }
+    @Override
+    public <K, V> DistributedMap<K, V> getMap(String name) {
+        return getPrimitive(name, DistributedMapType.instance());
+    }
 
-  @Override
-  public <K extends Comparable<K>, V> DistributedSortedMap<K, V> getSortedMap(String name) {
-    return getPrimitive(name, DistributedSortedMapType.instance());
-  }
+    @Override
+    public <K extends Comparable<K>, V> DistributedSortedMap<K, V> getSortedMap(String name) {
+        return getPrimitive(name, DistributedSortedMapType.instance());
+    }
 
-  @Override
-  public <K extends Comparable<K>, V> DistributedNavigableMap<K, V> getNavigableMap(String name) {
-    return getPrimitive(name, DistributedNavigableMapType.instance());
-  }
+    @Override
+    public <K extends Comparable<K>, V> DistributedNavigableMap<K, V> getNavigableMap(String name) {
+        return getPrimitive(name, DistributedNavigableMapType.instance());
+    }
 
-  @Override
-  public <K, V> DistributedMultimap<K, V> getMultimap(String name) {
-    return getPrimitive(name, DistributedMultimapType.instance());
-  }
+    @Override
+    public <K, V> DistributedMultimap<K, V> getMultimap(String name) {
+        return getPrimitive(name, DistributedMultimapType.instance());
+    }
 
-  @Override
-  public <K, V> AtomicMap<K, V> getAtomicMap(String name) {
-    return getPrimitive(name, AtomicMapType.instance());
-  }
+    @Override
+    public <K, V> AtomicMap<K, V> getAtomicMap(String name) {
+        return getPrimitive(name, AtomicMapType.instance());
+    }
 
-  @Override
-  public <V> AtomicDocumentTree<V> getAtomicDocumentTree(String name) {
-    return getPrimitive(name, AtomicDocumentTreeType.instance());
-  }
+    @Override
+    public <V> AtomicDocumentTree<V> getAtomicDocumentTree(String name) {
+        return getPrimitive(name, AtomicDocumentTreeType.instance());
+    }
 
-  @Override
-  public <K extends Comparable<K>, V> AtomicSortedMap<K, V> getAtomicSortedMap(String name) {
-    return getPrimitive(name, AtomicSortedMapType.instance());
-  }
+    @Override
+    public <K extends Comparable<K>, V> AtomicSortedMap<K, V> getAtomicSortedMap(String name) {
+        return getPrimitive(name, AtomicSortedMapType.instance());
+    }
 
-  @Override
-  public <K extends Comparable<K>, V> AtomicNavigableMap<K, V> getAtomicNavigableMap(String name) {
-    return getPrimitive(name, AtomicNavigableMapType.instance());
-  }
+    @Override
+    public <K extends Comparable<K>, V> AtomicNavigableMap<K, V> getAtomicNavigableMap(String name) {
+        return getPrimitive(name, AtomicNavigableMapType.instance());
+    }
 
-  @Override
-  public <K, V> AtomicMultimap<K, V> getAtomicMultimap(String name) {
-    return getPrimitive(name, AtomicMultimapType.instance());
-  }
+    @Override
+    public <K, V> AtomicMultimap<K, V> getAtomicMultimap(String name) {
+        return getPrimitive(name, AtomicMultimapType.instance());
+    }
 
-  @Override
-  public <K> AtomicCounterMap<K> getAtomicCounterMap(String name) {
-    return getPrimitive(name, AtomicCounterMapType.instance());
-  }
+    @Override
+    public <K> AtomicCounterMap<K> getAtomicCounterMap(String name) {
+        return getPrimitive(name, AtomicCounterMapType.instance());
+    }
 
-  @Override
-  public <E> DistributedSet<E> getSet(String name) {
-    return getPrimitive(name, DistributedSetType.instance());
-  }
+    @Override
+    public <E> DistributedSet<E> getSet(String name) {
+        return getPrimitive(name, DistributedSetType.instance());
+    }
 
-  @Override
-  public <E extends Comparable<E>> DistributedSortedSet<E> getSortedSet(String name) {
-    return getPrimitive(name, DistributedSortedSetType.instance());
-  }
+    @Override
+    public <E extends Comparable<E>> DistributedSortedSet<E> getSortedSet(String name) {
+        return getPrimitive(name, DistributedSortedSetType.instance());
+    }
 
-  @Override
-  public <E extends Comparable<E>> DistributedNavigableSet<E> getNavigableSet(String name) {
-    return getPrimitive(name, DistributedNavigableSetType.instance());
-  }
+    @Override
+    public <E extends Comparable<E>> DistributedNavigableSet<E> getNavigableSet(String name) {
+        return getPrimitive(name, DistributedNavigableSetType.instance());
+    }
 
-  @Override
-  public <E> DistributedQueue<E> getQueue(String name) {
-    return getPrimitive(name, DistributedQueueType.instance());
-  }
+    @Override
+    public <E> DistributedQueue<E> getQueue(String name) {
+        return getPrimitive(name, DistributedQueueType.instance());
+    }
 
-  @Override
-  public <E> DistributedList<E> getList(String name) {
-    return getPrimitive(name, DistributedListType.instance());
-  }
+    @Override
+    public <E> DistributedList<E> getList(String name) {
+        return getPrimitive(name, DistributedListType.instance());
+    }
 
-  @Override
-  public <E> DistributedMultiset<E> getMultiset(String name) {
-    return getPrimitive(name, DistributedMultisetType.instance());
-  }
+    @Override
+    public <E> DistributedMultiset<E> getMultiset(String name) {
+        return getPrimitive(name, DistributedMultisetType.instance());
+    }
 
-  @Override
-  public DistributedCounter getCounter(String name) {
-    return getPrimitive(name, DistributedCounterType.instance());
-  }
+    @Override
+    public DistributedCounter getCounter(String name) {
+        return getPrimitive(name, DistributedCounterType.instance());
+    }
 
-  @Override
-  public AtomicCounter getAtomicCounter(String name) {
-    return getPrimitive(name, AtomicCounterType.instance());
-  }
+    @Override
+    public AtomicCounter getAtomicCounter(String name) {
+        return getPrimitive(name, AtomicCounterType.instance());
+    }
 
-  @Override
-  public AtomicIdGenerator getAtomicIdGenerator(String name) {
-    return getPrimitive(name, AtomicIdGeneratorType.instance());
-  }
+    @Override
+    public AtomicIdGenerator getAtomicIdGenerator(String name) {
+        return getPrimitive(name, AtomicIdGeneratorType.instance());
+    }
 
-  @Override
-  public <V> DistributedValue<V> getValue(String name) {
-    return getPrimitive(name, DistributedValueType.instance());
-  }
+    @Override
+    public <V> DistributedValue<V> getValue(String name) {
+        return getPrimitive(name, DistributedValueType.instance());
+    }
 
-  @Override
-  public <V> AtomicValue<V> getAtomicValue(String name) {
-    return getPrimitive(name, AtomicValueType.instance());
-  }
+    @Override
+    public <V> AtomicValue<V> getAtomicValue(String name) {
+        return getPrimitive(name, AtomicValueType.instance());
+    }
 
-  @Override
-  public <T> LeaderElection<T> getLeaderElection(String name) {
-    return getPrimitive(name, LeaderElectionType.instance());
-  }
+    @Override
+    public <T> LeaderElection<T> getLeaderElection(String name) {
+        return getPrimitive(name, LeaderElectionType.instance());
+    }
 
-  @Override
-  public <T> LeaderElector<T> getLeaderElector(String name) {
-    return getPrimitive(name, LeaderElectorType.instance());
-  }
+    @Override
+    public <T> LeaderElector<T> getLeaderElector(String name) {
+        return getPrimitive(name, LeaderElectorType.instance());
+    }
 
-  @Override
-  public DistributedLock getLock(String name) {
-    return getPrimitive(name, DistributedLockType.instance());
-  }
+    @Override
+    public DistributedLock getLock(String name) {
+        return getPrimitive(name, DistributedLockType.instance());
+    }
 
-  @Override
-  public AtomicLock getAtomicLock(String name) {
-    return getPrimitive(name, AtomicLockType.instance());
-  }
+    @Override
+    public AtomicLock getAtomicLock(String name) {
+        return getPrimitive(name, AtomicLockType.instance());
+    }
 
-  @Override
-  public DistributedCyclicBarrier getCyclicBarrier(String name) {
-    return getPrimitive(name, DistributedCyclicBarrierType.instance());
-  }
+    @Override
+    public DistributedCyclicBarrier getCyclicBarrier(String name) {
+        return getPrimitive(name, DistributedCyclicBarrierType.instance());
+    }
 
-  @Override
-  public DistributedSemaphore getSemaphore(String name) {
-    return getPrimitive(name, DistributedSemaphoreType.instance());
-  }
+    @Override
+    public DistributedSemaphore getSemaphore(String name) {
+        return getPrimitive(name, DistributedSemaphoreType.instance());
+    }
 
-  @Override
-  public AtomicSemaphore getAtomicSemaphore(String name) {
-    return getPrimitive(name, AtomicSemaphoreType.instance());
-  }
+    @Override
+    public AtomicSemaphore getAtomicSemaphore(String name) {
+        return getPrimitive(name, AtomicSemaphoreType.instance());
+    }
 
-  @Override
-  public <E> WorkQueue<E> getWorkQueue(String name) {
-    return getPrimitive(name, WorkQueueType.instance());
-  }
+    @Override
+    public <E> WorkQueue<E> getWorkQueue(String name) {
+        return getPrimitive(name, WorkQueueType.instance());
+    }
 
-  @Override
-  public PrimitiveType getPrimitiveType(String typeName) {
-    return registry.getType(PrimitiveType.class, typeName);
-  }
+    @Override
+    public PrimitiveType getPrimitiveType(String typeName) {
+        return registry.getType(PrimitiveType.class, typeName);
+    }
 
-  @Override
-  public <B extends PrimitiveBuilder<B, C, P>, C extends PrimitiveConfig<C>, P extends SyncPrimitive> B primitiveBuilder(
-      String name, PrimitiveType<B, C, P> primitiveType) {
-    return primitiveType.newBuilder(name, configService.getConfig(name, primitiveType), managementService);
-  }
+    @Override
+    public <B extends PrimitiveBuilder<B, C, P>, C extends PrimitiveConfig<C>, P extends SyncPrimitive> B primitiveBuilder(
+            String name, PrimitiveType<B, C, P> primitiveType) {
+        return primitiveType.newBuilder(name, configService.getConfig(name, primitiveType), managementService);
+    }
 
-  @Override
-  @SuppressWarnings("unchecked")
-  public <P extends SyncPrimitive> CompletableFuture<P> getPrimitiveAsync(String name, PrimitiveType<?, ?, P> primitiveType) {
-    return getPrimitiveAsync(name, (PrimitiveType) primitiveType, null);
-  }
+    @Override
+    @SuppressWarnings("unchecked")
+    public <P extends SyncPrimitive> CompletableFuture<P> getPrimitiveAsync(String name, PrimitiveType<?, ?, P> primitiveType) {
+        return getPrimitiveAsync(name, (PrimitiveType) primitiveType, null);
+    }
 
-  @Override
-  @SuppressWarnings("unchecked")
-  public <C extends PrimitiveConfig<C>, P extends SyncPrimitive> CompletableFuture<P> getPrimitiveAsync(
-      String name, PrimitiveType<?, C, P> primitiveType, C primitiveConfig) {
-    return cache.getPrimitive(name, () -> {
-      C config = primitiveConfig;
-      if (config == null) {
-        config = configService.getConfig(name, primitiveType);
-      }
-      return primitiveType.newBuilder(name, config, managementService).buildAsync();
-    });
-  }
+    @Override
+    @SuppressWarnings("unchecked")
+    public <C extends PrimitiveConfig<C>, P extends SyncPrimitive> CompletableFuture<P> getPrimitiveAsync(
+            String name, PrimitiveType<?, C, P> primitiveType, C primitiveConfig) {
+        return cache.getPrimitive(name, () -> {
+            C config = primitiveConfig;
+            if (config == null) {
+                config = configService.getConfig(name, primitiveType);
+            }
+            return primitiveType.newBuilder(name, config, managementService).buildAsync();
+        });
+    }
 
     @Override
     public Collection<PrimitiveInfo> getPrimitives() {

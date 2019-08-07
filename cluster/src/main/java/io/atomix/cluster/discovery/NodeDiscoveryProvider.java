@@ -38,46 +38,47 @@ import java.util.concurrent.CompletableFuture;
  * @see BootstrapDiscoveryProvider
  * @see MulticastDiscoveryProvider
  */
+// TODO: 2018/12/06 by zmyer
 public interface NodeDiscoveryProvider
-    extends ListenerService<NodeDiscoveryEvent, NodeDiscoveryEventListener>,
-    Configured<NodeDiscoveryConfig> {
-
-  /**
-   * Membership provider type.
-   */
-  interface Type<C extends NodeDiscoveryConfig> extends ConfiguredType<C> {
+        extends ListenerService<NodeDiscoveryEvent, NodeDiscoveryEventListener>,
+        Configured<NodeDiscoveryConfig> {
 
     /**
-     * Creates a new instance of the provider.
-     *
-     * @param config the provider configuration
-     * @return the provider instance
+     * Membership provider type.
      */
-    NodeDiscoveryProvider newProvider(C config);
-  }
+    interface Type<C extends NodeDiscoveryConfig> extends ConfiguredType<C> {
 
-  /**
-   * Returns the set of active nodes.
-   *
-   * @return the set of active nodes
-   */
-  Set<Node> getNodes();
+        /**
+         * Creates a new instance of the provider.
+         *
+         * @param config the provider configuration
+         * @return the provider instance
+         */
+        NodeDiscoveryProvider newProvider(C config);
+    }
 
-  /**
-   * Joins the cluster.
-   *
-   * @param bootstrap the bootstrap service
-   * @param localNode the local node info
-   * @return a future to be completed once the join is complete
-   */
-  CompletableFuture<Void> join(BootstrapService bootstrap, Node localNode);
+    /**
+     * Returns the set of active nodes.
+     *
+     * @return the set of active nodes
+     */
+    Set<Node> getNodes();
 
-  /**
-   * Leaves the cluster.
-   *
-   * @param localNode the local node info
-   * @return a future to be completed once the leave is complete
-   */
-  CompletableFuture<Void> leave(Node localNode);
+    /**
+     * Joins the cluster.
+     *
+     * @param bootstrap the bootstrap service
+     * @param localNode the local node info
+     * @return a future to be completed once the join is complete
+     */
+    CompletableFuture<Void> join(BootstrapService bootstrap, Node localNode);
+
+    /**
+     * Leaves the cluster.
+     *
+     * @param localNode the local node info
+     * @return a future to be completed once the leave is complete
+     */
+    CompletableFuture<Void> leave(Node localNode);
 
 }

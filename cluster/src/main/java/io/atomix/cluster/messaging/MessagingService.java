@@ -85,12 +85,12 @@ public interface MessagingService {
      * @param address  address to send the message to.
      * @param type     type of message.
      * @param payload  message payload.
-     * @param timeout response timeout
+     * @param timeout  response timeout
      * @param executor executor over which any follow up actions after completion will be executed.
      * @return a response future
      */
     CompletableFuture<byte[]> sendAndReceive(Address address, String type, byte[] payload, Duration timeout,
-            Executor executor);
+                                             Executor executor);
 
     /**
      * Registers a new message handler for message type.

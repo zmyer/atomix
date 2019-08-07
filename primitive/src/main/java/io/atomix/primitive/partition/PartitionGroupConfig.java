@@ -21,9 +21,11 @@ import io.atomix.utils.config.TypedConfig;
 /**
  * Partition group configuration.
  */
-public abstract class PartitionGroupConfig<C extends PartitionGroupConfig<C>> implements TypedConfig<PartitionGroup.Type>, NamedConfig<C> {
-  private String name;
-  private int partitions = getDefaultPartitions();
+// TODO: 2018/12/06 by zmyer
+public abstract class PartitionGroupConfig<C extends PartitionGroupConfig<C>>
+        implements TypedConfig<PartitionGroup.Type>, NamedConfig<C> {
+    private String name;
+    private int partitions = getDefaultPartitions();
 
     @Override
     public String getName() {

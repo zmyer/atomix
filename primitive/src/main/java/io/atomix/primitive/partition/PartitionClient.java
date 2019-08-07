@@ -34,6 +34,6 @@ public interface PartitionClient {
      * @return a new proxy builder for the given primitive type
      */
     SessionClient.Builder sessionBuilder(String primitiveName, PrimitiveType primitiveType,
-            ServiceConfig serviceConfig);
+                                         ServiceConfig serviceConfig);
 
 }

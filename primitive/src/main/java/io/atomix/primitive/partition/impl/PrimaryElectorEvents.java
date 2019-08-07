@@ -28,28 +28,29 @@ import io.atomix.utils.serializer.Namespaces;
 /**
  * Leader elector events.
  */
+// TODO: 2018/12/07 by zmyer
 public enum PrimaryElectorEvents implements EventType {
-  CHANGE("change");
+    CHANGE("change");
 
-  private final String id;
+    private final String id;
 
-  PrimaryElectorEvents(String id) {
-    this.id = id;
-  }
+    PrimaryElectorEvents(String id) {
+        this.id = id;
+    }
 
-  @Override
-  public String id() {
-    return id;
-  }
+    @Override
+    public String id() {
+        return id;
+    }
 
-  public static final Namespace NAMESPACE = Namespace.builder()
-      .nextId(Namespaces.BEGIN_USER_CUSTOM_ID + 50)
-      .register(PrimaryElectionEvent.class)
-      .register(PrimaryElectionEvent.Type.class)
-      .register(PrimaryTerm.class)
-      .register(GroupMember.class)
-      .register(MemberId.class)
-      .register(MemberGroupId.class)
-      .register(PartitionId.class)
-      .build(PrimaryElectorEvents.class.getSimpleName());
+    public static final Namespace NAMESPACE = Namespace.builder()
+            .nextId(Namespaces.BEGIN_USER_CUSTOM_ID + 50)
+            .register(PrimaryElectionEvent.class)
+            .register(PrimaryElectionEvent.Type.class)
+            .register(PrimaryTerm.class)
+            .register(GroupMember.class)
+            .register(MemberId.class)
+            .register(MemberGroupId.class)
+            .register(PartitionId.class)
+            .build(PrimaryElectorEvents.class.getSimpleName());
 }

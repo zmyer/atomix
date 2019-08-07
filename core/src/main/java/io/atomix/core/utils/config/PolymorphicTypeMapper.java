@@ -22,53 +22,55 @@ import io.atomix.utils.config.TypedConfig;
 /**
  * Polymorphic type mapper.
  */
+// TODO: 2018/12/06 by zmyer
 public class PolymorphicTypeMapper {
-  private final String typePath;
-  private final Class<? extends TypedConfig> configClass;
-  private final Class<? extends ConfiguredType> typeClass;
+    private final String typePath;
+    private final Class<? extends TypedConfig> configClass;
+    private final Class<? extends ConfiguredType> typeClass;
 
-  public PolymorphicTypeMapper(String typePath, Class<? extends TypedConfig> configClass, Class<? extends ConfiguredType> typeClass) {
-    this.typePath = typePath;
-    this.configClass = configClass;
-    this.typeClass = typeClass;
-  }
+    public PolymorphicTypeMapper(String typePath, Class<? extends TypedConfig> configClass,
+                                 Class<? extends ConfiguredType> typeClass) {
+        this.typePath = typePath;
+        this.configClass = configClass;
+        this.typeClass = typeClass;
+    }
 
-  /**
-   * Returns the polymorphic configuration class.
-   *
-   * @return the polymorphic configuration class
-   */
-  public Class<? extends TypedConfig> getConfigClass() {
-    return configClass;
-  }
+    /**
+     * Returns the polymorphic configuration class.
+     *
+     * @return the polymorphic configuration class
+     */
+    public Class<? extends TypedConfig> getConfigClass() {
+        return configClass;
+    }
 
-  /**
-   * Returns the polymorphic type.
-   *
-   * @return the polymorphic type
-   */
-  public Class<? extends ConfiguredType> getTypeClass() {
-    return typeClass;
-  }
+    /**
+     * Returns the polymorphic type.
+     *
+     * @return the polymorphic type
+     */
+    public Class<? extends ConfiguredType> getTypeClass() {
+        return typeClass;
+    }
 
-  /**
-   * Returns the type path.
-   *
-   * @return the type path
-   */
-  public String getTypePath() {
-    return typePath;
-  }
+    /**
+     * Returns the type path.
+     *
+     * @return the type path
+     */
+    public String getTypePath() {
+        return typePath;
+    }
 
-  /**
-   * Returns the concrete configuration class.
-   *
-   * @param registry the Atomix type registry
-   * @param type     the type name
-   * @return the concrete configuration class
-   */
-  @SuppressWarnings("unchecked")
-  public Class<? extends TypedConfig<?>> getConcreteClass(AtomixRegistry registry, String type) {
-    return (Class<? extends TypedConfig<?>>) registry.getType(typeClass, type).newConfig().getClass();
-  }
+    /**
+     * Returns the concrete configuration class.
+     *
+     * @param registry the Atomix type registry
+     * @param type     the type name
+     * @return the concrete configuration class
+     */
+    @SuppressWarnings("unchecked")
+    public Class<? extends TypedConfig<?>> getConcreteClass(AtomixRegistry registry, String type) {
+        return (Class<? extends TypedConfig<?>>) registry.getType(typeClass, type).newConfig().getClass();
+    }
 }

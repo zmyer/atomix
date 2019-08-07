@@ -24,11 +24,13 @@ import io.atomix.utils.serializer.NamespaceConfig;
 /**
  * Primitive configuration.
  */
-public abstract class PrimitiveConfig<C extends PrimitiveConfig<C>> implements TypedConfig<PrimitiveType>, NamedConfig<C> {
-  private String name;
-  private NamespaceConfig namespaceConfig;
-  private PrimitiveProtocolConfig protocolConfig;
-  private boolean readOnly = false;
+// TODO: 2018/12/06 by zmyer
+public abstract class PrimitiveConfig<C extends PrimitiveConfig<C>>
+        implements TypedConfig<PrimitiveType>, NamedConfig<C> {
+    private String name;
+    private NamespaceConfig namespaceConfig;
+    private PrimitiveProtocolConfig protocolConfig;
+    private boolean readOnly = false;
 
     @Override
     public String getName() {
@@ -84,14 +86,14 @@ public abstract class PrimitiveConfig<C extends PrimitiveConfig<C>> implements T
         return (C) this;
     }
 
-  /**
-   * Sets the primitive to read-only.
-   *
-   * @return the primitive configuration
-   */
-  public C setReadOnly() {
-    return setReadOnly(true);
-  }
+    /**
+     * Sets the primitive to read-only.
+     *
+     * @return the primitive configuration
+     */
+    public C setReadOnly() {
+        return setReadOnly(true);
+    }
 
     /**
      * Sets whether the primitive is read-only.

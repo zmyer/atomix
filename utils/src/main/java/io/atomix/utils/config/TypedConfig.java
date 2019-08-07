@@ -18,6 +18,7 @@ package io.atomix.utils.config;
 /**
  * Typed configuration.
  */
+// TODO: 2018/12/06 by zmyer
 public interface TypedConfig<T> extends Config {
 
     /**

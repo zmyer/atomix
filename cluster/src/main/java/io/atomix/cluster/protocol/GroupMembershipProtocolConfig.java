@@ -20,5 +20,6 @@ import io.atomix.utils.config.TypedConfig;
 /**
  * Group membership protocol configuration.
  */
+// TODO: 2018/12/06 by zmyer
 public abstract class GroupMembershipProtocolConfig implements TypedConfig<GroupMembershipProtocol.Type> {
 }

@@ -43,29 +43,29 @@ public interface ClusterMembershipService
      */
     Set<Member> getMembers();
 
-  /**
-   * Returns the set of active reachable members.
-   *
-   * @return the set of active reachable members
-   */
-  default Set<Member> getReachableMembers() {
-    return getMembers().stream()
-        .filter(member -> member.isReachable())
-        .collect(Collectors.toSet());
-  }
+    /**
+     * Returns the set of active reachable members.
+     *
+     * @return the set of active reachable members
+     */
+    default Set<Member> getReachableMembers() {
+        return getMembers().stream()
+                .filter(member -> member.isReachable())
+                .collect(Collectors.toSet());
+    }
 
-  /**
-   * Returns the specified member node.
-   * <p>
-   * This is a convenience method that wraps the given {@link String} in a {@link MemberId}. To avoid unnecessary
-   * object allocation, repeated invocations of this method should instead use {@link #getMember(MemberId)}.
-   *
-   * @param memberId the member identifier
-   * @return the member or {@code null} if no node with the given identifier exists
-   */
-  default Member getMember(String memberId) {
-    return getMember(MemberId.from(memberId));
-  }
+    /**
+     * Returns the specified member node.
+     * <p>
+     * This is a convenience method that wraps the given {@link String} in a {@link MemberId}. To avoid unnecessary
+     * object allocation, repeated invocations of this method should instead use {@link #getMember(MemberId)}.
+     *
+     * @param memberId the member identifier
+     * @return the member or {@code null} if no node with the given identifier exists
+     */
+    default Member getMember(String memberId) {
+        return getMember(MemberId.from(memberId));
+    }
 
     /**
      * Returns the specified member.
@@ -75,17 +75,17 @@ public interface ClusterMembershipService
      */
     Member getMember(MemberId memberId);
 
-  /**
-   * Returns a member by address.
-   *
-   * @param address the member address
-   * @return the member or {@code null} if no member with the given address could be found
-   */
-  default Member getMember(Address address) {
-    return getMembers().stream()
-        .filter(member -> member.address().equals(address))
-        .findFirst()
-        .orElse(null);
-  }
+    /**
+     * Returns a member by address.
+     *
+     * @param address the member address
+     * @return the member or {@code null} if no member with the given address could be found
+     */
+    default Member getMember(Address address) {
+        return getMembers().stream()
+                .filter(member -> member.address().equals(address))
+                .findFirst()
+                .orElse(null);
+    }
 
 }
