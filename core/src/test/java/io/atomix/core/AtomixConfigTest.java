@@ -15,6 +15,9 @@
  */
 package io.atomix.core;
 
+import java.time.Duration;
+import java.util.Arrays;
+
 import io.atomix.cluster.ClusterConfig;
 import io.atomix.cluster.MemberConfig;
 import io.atomix.cluster.MembershipConfig;
@@ -22,7 +25,8 @@ import io.atomix.cluster.MulticastConfig;
 import io.atomix.cluster.discovery.MulticastDiscoveryConfig;
 import io.atomix.cluster.discovery.MulticastDiscoveryProvider;
 import io.atomix.cluster.messaging.MessagingConfig;
-import io.atomix.cluster.protocol.PhiMembershipProtocolConfig;
+import io.atomix.cluster.protocol.HeartbeatMembershipProtocolConfig;
+import io.atomix.core.log.DistributedLogConfig;
 import io.atomix.core.map.AtomicMapConfig;
 import io.atomix.core.profile.ConsensusProfile;
 import io.atomix.core.profile.ConsensusProfileConfig;
@@ -36,15 +40,16 @@ import io.atomix.protocols.backup.MultiPrimaryProtocol;
 import io.atomix.protocols.backup.MultiPrimaryProtocolConfig;
 import io.atomix.protocols.backup.partition.PrimaryBackupPartitionGroup;
 import io.atomix.protocols.backup.partition.PrimaryBackupPartitionGroupConfig;
+import io.atomix.protocols.log.DistributedLogProtocol;
+import io.atomix.protocols.log.DistributedLogProtocolConfig;
+import io.atomix.protocols.log.partition.LogPartitionGroup;
+import io.atomix.protocols.log.partition.LogPartitionGroupConfig;
 import io.atomix.protocols.raft.MultiRaftProtocolConfig;
 import io.atomix.protocols.raft.ReadConsistency;
 import io.atomix.protocols.raft.partition.RaftPartitionGroup;
 import io.atomix.protocols.raft.partition.RaftPartitionGroupConfig;
 import io.atomix.utils.memory.MemorySize;
 import org.junit.Test;
-
-import java.time.Duration;
-import java.util.Arrays;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -70,9 +75,9 @@ public class AtomixConfigTest {
     MemberConfig node = cluster.getNodeConfig();
     assertEquals("one", node.getId().id());
     assertEquals("localhost:5000", node.getAddress().toString());
-    assertEquals("foo", node.getZone());
-    assertEquals("bar", node.getRack());
-    assertEquals("baz", node.getHost());
+    assertEquals("foo", node.getZoneId());
+    assertEquals("bar", node.getRackId());
+    assertEquals("baz", node.getHostId());
     assertEquals("bar", node.getProperties().getProperty("foo"));
     assertEquals("baz", node.getProperties().getProperty("bar"));
 
@@ -81,9 +86,9 @@ public class AtomixConfigTest {
     assertEquals("230.0.1.1", multicast.getGroup().getHostAddress());
     assertEquals(56789, multicast.getPort());
 
-    PhiMembershipProtocolConfig protocol = (PhiMembershipProtocolConfig) cluster.getProtocolConfig();
+    HeartbeatMembershipProtocolConfig protocol = (HeartbeatMembershipProtocolConfig) cluster.getProtocolConfig();
     assertEquals(Duration.ofMillis(200), protocol.getHeartbeatInterval());
-    assertEquals(12, protocol.getFailureThreshold());
+    assertEquals(12, protocol.getPhiFailureThreshold());
     assertEquals(Duration.ofSeconds(15), protocol.getFailureTimeout());
 
     MembershipConfig membership = cluster.getMembershipConfig();
@@ -112,6 +117,9 @@ public class AtomixConfigTest {
     RaftPartitionGroupConfig managementGroup = (RaftPartitionGroupConfig) config.getManagementGroup();
     assertEquals(RaftPartitionGroup.TYPE, managementGroup.getType());
     assertEquals(1, managementGroup.getPartitions());
+    assertEquals(Duration.ofSeconds(5), managementGroup.getElectionTimeout());
+    assertEquals(Duration.ofMillis(500), managementGroup.getHeartbeatInterval());
+    assertEquals(Duration.ofSeconds(10), managementGroup.getDefaultSessionTimeout());
     assertEquals(new MemorySize(1024 * 1024 * 16), managementGroup.getStorageConfig().getSegmentSize());
 
     RaftPartitionGroupConfig groupOne = (RaftPartitionGroupConfig) config.getPartitionGroups().get("one");
@@ -123,6 +131,11 @@ public class AtomixConfigTest {
     assertEquals(PrimaryBackupPartitionGroup.TYPE, groupTwo.getType());
     assertEquals("two", groupTwo.getName());
     assertEquals(32, groupTwo.getPartitions());
+
+    LogPartitionGroupConfig groupThree = (LogPartitionGroupConfig) config.getPartitionGroups().get("three");
+    assertEquals(LogPartitionGroup.TYPE, groupThree.getType());
+    assertEquals("three", groupThree.getName());
+    assertEquals(3, groupThree.getPartitions());
 
     ConsensusProfileConfig consensusProfile = (ConsensusProfileConfig) config.getProfiles().get(0);
     assertEquals(ConsensusProfile.TYPE, consensusProfile.getType());
@@ -159,5 +172,12 @@ public class AtomixConfigTest {
     assertEquals(ReadConsistency.SEQUENTIAL, multiRaft.getReadConsistency());
     assertEquals(Recovery.RECOVER, multiRaft.getRecoveryStrategy());
     assertEquals(Duration.ofSeconds(2), multiRaft.getRetryDelay());
+
+    DistributedLogConfig log = config.getPrimitive("log");
+    assertEquals("log", log.getType().name());
+
+    DistributedLogProtocolConfig logConfig = (DistributedLogProtocolConfig) log.getProtocolConfig();
+    assertEquals(DistributedLogProtocol.TYPE, logConfig.getType());
+    assertEquals("three", logConfig.getGroup());
   }
 }

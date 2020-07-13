@@ -18,22 +18,33 @@ package io.atomix.core.map.impl;
 import io.atomix.core.map.AsyncAtomicMap;
 import io.atomix.core.map.AtomicMap;
 import io.atomix.primitive.PrimitiveRegistry;
+import io.atomix.primitive.partition.PartitionId;
 import io.atomix.primitive.proxy.ProxyClient;
 
 import java.time.Duration;
+import java.util.Collection;
 
 /**
  * Distributed resource providing the {@link AsyncAtomicMap} primitive.
  */
-// TODO: 2018/12/07 by zmyer
-public class AtomicMapProxy extends PartitionedAtomicMapProxy<AsyncAtomicMap<String, byte[]>, AtomicMapService<String>, String>
-        implements AsyncAtomicMap<String, byte[]>, AtomicMapClient<String> {
-    public AtomicMapProxy(ProxyClient<AtomicMapService<String>> proxy, PrimitiveRegistry registry) {
-        super(proxy, registry);
-    }
+public class AtomicMapProxy extends AbstractAtomicMapProxy<AsyncAtomicMap<String, byte[]>, AtomicMapService<String>, String>
+    implements AsyncAtomicMap<String, byte[]>, AtomicMapClient<String> {
+  public AtomicMapProxy(ProxyClient<AtomicMapService<String>> proxy, PrimitiveRegistry registry) {
+    super(proxy, registry);
+  }
 
-    @Override
-    public AtomicMap<String, byte[]> sync(Duration operationTimeout) {
-        return new BlockingAtomicMap<>(this, operationTimeout.toMillis());
-    }
+  @Override
+  protected PartitionId getPartition(String key) {
+    return getProxyClient().getPartitionId(key);
+  }
+
+  @Override
+  protected Collection<PartitionId> getPartitions() {
+    return getProxyClient().getPartitionIds();
+  }
+
+  @Override
+  public AtomicMap<String, byte[]> sync(Duration operationTimeout) {
+    return new BlockingAtomicMap<>(this, operationTimeout.toMillis());
+  }
 }

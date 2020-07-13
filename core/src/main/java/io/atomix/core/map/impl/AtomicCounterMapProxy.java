@@ -20,6 +20,8 @@ import io.atomix.core.map.AtomicCounterMap;
 import io.atomix.primitive.AbstractAsyncPrimitive;
 import io.atomix.primitive.PrimitiveRegistry;
 import io.atomix.primitive.proxy.ProxyClient;
+import io.atomix.primitive.proxy.ProxySession;
+import io.atomix.utils.concurrent.Futures;
 
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
@@ -29,7 +31,7 @@ import java.util.function.Predicate;
  * {@code AsyncAtomicCounterMap} implementation backed by Atomix.
  */
 public class AtomicCounterMapProxy
-    extends AbstractAsyncPrimitive<AsyncAtomicCounterMap<String>, AtomicCounterMapService> 
+    extends AbstractAsyncPrimitive<AsyncAtomicCounterMap<String>, AtomicCounterMapService>
     implements AsyncAtomicCounterMap<String> {
   public AtomicCounterMapProxy(ProxyClient<AtomicCounterMapService> proxy, PrimitiveRegistry registry) {
     super(proxy, registry);
@@ -110,6 +112,13 @@ public class AtomicCounterMapProxy
   @Override
   public CompletableFuture<Void> clear() {
     return getProxyClient().acceptAll(service -> service.clear());
+  }
+
+  @Override
+  public CompletableFuture<AsyncAtomicCounterMap<String>> connect() {
+    return super.connect()
+        .thenCompose(v -> Futures.allOf(getProxyClient().getPartitions().stream().map(ProxySession::connect)))
+        .thenApply(v -> this);
   }
 
   @Override

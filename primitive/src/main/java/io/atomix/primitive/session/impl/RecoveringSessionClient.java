@@ -48,7 +48,6 @@ import static com.google.common.base.Preconditions.checkNotNull;
 /**
  * Primitive proxy that supports recovery.
  */
-// TODO: 2018/7/31 by zmyer
 public class RecoveringSessionClient implements SessionClient {
   private static final SessionId DEFAULT_SESSION_ID = SessionId.from(0);
   private final PartitionId partitionId;
@@ -83,36 +82,36 @@ public class RecoveringSessionClient implements SessionClient {
         .build());
   }
 
-    @Override
-    public SessionId sessionId() {
-        SessionClient proxy = this.session;
-        return proxy != null ? proxy.sessionId() : DEFAULT_SESSION_ID;
-    }
+  @Override
+  public SessionId sessionId() {
+    SessionClient proxy = this.session;
+    return proxy != null ? proxy.sessionId() : DEFAULT_SESSION_ID;
+  }
 
-    @Override
-    public PartitionId partitionId() {
-        return partitionId;
-    }
+  @Override
+  public PartitionId partitionId() {
+    return partitionId;
+  }
 
-    @Override
-    public String name() {
-        return name;
-    }
+  @Override
+  public String name() {
+    return name;
+  }
 
-    @Override
-    public PrimitiveType type() {
-        return primitiveType;
-    }
+  @Override
+  public PrimitiveType type() {
+    return primitiveType;
+  }
 
-    @Override
-    public ThreadContext context() {
-        return context;
-    }
+  @Override
+  public ThreadContext context() {
+    return context;
+  }
 
-    @Override
-    public PrimitiveState getState() {
-        return state;
-    }
+  @Override
+  public PrimitiveState getState() {
+    return state;
+  }
 
   /**
    * Sets the session state.
@@ -142,24 +141,24 @@ public class RecoveringSessionClient implements SessionClient {
     }
   }
 
-    @Override
-    public void addStateChangeListener(Consumer<PrimitiveState> listener) {
-        stateChangeListeners.add(listener);
-    }
+  @Override
+  public void addStateChangeListener(Consumer<PrimitiveState> listener) {
+    stateChangeListeners.add(listener);
+  }
 
-    @Override
-    public void removeStateChangeListener(Consumer<PrimitiveState> listener) {
-        stateChangeListeners.remove(listener);
-    }
+  @Override
+  public void removeStateChangeListener(Consumer<PrimitiveState> listener) {
+    stateChangeListeners.remove(listener);
+  }
 
-    /**
-     * Recovers the client.
-     */
-    private void recover() {
-        session = null;
-        connectFuture = new OrderedFuture<>();
-        openProxy(connectFuture);
-    }
+  /**
+   * Recovers the client.
+   */
+  private void recover() {
+    session = null;
+    connectFuture = new OrderedFuture<>();
+    openProxy(connectFuture);
+  }
 
   /**
    * Opens a new client, completing the provided future only once the client has been opened.
@@ -178,7 +177,7 @@ public class RecoveringSessionClient implements SessionClient {
               .build());
           this.session = proxy;
           proxy.addStateChangeListener(this::onStateChange);
-          eventListeners.forEach(proxy::addEventListener);
+          eventListeners.entries().forEach(entry -> proxy.addEventListener(entry.getKey(), entry.getValue()));
           onStateChange(PrimitiveState.CONNECTED);
         }
         future.complete(this);
@@ -188,47 +187,47 @@ public class RecoveringSessionClient implements SessionClient {
     });
   }
 
-    @Override
-    public CompletableFuture<byte[]> execute(PrimitiveOperation operation) {
-        SessionClient proxy = this.session;
-        if (proxy != null) {
-            return proxy.execute(operation);
-        } else {
-            return connectFuture.thenCompose(c -> c.execute(operation));
-        }
+  @Override
+  public CompletableFuture<byte[]> execute(PrimitiveOperation operation) {
+    SessionClient proxy = this.session;
+    if (proxy != null) {
+      return proxy.execute(operation);
+    } else {
+      return connectFuture.thenCompose(c -> c.execute(operation));
     }
+  }
 
-    @Override
-    public synchronized void addEventListener(EventType eventType, Consumer<PrimitiveEvent> consumer) {
-        eventListeners.put(eventType.canonicalize(), consumer);
-        SessionClient proxy = this.session;
-        if (proxy != null) {
-            proxy.addEventListener(eventType, consumer);
-        }
+  @Override
+  public synchronized void addEventListener(EventType eventType, Consumer<PrimitiveEvent> consumer) {
+    eventListeners.put(eventType.canonicalize(), consumer);
+    SessionClient proxy = this.session;
+    if (proxy != null) {
+      proxy.addEventListener(eventType, consumer);
     }
+  }
 
-    @Override
-    public synchronized void removeEventListener(EventType eventType, Consumer<PrimitiveEvent> consumer) {
-        eventListeners.remove(eventType.canonicalize(), consumer);
-        SessionClient proxy = this.session;
-        if (proxy != null) {
-            proxy.removeEventListener(eventType, consumer);
-        }
+  @Override
+  public synchronized void removeEventListener(EventType eventType, Consumer<PrimitiveEvent> consumer) {
+    eventListeners.remove(eventType.canonicalize(), consumer);
+    SessionClient proxy = this.session;
+    if (proxy != null) {
+      proxy.removeEventListener(eventType, consumer);
     }
+  }
 
-    @Override
-    public CompletableFuture<SessionClient> connect() {
+  @Override
+  public CompletableFuture<SessionClient> connect() {
+    if (connectFuture == null) {
+      synchronized (this) {
         if (connectFuture == null) {
-            synchronized (this) {
-                if (connectFuture == null) {
-                    connected = true;
-                    connectFuture = new OrderedFuture<>();
-                    openProxy(connectFuture);
-                }
-            }
+          connected = true;
+          connectFuture = new OrderedFuture<>();
+          openProxy(connectFuture);
         }
-        return connectFuture;
+      }
     }
+    return connectFuture;
+  }
 
   @Override
   public CompletableFuture<Void> close() {
@@ -259,12 +258,12 @@ public class RecoveringSessionClient implements SessionClient {
     return closeFuture;
   }
 
-    @Override
-    public String toString() {
-        return toStringHelper(this)
-                .add("name", session.name())
-                .add("serviceType", session.type())
-                .add("state", state)
-                .toString();
-    }
+  @Override
+  public String toString() {
+    return toStringHelper(this)
+        .add("name", session.name())
+        .add("serviceType", session.type())
+        .add("state", state)
+        .toString();
+  }
 }

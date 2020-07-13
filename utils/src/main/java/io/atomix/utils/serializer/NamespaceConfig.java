@@ -23,71 +23,71 @@ import java.util.List;
 /**
  * Namespace configuration.
  */
-// TODO: 2018/7/30 by zmyer
 public class NamespaceConfig implements Config {
   private String name = Namespace.NO_NAME;
   private boolean registrationRequired = true;
   private boolean compatible = false;
   private List<NamespaceTypeConfig> types = new ArrayList<>();
 
-    /**
-     * Returns the serializer name.
-     *
-     * @return the serializer name
-     */
-    public String getName() {
-        return name;
-    }
+  /**
+   * Returns the serializer name.
+   *
+   * @return the serializer name
+   */
+  public String getName() {
+    return name;
+  }
 
-    /**
-     * Sets the serializer name.
-     *
-     * @param name the serializer name
-     */
-    public NamespaceConfig setName(String name) {
-        this.name = name;
-        return this;
-    }
+  /**
+   * Sets the serializer name.
+   *
+   * @param name the serializer name
+   * @return the serializer configuration
+   */
+  public NamespaceConfig setName(String name) {
+    this.name = name;
+    return this;
+  }
 
-    /**
-     * Returns whether registration is required.
-     *
-     * @return whether registration is required
-     */
-    public boolean isRegistrationRequired() {
-        return registrationRequired;
-    }
+  /**
+   * Returns whether registration is required.
+   *
+   * @return whether registration is required
+   */
+  public boolean isRegistrationRequired() {
+    return registrationRequired;
+  }
 
-    /**
-     * Sets whether registration is required.
-     *
-     * @param registrationRequired whether registration is required
-     * @return the serializer configuration
-     */
-    public NamespaceConfig setRegistrationRequired(boolean registrationRequired) {
-        this.registrationRequired = registrationRequired;
-        return this;
-    }
+  /**
+   * Sets whether registration is required.
+   *
+   * @param registrationRequired whether registration is required
+   * @return the serializer configuration
+   */
+  public NamespaceConfig setRegistrationRequired(boolean registrationRequired) {
+    this.registrationRequired = registrationRequired;
+    return this;
+  }
 
-    /**
-     * Returns whether compatible serialization is enabled.
-     *
-     * @return whether compatible serialization is enabled
-     */
-    public boolean isCompatible() {
-        return compatible;
-    }
+  /**
+   * Returns whether compatible serialization is enabled.
+   *
+   * @return whether compatible serialization is enabled
+   */
+  public boolean isCompatible() {
+    return compatible;
+  }
 
-    /**
-     * Sets whether compatible serialization is enabled.
-     *
-     * @param compatible whether compatible serialization is enabled
-     * @return the serializer configuration
-     */
-    public NamespaceConfig setCompatible(boolean compatible) {
-        this.compatible = compatible;
-        return this;
-    }
+  /**
+   * Sets whether compatible serialization is enabled.
+   *
+   * @param compatible whether compatible serialization is enabled
+   * @return the serializer configuration
+   */
+  public NamespaceConfig setCompatible(boolean compatible) {
+    this.compatible = compatible;
+    return this;
+  }
 
   /**
    * Returns the serializable types.
@@ -109,14 +109,14 @@ public class NamespaceConfig implements Config {
     return this;
   }
 
-    /**
-     * Adds a serializable type to the configuration.
-     *
-     * @param type the serializable type to add
-     * @return the serializer configuration
-     */
-    public NamespaceConfig addType(NamespaceTypeConfig type) {
-        types.add(type);
-        return this;
-    }
+  /**
+   * Adds a serializable type to the configuration.
+   *
+   * @param type the serializable type to add
+   * @return the serializer configuration
+   */
+  public NamespaceConfig addType(NamespaceTypeConfig type) {
+    types.add(type);
+    return this;
+  }
 }

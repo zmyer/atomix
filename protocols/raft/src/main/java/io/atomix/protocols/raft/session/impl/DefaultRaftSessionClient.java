@@ -18,12 +18,12 @@ package io.atomix.protocols.raft.session.impl;
 import io.atomix.cluster.MemberId;
 import io.atomix.primitive.PrimitiveState;
 import io.atomix.primitive.PrimitiveType;
+import io.atomix.primitive.session.SessionClient;
 import io.atomix.primitive.event.EventType;
 import io.atomix.primitive.event.PrimitiveEvent;
 import io.atomix.primitive.operation.PrimitiveOperation;
 import io.atomix.primitive.partition.PartitionId;
 import io.atomix.primitive.service.ServiceConfig;
-import io.atomix.primitive.session.SessionClient;
 import io.atomix.primitive.session.SessionId;
 import io.atomix.protocols.raft.ReadConsistency;
 import io.atomix.protocols.raft.protocol.RaftClientProtocol;
@@ -58,218 +58,219 @@ import static com.google.common.base.Preconditions.checkNotNull;
  * In the event that the client session expires, clients are responsible for opening a new session by creating and
  * opening a new session object.
  */
-// TODO: 2018/7/31 by zmyer
 public class DefaultRaftSessionClient implements RaftSessionClient {
-    private final String serviceName;
-    private final PrimitiveType primitiveType;
-    private final ServiceConfig serviceConfig;
-    private final PartitionId partitionId;
-    private final Duration minTimeout;
-    private final Duration maxTimeout;
-    private final RaftClientProtocol protocol;
-    private final MemberSelectorManager selectorManager;
-    private final RaftSessionManager sessionManager;
-    private final ReadConsistency readConsistency;
-    private final CommunicationStrategy communicationStrategy;
-    private final ThreadContext context;
-    private volatile RaftSessionListener proxyListener;
-    private volatile RaftSessionInvoker proxyInvoker;
-    private volatile RaftSessionState state;
-    private final Consumer<MemberId> leaderChangeListener = this::onLeaderChange;
+  private final String serviceName;
+  private final PrimitiveType primitiveType;
+  private final ServiceConfig serviceConfig;
+  private final PartitionId partitionId;
+  private final Duration minTimeout;
+  private final Duration maxTimeout;
+  private final RaftClientProtocol protocol;
+  private final MemberSelectorManager selectorManager;
+  private final RaftSessionManager sessionManager;
+  private final ReadConsistency readConsistency;
+  private final CommunicationStrategy communicationStrategy;
+  private final ThreadContext context;
+  private volatile RaftSessionListener proxyListener;
+  private volatile RaftSessionInvoker proxyInvoker;
+  private volatile RaftSessionState state;
+  private final Consumer<MemberId> leaderChangeListener = this::onLeaderChange;
 
-    public DefaultRaftSessionClient(
-            String serviceName,
-            PrimitiveType primitiveType,
-            ServiceConfig serviceConfig,
-            PartitionId partitionId,
-            RaftClientProtocol protocol,
-            MemberSelectorManager selectorManager,
-            RaftSessionManager sessionManager,
-            ReadConsistency readConsistency,
-            CommunicationStrategy communicationStrategy,
-            ThreadContext context,
-            Duration minTimeout,
-            Duration maxTimeout) {
-        this.serviceName = checkNotNull(serviceName, "serviceName cannot be null");
-        this.primitiveType = checkNotNull(primitiveType, "serviceType cannot be null");
-        this.serviceConfig = checkNotNull(serviceConfig, "serviceConfig cannot be null");
-        this.partitionId = checkNotNull(partitionId, "partitionId cannot be null");
-        this.protocol = checkNotNull(protocol, "protocol cannot be null");
-        this.selectorManager = checkNotNull(selectorManager, "selectorManager cannot be null");
-        this.readConsistency = checkNotNull(readConsistency, "readConsistency cannot be null");
-        this.communicationStrategy = checkNotNull(communicationStrategy, "communicationStrategy cannot be null");
-        this.context = checkNotNull(context, "context cannot be null");
-        this.minTimeout = checkNotNull(minTimeout, "minTimeout cannot be null");
-        this.maxTimeout = checkNotNull(maxTimeout, "maxTimeout cannot be null");
-        this.sessionManager = checkNotNull(sessionManager, "sessionManager cannot be null");
+  public DefaultRaftSessionClient(
+      String serviceName,
+      PrimitiveType primitiveType,
+      ServiceConfig serviceConfig,
+      PartitionId partitionId,
+      RaftClientProtocol protocol,
+      MemberSelectorManager selectorManager,
+      RaftSessionManager sessionManager,
+      ReadConsistency readConsistency,
+      CommunicationStrategy communicationStrategy,
+      ThreadContext context,
+      Duration minTimeout,
+      Duration maxTimeout) {
+    this.serviceName = checkNotNull(serviceName, "serviceName cannot be null");
+    this.primitiveType = checkNotNull(primitiveType, "serviceType cannot be null");
+    this.serviceConfig = checkNotNull(serviceConfig, "serviceConfig cannot be null");
+    this.partitionId = checkNotNull(partitionId, "partitionId cannot be null");
+    this.protocol = checkNotNull(protocol, "protocol cannot be null");
+    this.selectorManager = checkNotNull(selectorManager, "selectorManager cannot be null");
+    this.readConsistency = checkNotNull(readConsistency, "readConsistency cannot be null");
+    this.communicationStrategy = checkNotNull(communicationStrategy, "communicationStrategy cannot be null");
+    this.context = checkNotNull(context, "context cannot be null");
+    this.minTimeout = checkNotNull(minTimeout, "minTimeout cannot be null");
+    this.maxTimeout = checkNotNull(maxTimeout, "maxTimeout cannot be null");
+    this.sessionManager = checkNotNull(sessionManager, "sessionManager cannot be null");
+  }
+
+  @Override
+  public String name() {
+    return serviceName;
+  }
+
+  @Override
+  public PrimitiveType type() {
+    return primitiveType;
+  }
+
+  @Override
+  public ThreadContext context() {
+    return context;
+  }
+
+  @Override
+  public SessionId sessionId() {
+    return state != null ? state.getSessionId() : null;
+  }
+
+  @Override
+  public PartitionId partitionId() {
+    return partitionId;
+  }
+
+  @Override
+  public PrimitiveState getState() {
+    return state.getState();
+  }
+
+  @Override
+  public void addStateChangeListener(Consumer<PrimitiveState> listener) {
+    if (state != null) {
+      state.addStateChangeListener(listener);
     }
+  }
 
-    @Override
-    public String name() {
-        return serviceName;
+  @Override
+  public void removeStateChangeListener(Consumer<PrimitiveState> listener) {
+    if (state != null) {
+      state.removeStateChangeListener(listener);
     }
+  }
 
-    @Override
-    public PrimitiveType type() {
-        return primitiveType;
+  @Override
+  public CompletableFuture<byte[]> execute(PrimitiveOperation operation) {
+    RaftSessionInvoker invoker = this.proxyInvoker;
+    if (invoker == null) {
+      return Futures.exceptionalFuture(new IllegalStateException("Session not open"));
     }
+    return invoker.invoke(operation);
+  }
 
-    @Override
-    public ThreadContext context() {
-        return context;
+  @Override
+  public void addEventListener(EventType eventType, Consumer<PrimitiveEvent> listener) {
+    if (proxyListener != null) {
+      proxyListener.addEventListener(eventType, listener);
     }
+  }
 
-    @Override
-    public SessionId sessionId() {
-        return state != null ? state.getSessionId() : null;
+  @Override
+  public void removeEventListener(EventType eventType, Consumer<PrimitiveEvent> listener) {
+    if (proxyListener != null) {
+      proxyListener.removeEventListener(eventType, listener);
     }
+  }
 
-    @Override
-    public PartitionId partitionId() {
-        return partitionId;
+  @Override
+  public CompletableFuture<SessionClient> connect() {
+    return sessionManager.openSession(
+        serviceName,
+        primitiveType,
+        serviceConfig,
+        readConsistency,
+        communicationStrategy,
+        minTimeout,
+        maxTimeout)
+        .thenApply(state -> {
+          this.state = state;
+
+          // Create command/query connections.
+          RaftSessionConnection leaderConnection = new RaftSessionConnection(
+              protocol,
+              selectorManager.createSelector(CommunicationStrategy.LEADER),
+              context,
+              LoggerContext.builder(SessionClient.class)
+                  .addValue(state.getSessionId())
+                  .add("type", state.getPrimitiveType())
+                  .add("name", state.getPrimitiveName())
+                  .build());
+          RaftSessionConnection sessionConnection = new RaftSessionConnection(
+              protocol,
+              selectorManager.createSelector(communicationStrategy),
+              context,
+              LoggerContext.builder(SessionClient.class)
+                  .addValue(state.getSessionId())
+                  .add("type", state.getPrimitiveType())
+                  .add("name", state.getPrimitiveName())
+                  .build());
+
+          // Create proxy submitter/listener.
+          RaftSessionSequencer sequencer = new RaftSessionSequencer(state);
+          this.proxyListener = new RaftSessionListener(
+              protocol,
+              selectorManager.createSelector(CommunicationStrategy.ANY),
+              state,
+              sequencer,
+              context);
+          this.proxyInvoker = new RaftSessionInvoker(
+              leaderConnection,
+              sessionConnection,
+              state,
+              sequencer,
+              sessionManager,
+              context);
+
+          selectorManager.addLeaderChangeListener(leaderChangeListener);
+          state.addStateChangeListener(s -> {
+            if (s == PrimitiveState.EXPIRED || s == PrimitiveState.CLOSED) {
+              selectorManager.removeLeaderChangeListener(leaderChangeListener);
+              proxyListener.close();
+              proxyInvoker.close();
+            }
+          });
+
+          return this;
+        });
+  }
+
+  private void onLeaderChange(MemberId memberId) {
+    if (memberId != null) {
+      proxyInvoker.reset();
     }
+  }
 
-    @Override
-    public PrimitiveState getState() {
-        return state.getState();
+  @Override
+  public CompletableFuture<Void> close() {
+    if (state != null) {
+      return sessionManager.closeSession(state.getSessionId(), false)
+          .whenComplete((result, error) -> state.setState(PrimitiveState.CLOSED));
     }
+    return CompletableFuture.completedFuture(null);
+  }
 
-    @Override
-    public void addStateChangeListener(Consumer<PrimitiveState> listener) {
-        if (state != null) {
-            state.addStateChangeListener(listener);
-        }
+  @Override
+  public CompletableFuture<Void> delete() {
+    if (state != null) {
+      return sessionManager.closeSession(state.getSessionId(), true)
+          .whenComplete((result, error) -> state.setState(PrimitiveState.CLOSED));
     }
+    return CompletableFuture.completedFuture(null);
+  }
 
-    @Override
-    public void removeStateChangeListener(Consumer<PrimitiveState> listener) {
-        if (state != null) {
-            state.removeStateChangeListener(listener);
-        }
-    }
+  @Override
+  public int hashCode() {
+    return Objects.hash(state);
+  }
 
-    @Override
-    public CompletableFuture<byte[]> execute(PrimitiveOperation operation) {
-        RaftSessionInvoker invoker = this.proxyInvoker;
-        if (invoker == null) {
-            return Futures.exceptionalFuture(new IllegalStateException("Session not open"));
-        }
-        return invoker.invoke(operation);
-    }
+  @Override
+  public boolean equals(Object object) {
+    return object instanceof DefaultRaftSessionClient
+        && ((DefaultRaftSessionClient) object).state.getSessionId() == state.getSessionId();
+  }
 
-    @Override
-    public void addEventListener(EventType eventType, Consumer<PrimitiveEvent> listener) {
-        if (proxyListener != null) {
-            proxyListener.addEventListener(eventType, listener);
-        }
-    }
-
-    @Override
-    public void removeEventListener(EventType eventType, Consumer<PrimitiveEvent> listener) {
-        if (proxyListener != null) {
-            proxyListener.removeEventListener(eventType, listener);
-        }
-    }
-
-    @Override
-    public CompletableFuture<SessionClient> connect() {
-        return sessionManager.openSession(
-                serviceName,
-                primitiveType,
-                serviceConfig,
-                readConsistency,
-                communicationStrategy,
-                minTimeout,
-                maxTimeout)
-                .thenApply(state -> {
-                    this.state = state;
-
-                    // Create command/query connections.
-                    RaftSessionConnection leaderConnection = new RaftSessionConnection(
-                            protocol,
-                            selectorManager.createSelector(CommunicationStrategy.LEADER),
-                            context,
-                            LoggerContext.builder(SessionClient.class)
-                                    .addValue(state.getSessionId())
-                                    .add("type", state.getPrimitiveType())
-                                    .add("name", state.getPrimitiveName())
-                                    .build());
-                    RaftSessionConnection sessionConnection = new RaftSessionConnection(
-                            protocol,
-                            selectorManager.createSelector(communicationStrategy),
-                            context,
-                            LoggerContext.builder(SessionClient.class)
-                                    .addValue(state.getSessionId())
-                                    .add("type", state.getPrimitiveType())
-                                    .add("name", state.getPrimitiveName())
-                                    .build());
-
-                    // Create proxy submitter/listener.
-                    RaftSessionSequencer sequencer = new RaftSessionSequencer(state);
-                    this.proxyListener = new RaftSessionListener(
-                            protocol,
-                            selectorManager.createSelector(CommunicationStrategy.ANY),
-                            state,
-                            sequencer,
-                            context);
-                    this.proxyInvoker = new RaftSessionInvoker(
-                            leaderConnection,
-                            sessionConnection,
-                            state,
-                            sequencer,
-                            sessionManager,
-                            context);
-
-                    selectorManager.addLeaderChangeListener(leaderChangeListener);
-                    state.addStateChangeListener(s -> {
-                        if (s == PrimitiveState.CLOSED) {
-                            selectorManager.removeLeaderChangeListener(leaderChangeListener);
-                        }
-                    });
-
-                    return this;
-                });
-    }
-
-    private void onLeaderChange(MemberId memberId) {
-        if (memberId != null) {
-            proxyInvoker.reset();
-        }
-    }
-
-    @Override
-    public CompletableFuture<Void> close() {
-        if (state != null) {
-            return sessionManager.closeSession(state.getSessionId(), false)
-                    .whenComplete((result, error) -> state.setState(PrimitiveState.CLOSED));
-        }
-        return CompletableFuture.completedFuture(null);
-    }
-
-    @Override
-    public CompletableFuture<Void> delete() {
-        if (state != null) {
-            return sessionManager.closeSession(state.getSessionId(), true)
-                    .whenComplete((result, error) -> state.setState(PrimitiveState.CLOSED));
-        }
-        return CompletableFuture.completedFuture(null);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(state);
-    }
-
-    @Override
-    public boolean equals(Object object) {
-        return object instanceof DefaultRaftSessionClient
-                && ((DefaultRaftSessionClient) object).state.getSessionId() == state.getSessionId();
-    }
-
-    @Override
-    public String toString() {
-        return toStringHelper(this)
-                .add("session", state != null ? state.getSessionId() : null)
-                .toString();
-    }
+  @Override
+  public String toString() {
+    return toStringHelper(this)
+        .add("session", state != null ? state.getSessionId() : null)
+        .toString();
+  }
 }

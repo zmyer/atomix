@@ -36,80 +36,77 @@ import static com.google.common.base.Preconditions.checkNotNull;
  *
  * @author <a href="http://github.com/kuujo">Jordan Halterman</a>
  */
-// TODO: 2018/8/1 by zmyer
 public class ThreadPoolContext extends AbstractThreadContext {
-    private static final Logger LOGGER = LoggerFactory.getLogger(ThreadPoolContext.class);
-    protected final ScheduledExecutorService parent;
-    private final Runnable runner;
-    private final LinkedList<Runnable> tasks = new LinkedList<>();
-    private boolean running;
-    private final Executor executor = new Executor() {
-        @Override
-        public void execute(final Runnable command) {
-            synchronized (tasks) {
-                tasks.add(command);
-                if (!running) {
-                    running = true;
-                    parent.execute(runner);
-                }
-            }
-        }
-    };
-
-    /**
-     * Creates a new thread pool context.
-     *
-     * @param parent The thread pool on which to execute events.
-     */
-    public ThreadPoolContext(final ScheduledExecutorService parent) {
-        this.parent = checkNotNull(parent, "parent cannot be null");
-
-        // This code was shamelessly stolededed from Vert.x:
-        // https://github.com/eclipse/vert.x/blob/master/src/main/java/io/vertx/core/impl/OrderedExecutorFactory.java
-        runner = () -> {
-            ((AtomixThread) Thread.currentThread()).setContext(this);
-            for (; ; ) {
-                final Runnable task;
-                synchronized (tasks) {
-                    task = tasks.poll();
-                    if (task == null) {
-                        running = false;
-                        return;
-                    }
-                }
-
-                try {
-                    task.run();
-                } catch (Throwable t) {
-                    LOGGER.error("An uncaught exception occurred", t);
-                    throw t;
-                }
-            }
-        };
-    }
-
+  private static final Logger LOGGER = LoggerFactory.getLogger(ThreadPoolContext.class);
+  protected final ScheduledExecutorService parent;
+  private final Runnable runner;
+  private final LinkedList<Runnable> tasks = new LinkedList<>();
+  private boolean running;
+  private final Executor executor = new Executor() {
     @Override
     public void execute(Runnable command) {
-        executor.execute(command);
+      synchronized (tasks) {
+        tasks.add(command);
+        if (!running) {
+          running = true;
+          parent.execute(runner);
+        }
+      }
     }
+  };
 
-    @Override
-    public Scheduled schedule(Duration delay, Runnable runnable) {
-        final ScheduledFuture<?> future = parent.schedule(() -> executor.execute(runnable), delay.toMillis(),
-                TimeUnit.MILLISECONDS);
-        return () -> future.cancel(false);
-    }
+  /**
+   * Creates a new thread pool context.
+   *
+   * @param parent The thread pool on which to execute events.
+   */
+  public ThreadPoolContext(ScheduledExecutorService parent) {
+    this.parent = checkNotNull(parent, "parent cannot be null");
 
-    @Override
-    public Scheduled schedule(Duration delay, Duration interval, Runnable runnable) {
-        final ScheduledFuture<?> future = parent.scheduleAtFixedRate(() -> executor.execute(runnable), delay.toMillis(),
-                interval.toMillis(), TimeUnit.MILLISECONDS);
-        return () -> future.cancel(false);
-    }
+    // This code was shamelessly stolededed from Vert.x:
+    // https://github.com/eclipse/vert.x/blob/master/src/main/java/io/vertx/core/impl/OrderedExecutorFactory.java
+    runner = () -> {
+      ((AtomixThread) Thread.currentThread()).setContext(this);
+      for (;;) {
+        final Runnable task;
+        synchronized (tasks) {
+          task = tasks.poll();
+          if (task == null) {
+            running = false;
+            return;
+          }
+        }
 
-    @Override
-    public void close() {
-        // Do nothing.
-    }
+        try {
+          task.run();
+        } catch (Throwable t) {
+          LOGGER.error("An uncaught exception occurred", t);
+          throw t;
+        }
+      }
+    };
+  }
+
+  @Override
+  public void execute(Runnable command) {
+    executor.execute(command);
+  }
+
+  @Override
+  public Scheduled schedule(Duration delay, Runnable runnable) {
+    ScheduledFuture<?> future = parent.schedule(() -> executor.execute(runnable), delay.toMillis(), TimeUnit.MILLISECONDS);
+    return () -> future.cancel(false);
+  }
+
+  @Override
+  public Scheduled schedule(Duration delay, Duration interval, Runnable runnable) {
+    ScheduledFuture<?> future = parent.scheduleAtFixedRate(() -> executor.execute(runnable), delay.toMillis(), interval.toMillis(), TimeUnit.MILLISECONDS);
+    return () -> future.cancel(false);
+  }
+
+  @Override
+  public void close() {
+    // Do nothing.
+  }
 
 }

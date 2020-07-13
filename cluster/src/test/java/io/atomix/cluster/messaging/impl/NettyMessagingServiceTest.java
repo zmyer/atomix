@@ -37,11 +37,13 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
@@ -58,22 +60,42 @@ public class NettyMessagingServiceTest {
 
   ManagedMessagingService netty1;
   ManagedMessagingService netty2;
+  ManagedMessagingService nettyv11;
+  ManagedMessagingService nettyv12;
+  ManagedMessagingService nettyv21;
+  ManagedMessagingService nettyv22;
 
   private static final String IP_STRING = "127.0.0.1";
 
-  Address ep1;
-  Address ep2;
+  Address address1;
+  Address address2;
+  Address addressv11;
+  Address addressv12;
+  Address addressv21;
+  Address addressv22;
   Address invalidAddress;
 
   @Before
   public void setUp() throws Exception {
-    ep1 = Address.from(findAvailablePort(5001));
-    netty1 = (ManagedMessagingService) new NettyMessagingService("test", ep1, new MessagingConfig()).start().join();
+    address1 = Address.from(findAvailablePort(5001));
+    netty1 = (ManagedMessagingService) new NettyMessagingService("test", address1, new MessagingConfig()).start().join();
 
-    ep2 = Address.from(findAvailablePort(5003));
-    netty2 = (ManagedMessagingService) new NettyMessagingService("test", ep2, new MessagingConfig()).start().join();
+    address2 = Address.from(findAvailablePort(5002));
+    netty2 = (ManagedMessagingService) new NettyMessagingService("test", address2, new MessagingConfig()).start().join();
 
-    invalidAddress = Address.from(IP_STRING, 5003);
+    addressv11 = Address.from(findAvailablePort(5003));
+    nettyv11 = (ManagedMessagingService) new NettyMessagingService("test", addressv11, new MessagingConfig(), ProtocolVersion.V1).start().join();
+
+    addressv12 = Address.from(findAvailablePort(5004));
+    nettyv12 = (ManagedMessagingService) new NettyMessagingService("test", addressv12, new MessagingConfig(), ProtocolVersion.V1).start().join();
+
+    addressv21 = Address.from(findAvailablePort(5005));
+    nettyv21 = (ManagedMessagingService) new NettyMessagingService("test", addressv21, new MessagingConfig(), ProtocolVersion.V2).start().join();
+
+    addressv22 = Address.from(findAvailablePort(5006));
+    nettyv22 = (ManagedMessagingService) new NettyMessagingService("test", addressv22, new MessagingConfig(), ProtocolVersion.V2).start().join();
+
+    invalidAddress = Address.from(IP_STRING, 5007);
   }
 
   /**
@@ -104,10 +126,18 @@ public class NettyMessagingServiceTest {
   }
 
   @Test
+  public void testSendAsyncToUnresolvable() {
+    final Address unresolvable = Address.from("unknown.local", address1.port());
+    final String subject = nextSubject();
+    final CompletableFuture<Void> response = netty1.sendAsync(unresolvable, subject, "hello world".getBytes());
+    assertTrue(response.isCompletedExceptionally());
+  }
+
+  @Test
   public void testSendAsync() {
     String subject = nextSubject();
     CountDownLatch latch1 = new CountDownLatch(1);
-    CompletableFuture<Void> response = netty1.sendAsync(ep2, subject, "hello world".getBytes());
+    CompletableFuture<Void> response = netty1.sendAsync(address2, subject, "hello world".getBytes());
     response.whenComplete((r, e) -> {
       assertNull(e);
       latch1.countDown();
@@ -125,7 +155,6 @@ public class NettyMessagingServiceTest {
   }
 
   @Test
-  @Ignore // FIXME disabled on 9/29/16 due to random failures
   public void testSendAndReceive() {
     String subject = nextSubject();
     AtomicBoolean handlerInvoked = new AtomicBoolean(false);
@@ -140,21 +169,43 @@ public class NettyMessagingServiceTest {
     };
     netty2.registerHandler(subject, handler, MoreExecutors.directExecutor());
 
-    CompletableFuture<byte[]> response = netty1.sendAndReceive(ep2, subject, "hello world".getBytes());
+    CompletableFuture<byte[]> response = netty1.sendAndReceive(address2, subject, "hello world".getBytes());
     assertTrue(Arrays.equals("hello there".getBytes(), response.join()));
     assertTrue(handlerInvoked.get());
     assertTrue(Arrays.equals(request.get(), "hello world".getBytes()));
-    assertEquals(ep1, sender.get());
+    assertEquals(address1.address(), sender.get().address());
   }
 
   @Test
-  public void testSendTimeout() {
+  public void testTransientSendAndReceive() {
+    String subject = nextSubject();
+    AtomicBoolean handlerInvoked = new AtomicBoolean(false);
+    AtomicReference<byte[]> request = new AtomicReference<>();
+    AtomicReference<Address> sender = new AtomicReference<>();
+
+    BiFunction<Address, byte[], byte[]> handler = (ep, data) -> {
+      handlerInvoked.set(true);
+      sender.set(ep);
+      request.set(data);
+      return "hello there".getBytes();
+    };
+    netty2.registerHandler(subject, handler, MoreExecutors.directExecutor());
+
+    CompletableFuture<byte[]> response = netty1.sendAndReceive(address2, subject, "hello world".getBytes(), false);
+    assertTrue(Arrays.equals("hello there".getBytes(), response.join()));
+    assertTrue(handlerInvoked.get());
+    assertTrue(Arrays.equals(request.get(), "hello world".getBytes()));
+    assertEquals(address1.address(), sender.get().address());
+  }
+
+  @Test
+  public void testSendAndReceiveWithFixedTimeout() {
     String subject = nextSubject();
     BiFunction<Address, byte[], CompletableFuture<byte[]>> handler = (ep, payload) -> new CompletableFuture<>();
     netty2.registerHandler(subject, handler);
 
     try {
-      netty1.sendAndReceive(ep2, subject, "hello world".getBytes(), Duration.ofSeconds(1)).join();
+      netty1.sendAndReceive(address2, subject, "hello world".getBytes(), Duration.ofSeconds(1)).join();
       fail();
     } catch (CompletionException e) {
       assertTrue(e.getCause() instanceof TimeoutException);
@@ -162,23 +213,19 @@ public class NettyMessagingServiceTest {
   }
 
   @Test
-  public void testSendAutoTimeout() {
+  public void testSendAndReceiveWithDynamicTimeout() {
     String subject = nextSubject();
     BiFunction<Address, byte[], CompletableFuture<byte[]>> handler = (ep, payload) -> new CompletableFuture<>();
     netty2.registerHandler(subject, handler);
 
     try {
-      netty1.sendAndReceive(ep2, subject, "hello world".getBytes()).join();
+      netty1.sendAndReceive(address2, subject, "hello world".getBytes()).join();
       fail();
     } catch (CompletionException e) {
       assertTrue(e.getCause() instanceof TimeoutException);
     }
   }
 
-  /*
-   * Supplies executors when registering a handler and calling sendAndReceive and verifies the request handling
-   * and response completion occurs on the expected thread.
-   */
   @Test
   @Ignore
   public void testSendAndReceiveWithExecutor() {
@@ -202,7 +249,7 @@ public class NettyMessagingServiceTest {
     };
     netty2.registerHandler(subject, handler, handlerExecutor);
 
-    CompletableFuture<byte[]> response = netty1.sendAndReceive(ep2,
+    CompletableFuture<byte[]> response = netty1.sendAndReceive(address2,
         subject,
         "hello world".getBytes(),
         completionExecutor);
@@ -215,6 +262,47 @@ public class NettyMessagingServiceTest {
     assertTrue(Arrays.equals("hello there".getBytes(), response.join()));
     assertEquals("completion-thread", completionThreadName.get());
     assertEquals("handler-thread", handlerThreadName.get());
+  }
+
+  @Test
+  public void testV1() throws Exception {
+    String subject;
+    byte[] payload = "Hello world!".getBytes();
+    byte[] response;
+
+    subject = nextSubject();
+    nettyv11.registerHandler(subject, (address, bytes) -> CompletableFuture.completedFuture(bytes));
+    response = nettyv12.sendAndReceive(addressv11, subject, payload).get(10, TimeUnit.SECONDS);
+    assertArrayEquals(payload, response);
+  }
+
+  @Test
+  public void testV2() throws Exception {
+    String subject;
+    byte[] payload = "Hello world!".getBytes();
+    byte[] response;
+
+    subject = nextSubject();
+    nettyv21.registerHandler(subject, (address, bytes) -> CompletableFuture.completedFuture(bytes));
+    response = nettyv22.sendAndReceive(addressv21, subject, payload).get(10, TimeUnit.SECONDS);
+    assertArrayEquals(payload, response);
+  }
+
+  @Test
+  public void testVersionNegotiation() throws Exception {
+    String subject;
+    byte[] payload = "Hello world!".getBytes();
+    byte[] response;
+
+    subject = nextSubject();
+    nettyv11.registerHandler(subject, (address, bytes) -> CompletableFuture.completedFuture(bytes));
+    response = nettyv21.sendAndReceive(addressv11, subject, payload).get(10, TimeUnit.SECONDS);
+    assertArrayEquals(payload, response);
+
+    subject = nextSubject();
+    nettyv22.registerHandler(subject, (address, bytes) -> CompletableFuture.completedFuture(bytes));
+    response = nettyv12.sendAndReceive(addressv22, subject, payload).get(10, TimeUnit.SECONDS);
+    assertArrayEquals(payload, response);
   }
 
   private static int findAvailablePort(int defaultPort) {

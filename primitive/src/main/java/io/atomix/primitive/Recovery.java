@@ -18,15 +18,14 @@ package io.atomix.primitive;
 /**
  * Primitive session recovery strategy.
  */
-// TODO: 2018/8/1 by zmyer
 public enum Recovery {
-    /**
-     * Indicates that the session should be recovered when lost.
-     */
-    RECOVER,
+  /**
+   * Indicates that the session should be recovered when lost.
+   */
+  RECOVER,
 
-    /**
-     * Indicates that the session should be closed when lost.
-     */
-    CLOSE,
+  /**
+   * Indicates that the session should be closed when lost.
+   */
+  CLOSE,
 }

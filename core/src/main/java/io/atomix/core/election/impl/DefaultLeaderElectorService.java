@@ -17,7 +17,6 @@ package io.atomix.core.election.impl;
 
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
-import com.google.common.base.Throwables;
 import com.google.common.collect.ComparisonChain;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -46,6 +45,8 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+
+import static com.google.common.base.Throwables.throwIfUnchecked;
 
 /**
  * State machine for {@link LeaderElectorProxy} resource.
@@ -129,7 +130,8 @@ public class DefaultLeaderElectorService extends AbstractPrimitiveService<Leader
       return newLeadership;
     } catch (Exception e) {
       getLogger().error("State machine operation failed", e);
-      throw Throwables.propagate(e);
+      throwIfUnchecked(e);
+      throw new RuntimeException(e);
     }
   }
 
@@ -145,7 +147,8 @@ public class DefaultLeaderElectorService extends AbstractPrimitiveService<Leader
       }
     } catch (Exception e) {
       getLogger().error("State machine operation failed", e);
-      throw Throwables.propagate(e);
+      throwIfUnchecked(e);
+      throw new RuntimeException(e);
     }
   }
 
@@ -159,12 +162,13 @@ public class DefaultLeaderElectorService extends AbstractPrimitiveService<Leader
       if (!Objects.equal(oldLeadership, newLeadership)) {
         notifyLeadershipChange(topic, oldLeadership, newLeadership);
       }
-      return (electionState != null &&
-          electionState.leader() != null &&
-          Arrays.equals(id, electionState.leader().id()));
+      return (electionState != null
+          && electionState.leader() != null
+          && Arrays.equals(id, electionState.leader().id()));
     } catch (Exception e) {
       getLogger().error("State machine operation failed", e);
-      throw Throwables.propagate(e);
+      throwIfUnchecked(e);
+      throw new RuntimeException(e);
     }
   }
 
@@ -183,7 +187,8 @@ public class DefaultLeaderElectorService extends AbstractPrimitiveService<Leader
       return true;
     } catch (Exception e) {
       getLogger().error("State machine operation failed", e);
-      throw Throwables.propagate(e);
+      throwIfUnchecked(e);
+      throw new RuntimeException(e);
     }
   }
 
@@ -202,7 +207,8 @@ public class DefaultLeaderElectorService extends AbstractPrimitiveService<Leader
       });
     } catch (Exception e) {
       getLogger().error("State machine operation failed", e);
-      throw Throwables.propagate(e);
+      throwIfUnchecked(e);
+      throw new RuntimeException(e);
     }
   }
 
@@ -212,7 +218,8 @@ public class DefaultLeaderElectorService extends AbstractPrimitiveService<Leader
       return leadership(topic);
     } catch (Exception e) {
       getLogger().error("State machine operation failed", e);
-      throw Throwables.propagate(e);
+      throwIfUnchecked(e);
+      throw new RuntimeException(e);
     }
   }
 
@@ -224,7 +231,8 @@ public class DefaultLeaderElectorService extends AbstractPrimitiveService<Leader
       return result;
     } catch (Exception e) {
       getLogger().error("State machine operation failed", e);
-      throw Throwables.propagate(e);
+      throwIfUnchecked(e);
+      throw new RuntimeException(e);
     }
   }
 
@@ -259,7 +267,7 @@ public class DefaultLeaderElectorService extends AbstractPrimitiveService<Leader
     private final byte[] id;
     private final long sessionId;
 
-    public Registration(byte[] id, long sessionId) {
+    Registration(byte[] id, long sessionId) {
       this.id = id;
       this.sessionId = sessionId;
     }
@@ -288,7 +296,7 @@ public class DefaultLeaderElectorService extends AbstractPrimitiveService<Leader
     final List<Registration> registrations;
     transient Map<String, ElectionState> elections;
 
-    public ElectionState(Registration registration, Supplier<Long> termCounter,
+    ElectionState(Registration registration, Supplier<Long> termCounter,
                          Map<String, ElectionState> elections) {
       registrations = Arrays.asList(registration);
       term = termCounter.get();
@@ -297,7 +305,7 @@ public class DefaultLeaderElectorService extends AbstractPrimitiveService<Leader
       this.elections = elections;
     }
 
-    public ElectionState(ElectionState other) {
+    ElectionState(ElectionState other) {
       registrations = Lists.newArrayList(other.registrations);
       leader = other.leader;
       term = other.term;
@@ -305,7 +313,7 @@ public class DefaultLeaderElectorService extends AbstractPrimitiveService<Leader
       elections = other.elections;
     }
 
-    public ElectionState(List<Registration> registrations,
+    ElectionState(List<Registration> registrations,
                          Registration leader,
                          long term,
                          long termStartTime,

@@ -91,15 +91,18 @@ public class MultimapEvent<K, V> extends AbstractEvent<MultimapEvent.Type, K> {
 
   @Override
   public boolean equals(Object o) {
+    if (o == this) {
+      return true;
+    }
     if (!(o instanceof MultimapEvent)) {
       return false;
     }
 
     MultimapEvent<K, V> that = (MultimapEvent) o;
-    return Objects.equals(this.type(), that.type()) &&
-        Objects.equals(this.key(), that.key()) &&
-        Objects.equals(this.newValue, that.newValue) &&
-        Objects.equals(this.oldValue, that.oldValue);
+    return Objects.equals(this.type(), that.type())
+        && Objects.equals(this.key(), that.key())
+        && Objects.equals(this.newValue, that.newValue)
+        && Objects.equals(this.oldValue, that.oldValue);
   }
 
   @Override

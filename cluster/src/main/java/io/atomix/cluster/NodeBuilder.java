@@ -51,12 +51,36 @@ public class NodeBuilder implements Builder<Node> {
   }
 
   /**
+   * Sets the node host.
+   *
+   * @param host the node host
+   * @return the node builder
+   */
+  public NodeBuilder withHost(String host) {
+    config.setHost(host);
+    return this;
+  }
+
+  /**
+   * Sets the node port.
+   *
+   * @param port the node port
+   * @return the node builder
+   */
+  public NodeBuilder withPort(int port) {
+    config.setPort(port);
+    return this;
+  }
+
+  /**
    * Sets the node address.
    *
    * @param address a host:port tuple
    * @return the node builder
    * @throws io.atomix.utils.net.MalformedAddressException if a valid {@link Address} cannot be constructed from the arguments
+   * @deprecated since 3.1. Use {@link #withHost(String)} and/or {@link #withPort(int)} instead
    */
+  @Deprecated
   public NodeBuilder withAddress(String address) {
     return withAddress(Address.from(address));
   }
@@ -68,7 +92,9 @@ public class NodeBuilder implements Builder<Node> {
    * @param port the port number
    * @return the node builder
    * @throws io.atomix.utils.net.MalformedAddressException if a valid {@link Address} cannot be constructed from the arguments
+   * @deprecated since 3.1. Use {@link #withHost(String)} and {@link #withPort(int)} instead
    */
+  @Deprecated
   public NodeBuilder withAddress(String host, int port) {
     return withAddress(Address.from(host, port));
   }
@@ -79,7 +105,9 @@ public class NodeBuilder implements Builder<Node> {
    * @param port the port number
    * @return the node builder
    * @throws io.atomix.utils.net.MalformedAddressException if a valid {@link Address} cannot be constructed from the arguments
+   * @deprecated since 3.1. Use {@link #withPort(int)} instead
    */
+  @Deprecated
   public NodeBuilder withAddress(int port) {
     return withAddress(Address.from(port));
   }

@@ -16,7 +16,16 @@
 
 package io.atomix.core.map.impl;
 
-import com.google.common.base.MoreObjects;
+import java.time.Duration;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.OptionalLong;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.function.BiFunction;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
+
 import io.atomix.core.collection.AsyncDistributedCollection;
 import io.atomix.core.map.AsyncAtomicMap;
 import io.atomix.core.map.AtomicMap;
@@ -27,15 +36,6 @@ import io.atomix.core.transaction.TransactionLog;
 import io.atomix.primitive.PrimitiveState;
 import io.atomix.primitive.impl.DelegatingAsyncPrimitive;
 import io.atomix.utils.time.Versioned;
-
-import java.time.Duration;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
-import java.util.function.BiFunction;
-import java.util.function.Consumer;
-import java.util.function.Predicate;
 
 /**
  * {@code AsyncConsistentMap} that merely delegates control to
@@ -151,6 +151,36 @@ public class DelegatingAsyncAtomicMap<K, V>
   @Override
   public CompletableFuture<Boolean> replace(K key, long oldVersion, V newValue) {
     return delegate().replace(key, oldVersion, newValue);
+  }
+
+  @Override
+  public CompletableFuture<Long> lock(K key) {
+    return delegate().lock(key);
+  }
+
+  @Override
+  public CompletableFuture<OptionalLong> tryLock(K key) {
+    return delegate().tryLock(key);
+  }
+
+  @Override
+  public CompletableFuture<OptionalLong> tryLock(K key, Duration timeout) {
+    return delegate().tryLock(key, timeout);
+  }
+
+  @Override
+  public CompletableFuture<Boolean> isLocked(K key) {
+    return delegate().isLocked(key);
+  }
+
+  @Override
+  public CompletableFuture<Boolean> isLocked(K key, long version) {
+    return delegate().isLocked(key, version);
+  }
+
+  @Override
+  public CompletableFuture<Void> unlock(K key) {
+    return delegate().unlock(key);
   }
 
   @Override

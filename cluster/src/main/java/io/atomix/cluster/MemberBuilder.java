@@ -53,13 +53,27 @@ public class MemberBuilder extends NodeBuilder {
     return this;
   }
 
+  @Override
+  public MemberBuilder withHost(String host) {
+    super.withHost(host);
+    return this;
+  }
+
+  @Override
+  public MemberBuilder withPort(int port) {
+    super.withPort(port);
+    return this;
+  }
+
   /**
    * Sets the member address.
    *
    * @param address a host:port tuple
    * @return the member builder
    * @throws io.atomix.utils.net.MalformedAddressException if a valid {@link Address} cannot be constructed from the arguments
+   * @deprecated since 3.1. Use {@link #withHost(String)} and/or {@link #withPort(int)} instead
    */
+  @Deprecated
   public MemberBuilder withAddress(String address) {
     return withAddress(Address.from(address));
   }
@@ -71,7 +85,9 @@ public class MemberBuilder extends NodeBuilder {
    * @param port the port number
    * @return the member builder
    * @throws io.atomix.utils.net.MalformedAddressException if a valid {@link Address} cannot be constructed from the arguments
+   * @deprecated since 3.1. Use {@link #withHost(String)} and {@link #withPort(int)} instead
    */
+  @Deprecated
   public MemberBuilder withAddress(String host, int port) {
     return withAddress(Address.from(host, port));
   }
@@ -82,7 +98,9 @@ public class MemberBuilder extends NodeBuilder {
    * @param port the port number
    * @return the member builder
    * @throws io.atomix.utils.net.MalformedAddressException if a valid {@link Address} cannot be constructed from the arguments
+   * @deprecated since 3.1. Use {@link #withPort(int)} instead
    */
+  @Deprecated
   public MemberBuilder withAddress(int port) {
     return withAddress(Address.from(port));
   }
@@ -101,11 +119,24 @@ public class MemberBuilder extends NodeBuilder {
   /**
    * Sets the zone to which the member belongs.
    *
-   * @param zone the zone to which the member belongs
+   * @param zoneId the zone to which the member belongs
    * @return the member builder
    */
+  public MemberBuilder withZoneId(String zoneId) {
+    config.setZoneId(zoneId);
+    return this;
+  }
+
+  /**
+   * Sets the zone to which the member belongs.
+   *
+   * @param zone the zone to which the member belongs
+   * @return the member builder
+   * @deprecated since 3.1. Use {@link #withZoneId(String)} instead
+   */
+  @Deprecated
   public MemberBuilder withZone(String zone) {
-    config.setZone(zone);
+    config.setZoneId(zone);
     return this;
   }
 
@@ -115,19 +146,32 @@ public class MemberBuilder extends NodeBuilder {
    * @param rack the rack to which the member belongs
    * @return the member builder
    */
+  public MemberBuilder withRackId(String rack) {
+    config.setRackId(rack);
+    return this;
+  }
+
+  /**
+   * Sets the rack to which the member belongs.
+   *
+   * @param rack the rack to which the member belongs
+   * @return the member builder
+   * @deprecated since 3.1. Use {@link #withRackId(String)} instead
+   */
+  @Deprecated
   public MemberBuilder withRack(String rack) {
-    config.setRack(rack);
+    config.setRackId(rack);
     return this;
   }
 
   /**
    * Sets the host to which the member belongs.
    *
-   * @param host the host to which the member belongs
+   * @param hostId the host to which the member belongs
    * @return the member builder
    */
-  public MemberBuilder withHost(String host) {
-    config.setHost(host);
+  public MemberBuilder withHostId(String hostId) {
+    config.setHostId(hostId);
     return this;
   }
 

@@ -175,7 +175,7 @@ public class PrimaryBackupServiceContext implements ServiceContext {
 
   @Override
   public MemberId localMemberId() {
-      return memberId();
+    return memberId();
   }
 
     /**

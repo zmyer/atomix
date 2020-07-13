@@ -34,24 +34,24 @@ import static com.google.common.base.Preconditions.checkNotNull;
  * Changing values risk breaking the ability to backup/restore/upgrade clusters.
  */
 public enum PrimaryElectorOperations implements OperationId {
-    ENTER(OperationType.COMMAND),
-    GET_TERM(OperationType.QUERY);
+  ENTER(OperationType.COMMAND),
+  GET_TERM(OperationType.QUERY);
 
-    private final OperationType type;
+  private final OperationType type;
 
-    PrimaryElectorOperations(OperationType type) {
-        this.type = type;
-    }
+  PrimaryElectorOperations(OperationType type) {
+    this.type = type;
+  }
 
-    @Override
-    public String id() {
-        return name();
-    }
+  @Override
+  public String id() {
+    return name();
+  }
 
-    @Override
-    public OperationType type() {
-        return type;
-    }
+  @Override
+  public OperationType type() {
+    return type;
+  }
 
   public static final Namespace NAMESPACE = Namespace.builder()
       .register(Namespaces.BASIC)
@@ -64,90 +64,87 @@ public enum PrimaryElectorOperations implements OperationId {
       .register(PartitionId.class)
       .build(PrimaryElectorOperations.class.getSimpleName());
 
-    /**
-     * Abstract election query.
-     */
-    // TODO: 2018/7/31 by zmyer
-    @SuppressWarnings("serial")
-    public abstract static class ElectorOperation {
-    }
+  /**
+   * Abstract election query.
+   */
+  @SuppressWarnings("serial")
+  public abstract static class ElectorOperation {
+  }
 
-    /**
-     * Abstract election topic query.
-     */
-    // TODO: 2018/7/31 by zmyer
-    @SuppressWarnings("serial")
-    public abstract static class PartitionOperation extends ElectorOperation {
-        protected PartitionId partitionId;
+  /**
+   * Abstract election topic query.
+   */
+  @SuppressWarnings("serial")
+  public abstract static class PartitionOperation extends ElectorOperation {
+    protected PartitionId partitionId;
 
     public PartitionOperation() {
     }
 
-        public PartitionOperation(PartitionId partitionId) {
-            this.partitionId = checkNotNull(partitionId);
-        }
-
-        /**
-         * Returns the partition ID.
-         *
-         * @return partition ID
-         */
-        public PartitionId partitionId() {
-            return partitionId;
-        }
+    public PartitionOperation(PartitionId partitionId) {
+      this.partitionId = checkNotNull(partitionId);
     }
 
     /**
-     * GetTerm query.
+     * Returns the partition ID.
+     *
+     * @return partition ID
      */
-    @SuppressWarnings("serial")
-    public static class GetTerm extends PartitionOperation {
-        public GetTerm() {
-        }
+    public PartitionId partitionId() {
+      return partitionId;
+    }
+  }
 
-        public GetTerm(PartitionId partitionId) {
-            super(partitionId);
-        }
+  /**
+   * GetTerm query.
+   */
+  @SuppressWarnings("serial")
+  public static class GetTerm extends PartitionOperation {
+    public GetTerm() {
+    }
 
-        @Override
-        public String toString() {
-            return MoreObjects.toStringHelper(getClass())
-                    .add("partition", partitionId)
-                    .toString();
-        }
+    public GetTerm(PartitionId partitionId) {
+      super(partitionId);
+    }
+
+    @Override
+    public String toString() {
+      return MoreObjects.toStringHelper(getClass())
+          .add("partition", partitionId)
+          .toString();
+    }
+  }
+
+  /**
+   * Command for administratively changing the term state for a partition.
+   */
+  @SuppressWarnings("serial")
+  public static class Enter extends PartitionOperation {
+    private GroupMember member;
+
+    Enter() {
+    }
+
+    Enter(PartitionId partitionId, GroupMember member) {
+      super(partitionId);
+      this.member = member;
     }
 
     /**
-     * Command for administratively changing the term state for a partition.
+     * Returns the member.
+     *
+     * @return The member
      */
-    // TODO: 2018/7/31 by zmyer
-    @SuppressWarnings("serial")
-    public static class Enter extends PartitionOperation {
-        private GroupMember member;
-
-        Enter() {
-        }
-
-        Enter(PartitionId partitionId, GroupMember member) {
-            super(partitionId);
-            this.member = member;
-        }
-
-        /**
-         * Returns the member.
-         *
-         * @return The member
-         */
-        public GroupMember member() {
-            return member;
-        }
-
-        @Override
-        public String toString() {
-            return MoreObjects.toStringHelper(getClass())
-                    .add("partition", partitionId)
-                    .add("member", member)
-                    .toString();
-        }
+    public GroupMember member() {
+      return member;
     }
+
+    @Override
+    public String toString() {
+      return MoreObjects.toStringHelper(getClass())
+          .add("partition", partitionId)
+          .add("member", member)
+          .toString();
+    }
+  }
 }

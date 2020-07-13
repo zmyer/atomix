@@ -29,55 +29,54 @@ import static com.google.common.base.Preconditions.checkArgument;
  * This is used in both pessimistic and optimistic locking protocols to ensure that the state of a shared resource
  * has not changed at the end of a transaction.
  */
-// TODO: 2018/8/1 by zmyer
 public class Version implements Timestamp {
-    private final long version;
+  private final long version;
 
-    public Version(long version) {
-        this.version = version;
+  public Version(long version) {
+    this.version = version;
+  }
+
+  /**
+   * Returns the version.
+   *
+   * @return the version
+   */
+  public long value() {
+    return this.version;
+  }
+
+  @Override
+  public int compareTo(Timestamp o) {
+    checkArgument(o instanceof Version,
+        "Must be LockVersion", o);
+    Version that = (Version) o;
+
+    return ComparisonChain.start()
+        .compare(this.version, that.version)
+        .result();
+  }
+
+  @Override
+  public int hashCode() {
+    return Long.hashCode(version);
+  }
+
+  @Override
+  public boolean equals(Object obj) {
+    if (this == obj) {
+      return true;
     }
-
-    /**
-     * Returns the version.
-     *
-     * @return the version
-     */
-    public long value() {
-        return this.version;
+    if (!(obj instanceof Version)) {
+      return false;
     }
+    Version that = (Version) obj;
+    return Objects.equals(this.version, that.version);
+  }
 
-    @Override
-    public int compareTo(Timestamp o) {
-        checkArgument(o instanceof Version,
-                "Must be LockVersion", o);
-        final Version that = (Version) o;
-
-        return ComparisonChain.start()
-                .compare(this.version, that.version)
-                .result();
-    }
-
-    @Override
-    public int hashCode() {
-        return Long.hashCode(version);
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (!(obj instanceof Version)) {
-            return false;
-        }
-        final Version that = (Version) obj;
-        return Objects.equals(this.version, that.version);
-    }
-
-    @Override
-    public String toString() {
-        return toStringHelper(getClass())
-                .add("version", version)
-                .toString();
-    }
+  @Override
+  public String toString() {
+    return toStringHelper(getClass())
+        .add("version", version)
+        .toString();
+  }
 }

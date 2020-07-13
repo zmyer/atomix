@@ -15,11 +15,25 @@
  */
 package io.atomix.primitive.partition.impl;
 
+import java.time.Duration;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 import com.google.common.base.MoreObjects;
-import com.google.common.base.Throwables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import io.atomix.primitive.partition.GroupMember;
+import io.atomix.primitive.partition.MemberGroupId;
 import io.atomix.primitive.partition.PartitionId;
 import io.atomix.primitive.partition.PrimaryElectionEvent;
 import io.atomix.primitive.partition.PrimaryTerm;
@@ -33,18 +47,7 @@ import io.atomix.utils.concurrent.Scheduled;
 import io.atomix.utils.serializer.Namespace;
 import io.atomix.utils.serializer.Serializer;
 
-import java.time.Duration;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.Set;
-import java.util.stream.Collectors;
-
+import static com.google.common.base.Throwables.throwIfUnchecked;
 import static io.atomix.primitive.partition.impl.PrimaryElectorEvents.CHANGE;
 
 /**
@@ -182,7 +185,8 @@ public class PrimaryElectorService extends AbstractPrimitiveService {
             return v;
           }
         }
-      }).term();
+      })
+          .term();
 
       if (!Objects.equals(oldTerm, newTerm)) {
         notifyTermChange(partitionId, newTerm);
@@ -191,7 +195,8 @@ public class PrimaryElectorService extends AbstractPrimitiveService {
       return newTerm;
     } catch (Exception e) {
       getLogger().error("State machine operation failed", e);
-      throw Throwables.propagate(e);
+      throwIfUnchecked(e);
+      throw new RuntimeException(e);
     }
   }
 
@@ -207,7 +212,8 @@ public class PrimaryElectorService extends AbstractPrimitiveService {
       return term(partitionId);
     } catch (Exception e) {
       getLogger().error("State machine operation failed", e);
-      throw Throwables.propagate(e);
+      throwIfUnchecked(e);
+      throw new RuntimeException(e);
     }
   }
 
@@ -234,7 +240,7 @@ public class PrimaryElectorService extends AbstractPrimitiveService {
     private final GroupMember member;
     private final long sessionId;
 
-    public Registration(GroupMember member, long sessionId) {
+    Registration(GroupMember member, long sessionId) {
       this.member = member;
       this.sessionId = sessionId;
     }
@@ -369,7 +375,7 @@ public class PrimaryElectorService extends AbstractPrimitiveService {
         int registrationCount = countPrimaries(registration);
         for (int i = 0; i < registrations.size(); i++) {
           if (countPrimaries(registrations.get(i)) > registrationCount) {
-            updatedRegistrations.set(i, registration);
+            updatedRegistrations.add(i, registration);
             added = true;
             break;
           }
@@ -379,7 +385,9 @@ public class PrimaryElectorService extends AbstractPrimitiveService {
           updatedRegistrations.add(registration);
         }
 
-        Registration firstRegistration = updatedRegistrations.get(0);
+        List<Registration> sortedRegistrations = sortRegistrations(updatedRegistrations);
+
+        Registration firstRegistration = sortedRegistrations.get(0);
         Registration leader = this.primary;
         long term = this.term;
         long termStartTime = this.termStartTime;
@@ -390,13 +398,48 @@ public class PrimaryElectorService extends AbstractPrimitiveService {
         }
         return new ElectionState(
             partitionId,
-            updatedRegistrations,
+            sortedRegistrations,
             leader,
             term,
             termStartTime,
             elections);
       }
       return this;
+    }
+
+    List<Registration> sortRegistrations(List<Registration> registrations) {
+      // Count the number of distinct groups in the registrations list.
+      int groupCount = (int) registrations.stream()
+          .map(r -> r.member().groupId())
+          .distinct()
+          .count();
+
+      Set<MemberGroupId> groups = new HashSet<>();
+      List<Registration> sortedRegistrations = new LinkedList<>();
+
+      // Loop until all registrations have been sorted.
+      while (!registrations.isEmpty()) {
+        // Clear the list of consumed groups.
+        groups.clear();
+
+        // For each registration, check if it can be added to the registrations list.
+        Iterator<Registration> iterator = registrations.iterator();
+        while (iterator.hasNext()) {
+          Registration registration = iterator.next();
+
+          // If the registration's group has not been added to the list, add the registration.
+          if (groups.add(registration.member().groupId())) {
+            sortedRegistrations.add(registration);
+            iterator.remove();
+
+            // If an instance of a registration from each group has been added, reset the list of registrations.
+            if (groups.size() == groupCount) {
+              groups.clear();
+            }
+          }
+        }
+      }
+      return sortedRegistrations;
     }
 
     int countPrimaries(Registration registration) {

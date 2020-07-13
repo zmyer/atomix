@@ -404,6 +404,7 @@ final class LeaderAppender extends AbstractAppender {
       member.appendFailed();
       resetMatchIndex(member, response);
       resetNextIndex(member, response);
+      resetSnapshotIndex(member, response);
 
       // If there are more entries to send then attempt to send another commit.
       if (hasMoreEntries(member)) {
@@ -471,11 +472,11 @@ final class LeaderAppender extends AbstractAppender {
   private static class TimestampedFuture<T> extends CompletableFuture<T> {
     private final long timestamp;
 
-    public TimestampedFuture() {
+    TimestampedFuture() {
       this(System.currentTimeMillis());
     }
 
-    public TimestampedFuture(long timestamp) {
+    TimestampedFuture(long timestamp) {
       this.timestamp = timestamp;
     }
   }

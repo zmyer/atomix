@@ -72,6 +72,7 @@ public interface PartitionService {
       if (systemGroup != null && systemGroup.name().equals(protocol.group())) {
         return systemGroup;
       }
+      return null;
     }
 
         for (final PartitionGroup partitionGroup : getPartitionGroups()) {

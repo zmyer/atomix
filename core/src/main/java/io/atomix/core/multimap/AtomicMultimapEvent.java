@@ -91,15 +91,18 @@ public class AtomicMultimapEvent<K, V> extends AbstractEvent<AtomicMultimapEvent
 
   @Override
   public boolean equals(Object o) {
+    if (o == this) {
+      return true;
+    }
     if (!(o instanceof AtomicMultimapEvent)) {
       return false;
     }
 
     AtomicMultimapEvent<K, V> that = (AtomicMultimapEvent) o;
-    return Objects.equals(this.type(), that.type()) &&
-        Objects.equals(this.key(), that.key()) &&
-        Objects.equals(this.newValue, that.newValue) &&
-        Objects.equals(this.oldValue, that.oldValue);
+    return Objects.equals(this.type(), that.type())
+        && Objects.equals(this.key(), that.key())
+        && Objects.equals(this.newValue, that.newValue)
+        && Objects.equals(this.oldValue, that.oldValue);
   }
 
   @Override

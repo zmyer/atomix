@@ -28,41 +28,39 @@ import static com.google.common.base.MoreObjects.toStringHelper;
 /**
  * Leader elector primitive type.
  */
-// TODO: 2018/8/1 by zmyer
-public class LeaderElectionType<T>
-        implements PrimitiveType<LeaderElectionBuilder<T>, LeaderElectionConfig, LeaderElection<T>> {
-    private static final String NAME = "leader-election";
-    private static final LeaderElectionType INSTANCE = new LeaderElectionType();
+public class LeaderElectionType<T> implements PrimitiveType<LeaderElectionBuilder<T>, LeaderElectionConfig, LeaderElection<T>> {
+  private static final String NAME = "leader-election";
+  private static final LeaderElectionType INSTANCE = new LeaderElectionType();
 
-    /**
-     * Returns a new leader elector type.
-     *
-     * @param <T> the election candidate type
-     * @return a new leader elector type
-     */
-    @SuppressWarnings("unchecked")
-    public static <T> LeaderElectionType<T> instance() {
-        return INSTANCE;
-    }
+  /**
+   * Returns a new leader elector type.
+   *
+   * @param <T> the election candidate type
+   * @return a new leader elector type
+   */
+  @SuppressWarnings("unchecked")
+  public static <T> LeaderElectionType<T> instance() {
+    return INSTANCE;
+  }
 
-    @Override
-    public String name() {
-        return NAME;
-    }
+  @Override
+  public String name() {
+    return NAME;
+  }
 
-    @Override
-    public Namespace namespace() {
-        return Namespace.builder()
-                .register(PrimitiveType.super.namespace())
-                .register(Leadership.class)
-                .register(Leader.class)
-                .build();
-    }
+  @Override
+  public Namespace namespace() {
+    return Namespace.builder()
+        .register(PrimitiveType.super.namespace())
+        .register(Leadership.class)
+        .register(Leader.class)
+        .build();
+  }
 
-    @Override
-    public PrimitiveService newService(ServiceConfig config) {
-        return new DefaultLeaderElectionService();
-    }
+  @Override
+  public PrimitiveService newService(ServiceConfig config) {
+    return new DefaultLeaderElectionService();
+  }
 
   @Override
   public LeaderElectionConfig newConfig() {
@@ -74,10 +72,10 @@ public class LeaderElectionType<T>
     return new DefaultLeaderElectionBuilder<>(name, config, managementService);
   }
 
-    @Override
-    public String toString() {
-        return toStringHelper(this)
-                .add("name", name())
-                .toString();
-    }
+  @Override
+  public String toString() {
+    return toStringHelper(this)
+        .add("name", name())
+        .toString();
+  }
 }

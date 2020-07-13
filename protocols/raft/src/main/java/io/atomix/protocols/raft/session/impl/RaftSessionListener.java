@@ -47,7 +47,7 @@ final class RaftSessionListener {
   private final RaftSessionSequencer sequencer;
   private final Executor executor;
 
-  public RaftSessionListener(RaftClientProtocol protocol, MemberSelector memberSelector, RaftSessionState state, RaftSessionSequencer sequencer, Executor executor) {
+  RaftSessionListener(RaftClientProtocol protocol, MemberSelector memberSelector, RaftSessionState state, RaftSessionSequencer sequencer, Executor executor) {
     this.protocol = checkNotNull(protocol, "protocol cannot be null");
     this.memberSelector = checkNotNull(memberSelector, "nodeSelector cannot be null");
     this.state = checkNotNull(state, "state cannot be null");
@@ -140,6 +140,7 @@ final class RaftSessionListener {
    */
   public CompletableFuture<Void> close() {
     protocol.unregisterPublishListener(state.getSessionId());
+    memberSelector.close();
     return CompletableFuture.completedFuture(null);
   }
 }

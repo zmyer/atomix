@@ -28,11 +28,13 @@ import org.junit.Test;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.stream.Collectors;
 
@@ -41,6 +43,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /**
  * Unit tests for {@link AtomicMap}.
@@ -87,13 +90,53 @@ public class AtomicMapTest extends AbstractPrimitiveTest {
   }
 
   @Test
-  public void testBasicMapOperations() throws Throwable {
+  public void testSimpleMap() throws Throwable {
+    testMap(atomix().<String, String>atomicMapBuilder("testSimpleMap")
+        .withProtocol(protocol())
+        .build());
+  }
+
+  @Test
+  public void testCachedMap() throws Throwable {
+    testMap(atomix().<String, String>atomicMapBuilder("testCachedMap")
+        .withProtocol(protocol())
+        .withCacheEnabled()
+        .build());
+  }
+
+  @Test
+  public void testLocalMap() throws Throwable {
+    testMap(atomix().<String, String>atomicMapBuilder("testLocalMap")
+        .withProtocol(protocol())
+        .withCacheEnabled()
+        .withCacheSize(-1)
+        .build());
+  }
+
+  @Test
+  public void testLocalMapInitialization() throws Exception {
+    AtomicMap<String, String> map1 = atomix().<String, String>atomicMapBuilder("testLocalMapInitialization")
+        .withProtocol(protocol())
+        .withCacheEnabled()
+        .withCacheSize(-1)
+        .build();
+
+    map1.put("foo", "bar");
+    map1.put("bar", "baz");
+
+    AtomicMap<String, String> map2 = atomix().<String, String>atomicMapBuilder("testLocalMapInitialization")
+        .withProtocol(protocol())
+        .withCacheEnabled()
+        .withCacheSize(-1)
+        .build();
+
+    assertEquals("bar", map2.get("foo").value());
+    assertEquals("baz", map2.get("bar").value());
+  }
+
+  private void testMap(AtomicMap<String, String> map) throws Exception {
     final String fooValue = "Hello foo!";
     final String barValue = "Hello bar!";
-
-    AtomicMap<String, String> map = atomix().<String, String>atomicMapBuilder("testBasicMapOperationMap")
-        .withProtocol(protocol())
-        .build();
 
     assertTrue(map.isEmpty());
     assertNull(map.put("foo", fooValue));
@@ -262,6 +305,47 @@ public class AtomicMapTest extends AbstractPrimitiveTest {
     assertEquals("expire", event.oldValue().value());
 
     map.removeListener(listener);
+  }
+
+  @Test
+  public void testKeyLock() throws Throwable {
+    AtomicMap<String, String> map1 = atomix().<String, String>atomicMapBuilder("testKeyLock")
+        .withProtocol(protocol())
+        .build();
+    AtomicMap<String, String> map2 = atomix().<String, String>atomicMapBuilder("testKeyLock")
+        .withProtocol(protocol())
+        .build();
+
+    assertNull(map1.put("foo", "a"));
+
+    map2.lock("bar");
+    try {
+      map1.put("bar", "b");
+      fail();
+    } catch (ConcurrentModificationException e) {
+      // Exception is good :-)
+    }
+    assertNull(map2.put("bar", "b"));
+    map2.unlock("bar");
+
+    assertEquals("b", map1.put("bar", "c").value());
+
+    map1.lock("baz");
+    assertFalse(map2.tryLock("baz").isPresent());
+    assertFalse(map2.tryLock("baz", Duration.ofMillis(100)).isPresent());
+
+    CompletableFuture<Void> future = map2.async().tryLock("baz", Duration.ofSeconds(1))
+        .thenAccept(version -> {
+          assertTrue(version.isPresent());
+          assertTrue(version.getAsLong() > 0);
+        });
+    map1.unlock("baz");
+    future.join();
+    map2.put("baz", "d");
+    assertEquals("d", map2.get("baz").value());
+    assertTrue(map1.isLocked("baz"));
+    map2.unlock("baz");
+    assertFalse(map1.isLocked("baz"));
   }
 
   @Test

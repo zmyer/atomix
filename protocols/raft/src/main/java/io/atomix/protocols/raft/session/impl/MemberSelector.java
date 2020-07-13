@@ -23,7 +23,6 @@ import io.atomix.protocols.raft.session.CommunicationStrategy;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
-import java.util.LinkedList;
 import java.util.Objects;
 import java.util.Set;
 
@@ -37,7 +36,6 @@ import static com.google.common.base.Preconditions.checkNotNull;
 public final class MemberSelector implements Iterator<MemberId>, AutoCloseable {
 
   /**
-   * 1
    * Address selector state.
    */
   public enum State {
@@ -64,7 +62,7 @@ public final class MemberSelector implements Iterator<MemberId>, AutoCloseable {
   private Set<MemberId> members;
   private volatile MemberId selection;
   private final CommunicationStrategy strategy;
-  private Collection<MemberId> selections = new LinkedList<>();
+  private Collection<MemberId> selections;
   private Iterator<MemberId> selectionsIterator;
 
   public MemberSelector(MemberId leader, Collection<MemberId> members, CommunicationStrategy strategy, MemberSelectorManager selectors) {
@@ -167,8 +165,9 @@ public final class MemberSelector implements Iterator<MemberId>, AutoCloseable {
    * Returns a boolean value indicating whether the servers in the first list match the servers in the second list.
    */
   private boolean matches(Collection<MemberId> left, Collection<MemberId> right) {
-    if (left.size() != right.size())
+    if (left.size() != right.size()) {
       return false;
+    }
 
     for (MemberId address : left) {
       if (!right.contains(address)) {

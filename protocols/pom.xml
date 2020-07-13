@@ -19,7 +19,7 @@
   <parent>
     <groupId>io.atomix</groupId>
     <artifactId>atomix-parent</artifactId>
-    <version>3.1.0-SNAPSHOT</version>
+    <version>3.2.0-SNAPSHOT</version>
   </parent>
 
   <packaging>pom</packaging>
@@ -28,6 +28,7 @@
 
   <modules>
     <module>gossip</module>
+    <module>log</module>
     <module>primary-backup</module>
     <module>raft</module>
   </modules>

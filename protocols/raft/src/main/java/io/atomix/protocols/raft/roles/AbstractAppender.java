@@ -238,6 +238,7 @@ abstract class AbstractAppender implements AutoCloseable {
     else {
       resetMatchIndex(member, response);
       resetNextIndex(member, response);
+      resetSnapshotIndex(member, response);
 
       // If there are more entries to send then attempt to send another commit.
       if (response.lastLogIndex() != request.prevLogIndex() && hasMoreEntries(member)) {
@@ -315,6 +316,17 @@ abstract class AbstractAppender implements AutoCloseable {
   }
 
   /**
+   * Resets the snapshot index of the member when a response fails.
+   */
+  protected void resetSnapshotIndex(RaftMemberContext member, AppendResponse response) {
+    final long snapshotIndex = response.lastSnapshotIndex();
+    if (member.getSnapshotIndex() != snapshotIndex) {
+      member.setSnapshotIndex(snapshotIndex);
+      log.warn("Reset snapshot index for {} to {}", member, snapshotIndex);
+    }
+  }
+
+  /**
    * Builds a configure request for the given member.
    */
   protected ConfigureRequest buildConfigureRequest(RaftMemberContext member) {
@@ -350,9 +362,9 @@ abstract class AbstractAppender implements AutoCloseable {
           handleConfigureResponse(member, request, response, timestamp);
         } else {
           if (log.isTraceEnabled()) {
-            log.warn("Failed to configure {}", member.getMember().memberId(), error);
+            log.debug("Failed to configure {}", member.getMember().memberId(), error);
           } else {
-            log.warn("Failed to configure {}", member.getMember().memberId());
+            log.debug("Failed to configure {}", member.getMember().memberId());
           }
           handleConfigureResponseFailure(member, request, error);
         }

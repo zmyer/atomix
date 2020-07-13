@@ -207,24 +207,24 @@ public final class LeaderRole extends ActiveRole {
     if (expiring.add(session.sessionId())) {
       log.debug("Expiring session due to heartbeat failure: {}", session);
       appendAndCompact(new CloseSessionEntry(raft.getTerm(), System.currentTimeMillis(), session.sessionId().id(), true, false))
-              .whenCompleteAsync((entry, error) -> {
-                if (error != null) {
-                  expiring.remove(session.sessionId());
-                  return;
-                }
+          .whenCompleteAsync((entry, error) -> {
+            if (error != null) {
+              expiring.remove(session.sessionId());
+              return;
+            }
 
-                appender.appendEntries(entry.index()).whenComplete((commitIndex, commitError) -> {
-                  raft.checkThread();
-                  if (isRunning()) {
-                    if (commitError == null) {
-                      raft.getServiceManager().<Long>apply(entry.index())
-                              .whenCompleteAsync((r, e) -> expiring.remove(session.sessionId()), raft.getThreadContext());
-                    } else {
-                      expiring.remove(session.sessionId());
-                    }
-                  }
-                });
-              }, raft.getThreadContext());
+            appender.appendEntries(entry.index()).whenComplete((commitIndex, commitError) -> {
+              raft.checkThread();
+              if (isRunning()) {
+                if (commitError == null) {
+                  raft.getServiceManager().<Long>apply(entry.index())
+                      .whenCompleteAsync((r, e) -> expiring.remove(session.sessionId()), raft.getThreadContext());
+                } else {
+                  expiring.remove(session.sessionId());
+                }
+              }
+            });
+          }, raft.getThreadContext());
     }
   }
 
@@ -544,6 +544,7 @@ public final class LeaderRole extends ActiveRole {
           .withTerm(raft.getTerm())
           .withSucceeded(false)
           .withLastLogIndex(raft.getLogWriter().getLastIndex())
+          .withLastSnapshotIndex(raft.getSnapshotStore().getCurrentSnapshotIndex())
           .build()));
     } else {
       raft.setLeader(request.leader());
@@ -626,15 +627,15 @@ public final class LeaderRole extends ActiveRole {
     // to force it to be resent by the client.
     if (sequenceNumber > session.nextRequestSequence()) {
       if (session.getCommands().size() < MAX_PENDING_COMMANDS) {
-          log.trace("Registered sequence command {} > {}", sequenceNumber, session.nextRequestSequence());
-          session.registerCommand(request.sequenceNumber(), new PendingCommand(request, future));
-          return future;
+        log.trace("Registered sequence command {} > {}", sequenceNumber, session.nextRequestSequence());
+        session.registerCommand(request.sequenceNumber(), new PendingCommand(request, future));
+        return future;
       } else {
-          return CompletableFuture.completedFuture(logResponse(CommandResponse.builder()
-                  .withStatus(RaftResponse.Status.ERROR)
-                  .withError(RaftError.Type.COMMAND_FAILURE)
-                  .withLastSequence(session.getRequestSequence())
-                  .build()));
+        return CompletableFuture.completedFuture(logResponse(CommandResponse.builder()
+            .withStatus(RaftResponse.Status.ERROR)
+            .withError(RaftError.Type.COMMAND_FAILURE)
+            .withLastSequence(session.getRequestSequence())
+            .build()));
       }
     }
 
@@ -643,18 +644,19 @@ public final class LeaderRole extends ActiveRole {
     if (sequenceNumber <= session.getCommandSequence()) {
       OperationResult result = session.getResult(sequenceNumber);
       if (result != null) {
-          completeOperation(result, CommandResponse.builder(), null, future);
+        completeOperation(result, CommandResponse.builder(), null, future);
       } else {
-          future.complete(CommandResponse.builder()
-                  .withStatus(RaftResponse.Status.ERROR)
-                  .withError(RaftError.Type.PROTOCOL_ERROR)
-                  .build());
+        future.complete(CommandResponse.builder()
+            .withStatus(RaftResponse.Status.ERROR)
+            .withError(RaftError.Type.PROTOCOL_ERROR)
+            .build());
       }
     }
-    // Otherwise, commit the command and update the request sequence number.
+    // Otherwise, commit the command and update the request sequence number, then drain pending commands.
     else {
       commitCommand(request, future);
       session.setRequestSequence(sequenceNumber);
+      drainCommands(sequenceNumber, session);
     }
 
     return future.thenApply(this::logResponse);
@@ -715,8 +717,6 @@ public final class LeaderRole extends ActiveRole {
             }
             return;
           }
-
-
 
           // Replicate the command to followers.
           appender.appendEntries(entry.index()).whenComplete((commitIndex, commitError) -> {

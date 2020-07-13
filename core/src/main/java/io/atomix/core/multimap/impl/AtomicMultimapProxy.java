@@ -56,6 +56,7 @@ import io.atomix.primitive.PrimitiveType;
 import io.atomix.primitive.partition.PartitionId;
 import io.atomix.primitive.protocol.PrimitiveProtocol;
 import io.atomix.primitive.proxy.ProxyClient;
+import io.atomix.primitive.proxy.ProxySession;
 import io.atomix.utils.concurrent.Futures;
 import io.atomix.utils.time.Versioned;
 
@@ -213,6 +214,7 @@ public class AtomicMultimapProxy
   @Override
   public CompletableFuture<AsyncAtomicMultimap<String, byte[]>> connect() {
     return super.connect()
+        .thenCompose(v -> Futures.allOf(getProxyClient().getPartitions().stream().map(ProxySession::connect)))
         .thenRun(() -> getProxyClient().getPartitionIds().forEach(partition -> {
           getProxyClient().getPartition(partition).addStateChangeListener(state -> {
             if (state == PrimitiveState.CONNECTED && isListening()) {
@@ -357,6 +359,31 @@ public class AtomicMultimapProxy
     }
 
     @Override
+    public CompletableFuture<Void> lock(String key) {
+      return Futures.exceptionalFuture(new UnsupportedOperationException());
+    }
+
+    @Override
+    public CompletableFuture<Boolean> tryLock(String key) {
+      return Futures.exceptionalFuture(new UnsupportedOperationException());
+    }
+
+    @Override
+    public CompletableFuture<Boolean> tryLock(String key, Duration timeout) {
+      return Futures.exceptionalFuture(new UnsupportedOperationException());
+    }
+
+    @Override
+    public CompletableFuture<Boolean> isLocked(String key) {
+      return Futures.exceptionalFuture(new UnsupportedOperationException());
+    }
+
+    @Override
+    public CompletableFuture<Void> unlock(String key) {
+      return Futures.exceptionalFuture(new UnsupportedOperationException());
+    }
+
+    @Override
     public CompletableFuture<Void> addListener(MapEventListener<String, Versioned<Collection<byte[]>>> listener, Executor executor) {
       return Futures.exceptionalFuture(new UnsupportedOperationException());
     }
@@ -464,6 +491,7 @@ public class AtomicMultimapProxy
     public AsyncIterator<String> iterator() {
       return new PartitionedProxyIterator<>(
           getProxyClient(),
+          getProxyClient().getPartitionIds(),
           AtomicMultimapService::iterateKeySet,
           AtomicMultimapService::nextKeySet,
           AtomicMultimapService::closeKeySet);
@@ -642,6 +670,7 @@ public class AtomicMultimapProxy
     public AsyncIterator<String> iterator() {
       return new PartitionedProxyIterator<>(
           getProxyClient(),
+          getProxyClient().getPartitionIds(),
           AtomicMultimapService::iterateKeys,
           AtomicMultimapService::nextKeys,
           AtomicMultimapService::closeKeys);
@@ -801,6 +830,7 @@ public class AtomicMultimapProxy
     public AsyncIterator<byte[]> iterator() {
       return new PartitionedProxyIterator<>(
           getProxyClient(),
+          getProxyClient().getPartitionIds(),
           AtomicMultimapService::iterateValues,
           AtomicMultimapService::nextValues,
           AtomicMultimapService::closeValues);
@@ -930,6 +960,7 @@ public class AtomicMultimapProxy
       public AsyncIterator<byte[]> iterator() {
         return new TranscodingIterator<>(new PartitionedProxyIterator<>(
             getProxyClient(),
+            getProxyClient().getPartitionIds(),
             AtomicMultimapService::iterateValuesSet,
             AtomicMultimapService::nextValuesSet,
             AtomicMultimapService::closeValuesSet), e -> e.getElement());
@@ -1046,6 +1077,7 @@ public class AtomicMultimapProxy
       public AsyncIterator<Multiset.Entry<byte[]>> iterator() {
         return new PartitionedProxyIterator<>(
             getProxyClient(),
+            getProxyClient().getPartitionIds(),
             AtomicMultimapService::iterateValuesSet,
             AtomicMultimapService::nextValuesSet,
             AtomicMultimapService::closeValuesSet);
@@ -1157,6 +1189,7 @@ public class AtomicMultimapProxy
     public AsyncIterator<Map.Entry<String, byte[]>> iterator() {
       return new PartitionedProxyIterator<>(
           getProxyClient(),
+          getProxyClient().getPartitionIds(),
           AtomicMultimapService::iterateEntries,
           AtomicMultimapService::nextEntries,
           AtomicMultimapService::closeEntries);

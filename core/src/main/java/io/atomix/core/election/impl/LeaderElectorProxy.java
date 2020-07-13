@@ -27,6 +27,8 @@ import io.atomix.primitive.AbstractAsyncPrimitive;
 import io.atomix.primitive.PrimitiveRegistry;
 import io.atomix.primitive.PrimitiveState;
 import io.atomix.primitive.proxy.ProxyClient;
+import io.atomix.primitive.proxy.ProxySession;
+import io.atomix.utils.concurrent.Futures;
 
 import java.time.Duration;
 import java.util.Map;
@@ -105,7 +107,7 @@ public class LeaderElectorProxy
 
   @Override
   public synchronized CompletableFuture<Void> removeListener(LeadershipEventListener<byte[]> listener) {
-    if (leadershipChangeListeners.remove(listener)) {
+    if (leadershipChangeListeners.remove(listener) && !isListening()) {
       return getProxyClient().acceptAll(service -> service.unlisten());
     }
     return CompletableFuture.completedFuture(null);
@@ -124,23 +126,26 @@ public class LeaderElectorProxy
 
   @Override
   public synchronized CompletableFuture<Void> removeListener(String topic, LeadershipEventListener<byte[]> listener) {
-    topicListeners.computeIfPresent(topic, (t, s) -> {
-      s.remove(listener);
-      return s.size() == 0 ? null : s;
-    });
-    if (topicListeners.isEmpty()) {
-      return getProxyClient().acceptBy(topic, service -> service.unlisten());
+    if (!topicListeners.isEmpty()) {
+      topicListeners.computeIfPresent(topic, (t, s) -> {
+        s.remove(listener);
+        return s.size() == 0 ? null : s;
+      });
+      if (!isListening()) {
+        return getProxyClient().acceptBy(topic, service -> service.unlisten());
+      }
     }
     return CompletableFuture.completedFuture(null);
   }
 
   private boolean isListening() {
-    return !topicListeners.isEmpty();
+    return !leadershipChangeListeners.isEmpty() || !topicListeners.isEmpty();
   }
 
   @Override
   public CompletableFuture<AsyncLeaderElector<byte[]>> connect() {
     return super.connect()
+        .thenCompose(v -> Futures.allOf(getProxyClient().getPartitions().stream().map(ProxySession::connect)))
         .thenRun(() -> getProxyClient().getPartitions().forEach(partition -> {
           partition.addStateChangeListener(state -> {
             if (state == PrimitiveState.CONNECTED && isListening()) {

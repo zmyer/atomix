@@ -142,6 +142,7 @@ public class WorkQueueProxy
   @Override
   public CompletableFuture<AsyncWorkQueue<byte[]>> connect() {
     return super.connect()
+        .thenCompose(v -> getProxyClient().getPartition(name()).connect())
         .thenRun(() -> getProxyClient().getPartition(name()).addStateChangeListener(state -> {
           if (state == PrimitiveState.CONNECTED && isRegistered.get()) {
             getProxyClient().acceptBy(name(), service -> service.register());
@@ -174,7 +175,7 @@ public class WorkQueueProxy
     private final Executor executor;
     private final Accumulator<String> taskCompleter;
 
-    public TaskProcessor(Consumer<byte[]> backingConsumer,
+    TaskProcessor(Consumer<byte[]> backingConsumer,
                          int parallelism,
                          Executor executor,
                          Accumulator<String> taskCompleter) {
@@ -184,7 +185,7 @@ public class WorkQueueProxy
       this.taskCompleter = taskCompleter;
     }
 
-    public int headRoom() {
+    int headRoom() {
       return headRoom.get();
     }
 

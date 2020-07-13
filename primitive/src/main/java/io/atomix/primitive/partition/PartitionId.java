@@ -26,66 +26,65 @@ import static com.google.common.base.Preconditions.checkNotNull;
 /**
  * {@link PartitionMetadata} identifier.
  */
-// TODO: 2018/7/31 by zmyer
 public class PartitionId extends AbstractIdentifier<Integer> implements Comparable<PartitionId> {
-    private final String group;
+  private final String group;
 
-    /**
-     * Creates a partition identifier from an integer.
-     *
-     * @param group the group identifier
-     * @param id    input integer
-     */
-    public PartitionId(String group, int id) {
-        super(id);
-        this.group = checkNotNull(group, "group cannot be null");
-        Preconditions.checkArgument(id >= 0, "partition id must be non-negative");
-    }
+  /**
+   * Creates a partition identifier from an integer.
+   *
+   * @param group the group identifier
+   * @param id input integer
+   */
+  public PartitionId(String group, int id) {
+    super(id);
+    this.group = checkNotNull(group, "group cannot be null");
+    Preconditions.checkArgument(id >= 0, "partition id must be non-negative");
+  }
 
-    /**
-     * Creates a partition identifier from an integer.
-     *
-     * @param group the group identifier
-     * @param id    input integer
-     * @return partition identification
-     */
-    public static PartitionId from(String group, int id) {
-        return new PartitionId(group, id);
-    }
+  /**
+   * Creates a partition identifier from an integer.
+   *
+   * @param group the group identifier
+   * @param id input integer
+   * @return partition identification
+   */
+  public static PartitionId from(String group, int id) {
+    return new PartitionId(group, id);
+  }
 
-    @Override
-    public int compareTo(PartitionId that) {
-        return Integer.compare(this.identifier, that.identifier);
-    }
+  @Override
+  public int compareTo(PartitionId that) {
+    return Integer.compare(this.identifier, that.identifier);
+  }
 
-    /**
-     * Returns the partition group name.
-     *
-     * @return the partition group name
-     */
-    public String group() {
-        return group;
-    }
+  /**
+   * Returns the partition group name.
+   *
+   * @return the partition group name
+   */
+  public String group() {
+    return group;
+  }
 
-    @Override
-    public int hashCode() {
-        return Objects.hash(id(), group());
-    }
+  @Override
+  public int hashCode() {
+    return Objects.hash(id(), group());
+  }
 
-    @Override
-    public boolean equals(Object object) {
-        if (object instanceof PartitionId) {
-            PartitionId partitionId = (PartitionId) object;
-            return partitionId.id().equals(id()) && partitionId.group().equals(group());
-        }
-        return false;
+  @Override
+  public boolean equals(Object object) {
+    if (object instanceof PartitionId) {
+      PartitionId partitionId = (PartitionId) object;
+      return partitionId.id().equals(id()) && partitionId.group().equals(group());
     }
+    return false;
+  }
 
-    @Override
-    public String toString() {
-        return toStringHelper(this)
-                .add("id", id())
-                .add("group", group)
-                .toString();
-    }
+  @Override
+  public String toString() {
+    return toStringHelper(this)
+        .add("id", id())
+        .add("group", group)
+        .toString();
+  }
 }

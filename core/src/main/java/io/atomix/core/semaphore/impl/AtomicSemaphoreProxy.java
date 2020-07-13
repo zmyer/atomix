@@ -37,7 +37,7 @@ import java.util.function.Consumer;
 public class AtomicSemaphoreProxy
     extends AbstractAsyncPrimitive<AsyncAtomicSemaphore, AtomicSemaphoreService>
     implements AsyncAtomicSemaphore, AtomicSemaphoreClient {
-  private static Duration NO_TIMEOUT = Duration.ofMillis(-1);
+  private static final Duration NO_TIMEOUT = Duration.ofMillis(-1);
 
   private final ScheduledExecutorService scheduledExecutor;
   private final Map<Long, AcquireAttempt> attempts = new ConcurrentHashMap<>();
@@ -99,7 +99,9 @@ public class AtomicSemaphoreProxy
 
   @Override
   public CompletableFuture<Optional<Version>> tryAcquire(int permits, Duration timeout) {
-    if (permits < 0) throw new IllegalArgumentException();
+    if (permits < 0) {
+      throw new IllegalArgumentException();
+    }
 
     long id = attemptId.incrementAndGet();
     AcquireAttempt attempt = new AcquireAttempt(id, permits, timeout, a -> onExpired(a.id()));
@@ -115,7 +117,6 @@ public class AtomicSemaphoreProxy
     return attempt.thenApply(Optional::ofNullable);
   }
 
-
   @Override
   public CompletableFuture<Void> release() {
     return release(1);
@@ -123,7 +124,9 @@ public class AtomicSemaphoreProxy
 
   @Override
   public CompletableFuture<Void> release(int permits) {
-    if (permits < 0) throw new IllegalArgumentException();
+    if (permits < 0) {
+      throw new IllegalArgumentException();
+    }
     return getProxyClient().acceptBy(name(), service -> service.release(permits));
   }
 
@@ -153,6 +156,13 @@ public class AtomicSemaphoreProxy
   }
 
   @Override
+  public CompletableFuture<AsyncAtomicSemaphore> connect() {
+    return super.connect()
+        .thenCompose(v -> getProxyClient().getPartition(name()).connect())
+        .thenApply(v -> this);
+  }
+
+  @Override
   public AtomicSemaphore sync(Duration operationTimeout) {
     return new BlockingAtomicSemaphore(this, operationTimeout);
   }
@@ -172,12 +182,12 @@ public class AtomicSemaphoreProxy
     private final int permits;
     private ScheduledFuture<?> scheduledFuture;
 
-    public AcquireAttempt(long id, int permits) {
+    AcquireAttempt(long id, int permits) {
       this.id = id;
       this.permits = permits;
     }
 
-    public AcquireAttempt(long id, int permits, Duration timeout, Consumer<AcquireAttempt> callback) {
+    AcquireAttempt(long id, int permits, Duration timeout, Consumer<AcquireAttempt> callback) {
       this(id, permits);
       this.scheduledFuture = timeout != null && callback != null && timeout.toMillis() > 0
           ? scheduledExecutor.schedule(() -> callback.accept(this), timeout.toMillis(), TimeUnit.MILLISECONDS)

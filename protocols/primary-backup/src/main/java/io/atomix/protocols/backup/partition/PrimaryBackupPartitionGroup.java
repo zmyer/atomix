@@ -80,6 +80,7 @@ public class PrimaryBackupPartitionGroup implements ManagedPartitionGroup {
       return Namespace.builder()
           .nextId(Namespaces.BEGIN_USER_CUSTOM_ID + 200)
           .register(PrimaryBackupPartitionGroupConfig.class)
+          .register(MemberGroupStrategy.class)
           .build();
     }
 

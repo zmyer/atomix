@@ -50,10 +50,10 @@ public class AtomicMultimapType<K, V> implements PrimitiveType<AtomicMultimapBui
     return INSTANCE;
   }
 
-    @Override
-    public String name() {
-        return NAME;
-    }
+  @Override
+  public String name() {
+    return NAME;
+  }
 
   @Override
   public Namespace namespace() {
@@ -82,10 +82,10 @@ public class AtomicMultimapType<K, V> implements PrimitiveType<AtomicMultimapBui
     return new DefaultAtomicMultimapBuilder<>(name, config, managementService);
   }
 
-    @Override
-    public String toString() {
-        return toStringHelper(this)
-                .add("name", name())
-                .toString();
-    }
+  @Override
+  public String toString() {
+    return toStringHelper(this)
+        .add("name", name())
+        .toString();
+  }
 }

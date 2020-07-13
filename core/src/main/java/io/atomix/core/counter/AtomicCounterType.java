@@ -27,29 +27,28 @@ import static com.google.common.base.MoreObjects.toStringHelper;
 /**
  * Atomic counter primitive type.
  */
-// TODO: 2018/8/1 by zmyer
 public class AtomicCounterType implements PrimitiveType<AtomicCounterBuilder, AtomicCounterConfig, AtomicCounter> {
   private static final String NAME = "atomic-counter";
   private static final AtomicCounterType INSTANCE = new AtomicCounterType();
 
-    /**
-     * Returns a new atomic counter type.
-     *
-     * @return a new atomic counter type
-     */
-    public static AtomicCounterType instance() {
-        return INSTANCE;
-    }
+  /**
+   * Returns a new atomic counter type.
+   *
+   * @return a new atomic counter type
+   */
+  public static AtomicCounterType instance() {
+    return INSTANCE;
+  }
 
-    @Override
-    public String name() {
-        return NAME;
-    }
+  @Override
+  public String name() {
+    return NAME;
+  }
 
-    @Override
-    public PrimitiveService newService(ServiceConfig config) {
-        return new DefaultAtomicCounterService();
-    }
+  @Override
+  public PrimitiveService newService(ServiceConfig config) {
+    return new DefaultAtomicCounterService();
+  }
 
   @Override
   public AtomicCounterConfig newConfig() {
@@ -61,10 +60,10 @@ public class AtomicCounterType implements PrimitiveType<AtomicCounterBuilder, At
     return new DefaultAtomicCounterBuilder(name, config, managementService);
   }
 
-    @Override
-    public String toString() {
-        return toStringHelper(this)
-                .add("name", name())
-                .toString();
-    }
+  @Override
+  public String toString() {
+    return toStringHelper(this)
+        .add("name", name())
+        .toString();
+  }
 }

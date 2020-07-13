@@ -56,14 +56,13 @@ import static com.google.common.base.Preconditions.checkNotNull;
 /**
  * Utility for applying Typesafe configurations to Atomix configuration objects.
  */
-// TODO: 2018/7/30 by zmyer
 public class ConfigMapper {
   private static final Logger LOGGER = LoggerFactory.getLogger(ConfigMapper.class);
   private final ClassLoader classLoader;
 
-    public ConfigMapper(ClassLoader classLoader) {
-        this.classLoader = classLoader;
-    }
+  public ConfigMapper(ClassLoader classLoader) {
+    this.classLoader = classLoader;
+  }
 
   /**
    * Loads the given configuration file using the mapper, falling back to the given resources.
@@ -71,7 +70,7 @@ public class ConfigMapper {
    * @param type      the type to load
    * @param files     the files to load
    * @param resources the resources to which to fall back
-   * @param <T> the resulting type
+   * @param <T>       the resulting type
    * @return the loaded configuration
    */
   public <T> T loadFiles(Class<T> type, List<File> files, List<String> resources) {
@@ -79,21 +78,13 @@ public class ConfigMapper {
       return loadResources(type, resources);
     }
 
-    Config config = null;
+    Config config = ConfigFactory.systemProperties();
     for (File file : files) {
-      if (config == null) {
-        config = ConfigFactory.parseFile(file, ConfigParseOptions.defaults().setAllowMissing(false));
-      } else {
-        config = config.withFallback(ConfigFactory.parseFile(file, ConfigParseOptions.defaults().setAllowMissing(false)));
-      }
+      config = config.withFallback(ConfigFactory.parseFile(file, ConfigParseOptions.defaults().setAllowMissing(false)));
     }
 
     for (String resource : resources) {
-      if (config == null) {
-        config = ConfigFactory.load(classLoader, resource);
-      } else {
-        config = config.withFallback(ConfigFactory.load(classLoader, resource));
-      }
+      config = config.withFallback(ConfigFactory.load(classLoader, resource));
     }
     return map(checkNotNull(config, "config cannot be null").resolve(), type);
   }
@@ -101,9 +92,9 @@ public class ConfigMapper {
   /**
    * Loads the given resources using the configuration mapper.
    *
-   * @param type the type to load
+   * @param type      the type to load
    * @param resources the resources to load
-   * @param <T> the resulting type
+   * @param <T>       the resulting type
    * @return the loaded configuration
    */
   public <T> T loadResources(Class<T> type, String... resources) {
@@ -137,7 +128,7 @@ public class ConfigMapper {
    * Applies the given configuration to the given type.
    *
    * @param config the configuration to apply
-   * @param clazz the class to which to apply the configuration
+   * @param clazz  the class to which to apply the configuration
    */
   protected <T> T map(Config config, Class<T> clazz) {
     return map(config, null, null, clazz);
@@ -155,65 +146,78 @@ public class ConfigMapper {
    * Applies the given configuration to the given type.
    *
    * @param config the configuration to apply
-   * @param clazz the class to which to apply the configuration
+   * @param clazz  the class to which to apply the configuration
    */
   @SuppressWarnings("unchecked")
   protected <T> T map(Config config, String path, String name, Class<T> clazz) {
     T instance = newInstance(config, name, clazz);
 
-        // Map config property names to bean properties.
-        Map<String, String> propertyNames = new HashMap<>();
-        for (Map.Entry<String, ConfigValue> configProp : config.root().entrySet()) {
-            String originalName = configProp.getKey();
-            String camelName = toCamelCase(originalName);
-            // if a setting is in there both as some hyphen name and the camel name,
-            // the camel one wins
-            if (propertyNames.containsKey(camelName) && !originalName.equals(camelName)) {
-                // if we aren't a camel name to start with, we lose.
-                // if we are or we are the first matching key, we win.
-            } else {
-                propertyNames.put(camelName, originalName);
-            }
-        }
+    // Map config property names to bean properties.
+    Map<String, String> propertyNames = new HashMap<>();
+    for (Map.Entry<String, ConfigValue> configProp : config.root().entrySet()) {
+      String originalName = configProp.getKey();
+      String camelName = toCamelCase(originalName);
+      // if a setting is in there both as some hyphen name and the camel name,
+      // the camel one wins
+      if (!propertyNames.containsKey(camelName) || originalName.equals(camelName)) {
+        propertyNames.put(camelName, originalName);
+      }
+    }
 
-        // First use setters and then fall back to fields.
-        mapSetters(instance, clazz, path, name, propertyNames, config);
-        mapFields(instance, clazz, path, name, propertyNames, config);
+    // First use setters and then fall back to fields.
+    mapSetters(instance, clazz, path, name, propertyNames, config);
+    mapFields(instance, clazz, path, name, propertyNames, config);
 
     // If any properties present in the configuration were not found on config beans, throw an exception.
     if (!propertyNames.isEmpty()) {
-      checkRemainingProperties(propertyNames.keySet(), toPath(path, name), clazz);
+      checkRemainingProperties(propertyNames.keySet(), describeProperties(instance), toPath(path, name), clazz);
     }
     return instance;
   }
 
-  protected void checkRemainingProperties(Set<String> propertyNames, String path, Class<?> clazz) {
+  protected void checkRemainingProperties(Set<String> missingProperties, List<String> availableProperties, String path, Class<?> clazz) {
     Properties properties = System.getProperties();
-    Set<String> cleanNames = propertyNames
-        .stream()
+    List<String> cleanNames = missingProperties.stream()
         .map(propertyName -> toPath(path, propertyName))
         .filter(propertyName -> !properties.containsKey(propertyName))
         .filter(propertyName -> properties.entrySet().stream().noneMatch(entry -> entry.getKey().toString().startsWith(propertyName + ".")))
-        .collect(Collectors.toSet());
+        .sorted()
+        .collect(Collectors.toList());
     if (!cleanNames.isEmpty()) {
-      throw new ConfigurationException("Unknown properties present in configuration: " + Joiner.on(", ").join(cleanNames));
+      throw new ConfigurationException("Unknown properties present in configuration: " + Joiner.on(", ").join(cleanNames) + "\n"
+          + "Available properties:\n- " + Joiner.on("\n- ").join(availableProperties));
     }
   }
 
-    private <T> void mapSetters(T instance, Class<T> clazz, String path, String name, Map<String, String> propertyNames,
-            Config config) {
-        try {
-            for (SetterDescriptor descriptor : getSetterDescriptors(instance.getClass())) {
-                Method setter = descriptor.setter;
-                Type parameterType = setter.getGenericParameterTypes()[0];
-                Class<?> parameterClass = setter.getParameterTypes()[0];
+  private List<String> describeProperties(Object instance) {
+    Stream<String> setters = getSetterDescriptors(instance.getClass())
+        .stream()
+        .map(descriptor -> descriptor.name);
+    Stream<String> fields = getFieldDescriptors(instance.getClass())
+        .stream()
+        .map(descriptor -> descriptor.name);
+    return Stream.concat(setters, fields)
+        .sorted()
+        .collect(Collectors.toList());
+  }
+
+  private <T> void mapSetters(T instance, Class<T> clazz, String path, String name, Map<String, String> propertyNames, Config config) {
+    try {
+      for (SetterDescriptor descriptor : getSetterDescriptors(instance.getClass())) {
+        Method setter = descriptor.setter;
+        Type parameterType = setter.getGenericParameterTypes()[0];
+        Class<?> parameterClass = setter.getParameterTypes()[0];
 
         String configPropName = propertyNames.remove(descriptor.name);
         if (configPropName == null) {
           if ((Named.class.isAssignableFrom(clazz) || NamedConfig.class.isAssignableFrom(clazz))
-              && descriptor.setter.getParameterTypes()[0] == String.class && name != null && descriptor.name.equals("name")) {
+              && descriptor.setter.getParameterTypes()[0] == String.class && name != null && "name".equals(descriptor.name)) {
             if (descriptor.deprecated) {
-              LOGGER.warn("{}.{} is deprecated!", path, name);
+              if (path == null) {
+                LOGGER.warn("{} is deprecated!", name);
+              } else {
+                LOGGER.warn("{}.{} is deprecated!", path, name);
+              }
             }
             setter.invoke(instance, name);
           }
@@ -223,7 +227,11 @@ public class ConfigMapper {
         Object value = getValue(instance.getClass(), parameterType, parameterClass, config, toPath(path, name), configPropName);
         if (value != null) {
           if (descriptor.deprecated) {
-            LOGGER.warn("{}.{} is deprecated!", path, name);
+            if (path == null) {
+              LOGGER.warn("{}.{} is deprecated!", name, configPropName);
+            } else {
+              LOGGER.warn("{}.{}.{} is deprecated!", path, name, configPropName);
+            }
           }
           setter.invoke(instance, value);
         }
@@ -235,19 +243,18 @@ public class ConfigMapper {
     }
   }
 
-    private <T> void mapFields(T instance, Class<T> clazz, String path, String name, Map<String, String> propertyNames,
-            Config config) {
-        try {
-            for (FieldDescriptor descriptor : getFieldDescriptors(instance.getClass())) {
-                Field field = descriptor.field;
-                field.setAccessible(true);
+  private <T> void mapFields(T instance, Class<T> clazz, String path, String name, Map<String, String> propertyNames, Config config) {
+    try {
+      for (FieldDescriptor descriptor : getFieldDescriptors(instance.getClass())) {
+        Field field = descriptor.field;
+        field.setAccessible(true);
 
-                Type genericType = field.getGenericType();
-                Class<?> fieldClass = field.getType();
+        Type genericType = field.getGenericType();
+        Class<?> fieldClass = field.getType();
 
         String configPropName = propertyNames.remove(descriptor.name);
         if (configPropName == null) {
-          if (Named.class.isAssignableFrom(clazz) && field.getType() == String.class && name != null && descriptor.name.equals("name")) {
+          if (Named.class.isAssignableFrom(clazz) && field.getType() == String.class && name != null && "name".equals(descriptor.name)) {
             if (descriptor.deprecated) {
               LOGGER.warn("{}.{} is deprecated!", path, name);
             }
@@ -338,54 +345,56 @@ public class ConfigMapper {
       }
     } else if (parameterClass.isEnum()) {
       String value = config.getString(configPropName);
+      String enumName = value.replace("-", "_").toUpperCase();
       @SuppressWarnings("unchecked")
-      Enum enumValue = Enum.valueOf((Class<Enum>) parameterClass, value.replace("-", "_").toUpperCase());
+      Enum enumValue = Enum.valueOf((Class<Enum>) parameterClass, enumName);
+      try {
+        Deprecated deprecated = enumValue.getDeclaringClass().getField(enumName).getAnnotation(Deprecated.class);
+        if (deprecated != null) {
+          LOGGER.warn("{}.{} = {} is deprecated!", configPath, configPropName, value);
+        }
+      } catch (NoSuchFieldException e) {
+      }
       return enumValue;
     } else {
       return map(config.getConfig(configPropName), configPath, configPropName, parameterClass);
     }
   }
 
-    protected Map getMapValue(Class<?> beanClass, Type parameterType, Class<?> parameterClass, Config config,
-            String configPath, String configPropName) {
-        Type[] typeArgs = ((ParameterizedType) parameterType).getActualTypeArguments();
-        Type keyType = typeArgs[0];
-        Type valueType = typeArgs[1];
+  protected Map getMapValue(Class<?> beanClass, Type parameterType, Class<?> parameterClass, Config config, String configPath, String configPropName) {
+    Type[] typeArgs = ((ParameterizedType) parameterType).getActualTypeArguments();
+    Type keyType = typeArgs[0];
+    Type valueType = typeArgs[1];
 
-        Map<Object, Object> map = new HashMap<>();
-        Config childConfig = config.getConfig(configPropName);
-        Class valueClass =
-                (Class) (valueType instanceof ParameterizedType ? ((ParameterizedType) valueType).getRawType()
-                        : valueType);
-        for (String key : config.getObject(configPropName).unwrapped().keySet()) {
-            Object value = getValue(Map.class, valueType, valueClass, childConfig, toPath(configPath, configPropName),
-                    key);
-            map.put(getKeyValue(keyType, key), value);
-        }
-        return map;
+    Map<Object, Object> map = new HashMap<>();
+    Config childConfig = config.getConfig(configPropName);
+    Class valueClass = (Class) (valueType instanceof ParameterizedType ? ((ParameterizedType) valueType).getRawType() : valueType);
+    for (String key : config.getObject(configPropName).unwrapped().keySet()) {
+      Object value = getValue(Map.class, valueType, valueClass, childConfig, toPath(configPath, configPropName), key);
+      map.put(getKeyValue(keyType, key), value);
     }
+    return map;
+  }
 
-    protected Object getKeyValue(Type keyType, String key) {
-        if (keyType == Boolean.class || keyType == boolean.class) {
-            return Boolean.parseBoolean(key);
-        } else if (keyType == Integer.class || keyType == int.class) {
-            return Integer.parseInt(key);
-        } else if (keyType == Double.class || keyType == double.class) {
-            return Double.parseDouble(key);
-        } else if (keyType == Long.class || keyType == long.class) {
-            return Long.parseLong(key);
-        } else if (keyType == String.class) {
-            return key;
-        } else {
-            throw new ConfigurationException("Invalid map key type: " + keyType);
-        }
+  protected Object getKeyValue(Type keyType, String key) {
+    if (keyType == Boolean.class || keyType == boolean.class) {
+      return Boolean.parseBoolean(key);
+    } else if (keyType == Integer.class || keyType == int.class) {
+      return Integer.parseInt(key);
+    } else if (keyType == Double.class || keyType == double.class) {
+      return Double.parseDouble(key);
+    } else if (keyType == Long.class || keyType == long.class) {
+      return Long.parseLong(key);
+    } else if (keyType == String.class) {
+      return key;
+    } else {
+      throw new ConfigurationException("Invalid map key type: " + keyType);
     }
+  }
 
-    protected Object getSetValue(Class<?> beanClass, Type parameterType, Class<?> parameterClass, Config config,
-            String configPath, String configPropName) {
-        return new HashSet(
-                (List) getListValue(beanClass, parameterType, parameterClass, config, configPath, configPropName));
-    }
+  protected Object getSetValue(Class<?> beanClass, Type parameterType, Class<?> parameterClass, Config config, String configPath, String configPropName) {
+    return new HashSet((List) getListValue(beanClass, parameterType, parameterClass, config, configPath, configPropName));
+  }
 
   protected Object getListValue(Class<?> beanClass, Type parameterType, Class<?> parameterClass, Config config, String configPath, String configPropName) {
     Type elementType = ((ParameterizedType) parameterType).getActualTypeArguments()[0];
@@ -481,108 +490,112 @@ public class ConfigMapper {
     }
   }
 
-    protected String toPath(String path, String name) {
-        return path != null ? String.format("%s.%s", path, name) : name;
-    }
+  protected String toPath(String path, String name) {
+    return path != null ? String.format("%s.%s", path, name) : name;
+  }
 
-    protected static boolean isSimpleType(Class<?> parameterClass) {
-        return parameterClass == Boolean.class || parameterClass == boolean.class
-                || parameterClass == Integer.class || parameterClass == int.class
-                || parameterClass == Double.class || parameterClass == double.class
-                || parameterClass == Long.class || parameterClass == long.class
-                || parameterClass == String.class
-                || parameterClass == Duration.class
-                || parameterClass == MemorySize.class
-                || parameterClass == List.class
-                || parameterClass == Map.class
-                || parameterClass == Class.class;
-    }
+  protected static boolean isSimpleType(Class<?> parameterClass) {
+    return parameterClass == Boolean.class || parameterClass == boolean.class
+        || parameterClass == Integer.class || parameterClass == int.class
+        || parameterClass == Double.class || parameterClass == double.class
+        || parameterClass == Long.class || parameterClass == long.class
+        || parameterClass == String.class
+        || parameterClass == Duration.class
+        || parameterClass == MemorySize.class
+        || parameterClass == List.class
+        || parameterClass == Map.class
+        || parameterClass == Class.class;
+  }
 
-    protected static String toCamelCase(String originalName) {
-        String[] words = originalName.split("-+");
-        StringBuilder nameBuilder = new StringBuilder(originalName.length());
-        for (String word : words) {
-            if (nameBuilder.length() == 0) {
-                nameBuilder.append(word);
-            } else {
-                nameBuilder.append(word.substring(0, 1).toUpperCase());
-                nameBuilder.append(word.substring(1));
-            }
+  protected static String toCamelCase(String originalName) {
+    String[] words = originalName.split("-+");
+    if (words.length > 1) {
+      LOGGER.warn("Kebab case config name '" + originalName + "' is deprecated!");
+      StringBuilder nameBuilder = new StringBuilder(originalName.length());
+      for (String word : words) {
+        if (nameBuilder.length() == 0) {
+          nameBuilder.append(word);
+        } else {
+          nameBuilder.append(word.substring(0, 1).toUpperCase());
+          nameBuilder.append(word.substring(1));
         }
-        return nameBuilder.toString();
+      }
+      return nameBuilder.toString();
     }
+    return originalName;
+  }
 
-    protected static String toSetterName(String name) {
-        return "set" + name.substring(0, 1).toUpperCase() + name.substring(1);
-    }
+  protected static String toSetterName(String name) {
+    return "set" + name.substring(0, 1).toUpperCase() + name.substring(1);
+  }
 
-    protected static Collection<SetterDescriptor> getSetterDescriptors(Class<?> clazz) {
-        Map<String, SetterDescriptor> descriptors = Maps.newHashMap();
-        for (Method method : clazz.getMethods()) {
-            String name = method.getName();
-            if (method.getParameterTypes().length == 1
-                    && name.length() > 3
-                    && name.substring(0, 3).equals("set")
-                    && name.charAt(3) >= 'A'
-                    && name.charAt(3) <= 'Z') {
+  protected static Collection<SetterDescriptor> getSetterDescriptors(Class<?> clazz) {
+    Map<String, SetterDescriptor> descriptors = Maps.newHashMap();
+    for (Method method : clazz.getMethods()) {
+      String name = method.getName();
+      if (method.getParameterTypes().length == 1
+          && name.length() > 3
+          && "set".equals(name.substring(0, 3))
+          && name.charAt(3) >= 'A'
+          && name.charAt(3) <= 'Z') {
 
-                // Strip the "set" prefix from the property name.
-                name = method.getName().substring(3);
-                name = name.length() > 1
-                        ? name.substring(0, 1).toLowerCase() + name.substring(1)
-                        : name.toLowerCase();
+        // Strip the "set" prefix from the property name.
+        name = method.getName().substring(3);
+        name = name.length() > 1
+            ? name.substring(0, 1).toLowerCase() + name.substring(1)
+            : name.toLowerCase();
 
-                // Strip the "Config" suffix from the property name.
-                if (name.endsWith("Config")) {
-                    name = name.substring(0, name.length() - "Config".length());
-                }
-
-                // If a setter with this property name has already been registered, determine whether to override it.
-                // We favor simpler types over more complex types (i.e. beans).
-                SetterDescriptor descriptor = descriptors.get(name);
-                if (descriptor != null) {
-                    Class<?> type = method.getParameterTypes()[0];
-                    if (isSimpleType(type)) {
-                        descriptors.put(name, new SetterDescriptor(name, method));
-                    }
-                } else {
-                    descriptors.put(name, new SetterDescriptor(name, method));
-                }
-            }
+        // Strip the "Config" suffix from the property name.
+        if (name.endsWith("Config")) {
+          name = name.substring(0, name.length() - "Config".length());
         }
-        return descriptors.values();
-    }
 
-    protected static Collection<FieldDescriptor> getFieldDescriptors(Class<?> type) {
-        Class<?> clazz = type;
-        Map<String, FieldDescriptor> descriptors = Maps.newHashMap();
-        while (clazz != Object.class) {
-            for (Field field : clazz.getDeclaredFields()) {
-                // If the field is static or transient, ignore it.
-                if (Modifier.isTransient(field.getModifiers()) || Modifier.isStatic(field.getModifiers())) {
-                    continue;
-                }
-
-                // If the field has a setter, ignore it and use the setter.
-                Method method = Stream.of(clazz.getMethods())
-                        .filter(m -> m.getName().equals(toSetterName(field.getName())))
-                        .findFirst()
-                        .orElse(null);
-                if (method != null) {
-                    continue;
-                }
-
-                // Strip the "Config" suffix from the field.
-                String name = field.getName();
-                if (name.endsWith("Config")) {
-                    name = name.substring(0, name.length() - "Config".length());
-                }
-                descriptors.putIfAbsent(name, new FieldDescriptor(name, field));
-            }
-            clazz = clazz.getSuperclass();
+        // If a setter with this property name has already been registered, determine whether to override it.
+        // We favor simpler types over more complex types (i.e. beans).
+        SetterDescriptor descriptor = descriptors.get(name);
+        if (descriptor != null) {
+          Class<?> type = method.getParameterTypes()[0];
+          if (isSimpleType(type)) {
+            descriptors.put(name, new SetterDescriptor(name, method));
+          }
+        } else {
+          descriptors.put(name, new SetterDescriptor(name, method));
         }
-        return Lists.newArrayList(descriptors.values());
+      }
     }
+    return descriptors.values();
+  }
+
+  protected static Collection<FieldDescriptor> getFieldDescriptors(Class<?> type) {
+    Class<?> clazz = type;
+    Map<String, FieldDescriptor> descriptors = Maps.newHashMap();
+    while (clazz != Object.class) {
+      for (Field field : clazz.getDeclaredFields()) {
+        // If the field is static or transient, ignore it.
+        if (Modifier.isTransient(field.getModifiers()) || Modifier.isStatic(field.getModifiers())) {
+          continue;
+        }
+
+        // If the field has a setter, ignore it and use the setter.
+        Method method = Stream.of(clazz.getMethods())
+            .filter(m -> m.getName().equals(toSetterName(field.getName())))
+            .findFirst()
+            .orElse(null);
+        if (method != null) {
+          continue;
+        }
+
+        // Strip the "Config" suffix from the field.
+        String name = field.getName();
+        if (name.endsWith("Config")) {
+          name = name.substring(0, name.length() - "Config".length());
+        }
+        descriptors.putIfAbsent(name, new FieldDescriptor(name, field));
+      }
+      clazz = clazz.getSuperclass();
+    }
+    return Lists.newArrayList(descriptors.values());
+  }
 
   protected static class SetterDescriptor {
     private final String name;

@@ -71,6 +71,7 @@ public class RaftServiceContext implements ServiceContext {
   private long currentIndex;
   private Session currentSession;
   private long currentTimestamp;
+  private long timestampDelta;
   private OperationType currentOperation;
   private boolean deleted;
   private final LogicalClock logicalClock = new LogicalClock() {
@@ -118,10 +119,10 @@ public class RaftServiceContext implements ServiceContext {
   public boolean deleted() {
     return deleted;
   }
-  
+
   @Override
   public MemberId localMemberId() {
-      return raft.localMemberId();
+    return raft.localMemberId();
   }
 
   @Override
@@ -188,7 +189,23 @@ public class RaftServiceContext implements ServiceContext {
    */
   private void tick(long index, long timestamp) {
     this.currentIndex = index;
-    this.currentTimestamp = Math.max(currentTimestamp, timestamp);
+
+    // If the entry timestamp is less than the current state machine timestamp
+    // and the delta is not yet set, set the delta and do not change the current timestamp.
+    // If the entry timestamp is less than the current state machine timestamp
+    // and the delta is set, update the current timestamp to the entry timestamp plus the delta.
+    // If the entry timestamp is greater than or equal to the current timestamp, update the current
+    // timestamp and reset the delta.
+    if (timestamp < currentTimestamp) {
+      if (timestampDelta == 0) {
+        timestampDelta = currentTimestamp - timestamp;
+      } else {
+        currentTimestamp = timestamp + timestampDelta;
+      }
+    } else {
+      currentTimestamp = timestamp;
+      timestampDelta = 0;
+    }
 
     // Set the current operation type to COMMAND to allow events to be sent.
     setOperation(OperationType.COMMAND);
@@ -228,6 +245,10 @@ public class RaftServiceContext implements ServiceContext {
     }
 
     String serviceName = reader.readString();
+    currentIndex = reader.readLong();
+    currentTimestamp = reader.readLong();
+    timestampDelta = reader.readLong();
+
     int sessionCount = reader.readInt();
     for (int i = 0; i < sessionCount; i++) {
       SessionId sessionId = SessionId.from(reader.readLong());
@@ -262,8 +283,6 @@ public class RaftServiceContext implements ServiceContext {
       session.open();
       service.register(sessions.addSession(session));
     }
-    currentIndex = reader.snapshot().index();
-    currentTimestamp = reader.snapshot().timestamp().unixTimestamp();
     service.restore(new DefaultBackupInput(reader, service.serializer()));
   }
 
@@ -277,6 +296,10 @@ public class RaftServiceContext implements ServiceContext {
     writer.writeLong(primitiveId.id());
     writer.writeString(primitiveType.name());
     writer.writeString(serviceName);
+    writer.writeLong(currentIndex);
+    writer.writeLong(currentTimestamp);
+    writer.writeLong(timestampDelta);
+
     writer.writeInt(sessions.getSessions().size());
     for (RaftSession session : sessions.getSessions()) {
       writer.writeLong(session.sessionId().id());
@@ -296,18 +319,18 @@ public class RaftServiceContext implements ServiceContext {
   /**
    * Registers the given session.
    *
-   * @param index The index of the registration.
+   * @param index     The index of the registration.
    * @param timestamp The timestamp of the registration.
-   * @param session The session to register.
+   * @param session   The session to register.
    */
   public long openSession(long index, long timestamp, RaftSession session) {
     log.debug("Opening session {}", session.sessionId());
 
-    // Update the state machine index/ timestamp .
-    session.setLastUpdated(timestamp);
-
     // Update the state machine index/timestamp.
     tick(index, timestamp);
+
+    // Set the session timestamp to the current service timestamp.
+    session.setLastUpdated(currentTimestamp);
 
     // Expire sessions that have timed out.
     expireSessions(currentTimestamp);
@@ -326,17 +349,16 @@ public class RaftServiceContext implements ServiceContext {
   /**
    * Keeps the given session alive.
    *
-   * @param index The index of the keep-alive.
-   * @param timestamp The timestamp of the keep-alive.
-   * @param session The session to keep-alive.
+   * @param index           The index of the keep-alive.
+   * @param timestamp       The timestamp of the keep-alive.
+   * @param session         The session to keep-alive.
    * @param commandSequence The session command sequence number.
-   * @param eventIndex The session event index.
+   * @param eventIndex      The session event index.
    */
   public boolean keepAlive(long index, long timestamp, RaftSession session, long commandSequence, long eventIndex) {
-    // If the service has been deleted then throw an unknown service exception.
+    // If the service has been deleted, just return false to ignore the keep-alive.
     if (deleted) {
-      log.warn("Service {} has been deleted by another process", serviceName);
-      throw new RaftException.UnknownService("Service " + serviceName + " has been deleted");
+      return false;
     }
 
     // Update the state machine index/timestamp.
@@ -378,7 +400,7 @@ public class RaftServiceContext implements ServiceContext {
   /**
    * Completes a keep-alive.
    *
-   * @param index the keep-alive index
+   * @param index     the keep-alive index
    * @param timestamp the keep-alive timestamp
    */
   public void completeKeepAlive(long index, long timestamp) {
@@ -395,7 +417,7 @@ public class RaftServiceContext implements ServiceContext {
   /**
    * Keeps all sessions alive using the given timestamp.
    *
-   * @param index the index of the timestamp
+   * @param index     the index of the timestamp
    * @param timestamp the timestamp with which to reset session timeouts
    */
   public void keepAliveSessions(long index, long timestamp) {
@@ -412,10 +434,10 @@ public class RaftServiceContext implements ServiceContext {
   /**
    * Unregister the given session.
    *
-   * @param index The index of the unregister.
+   * @param index     The index of the unregister.
    * @param timestamp The timestamp of the unregister.
-   * @param session The session to unregister.
-   * @param expired Whether the session was expired by the leader.
+   * @param session   The session to unregister.
+   * @param expired   Whether the session was expired by the leader.
    */
   public void closeSession(long index, long timestamp, RaftSession session, boolean expired) {
     log.debug("Closing session {}", session.sessionId());
@@ -451,10 +473,10 @@ public class RaftServiceContext implements ServiceContext {
   /**
    * Executes the given command on the state machine.
    *
-   * @param index The index of the command.
+   * @param index     The index of the command.
    * @param timestamp The timestamp of the command.
-   * @param sequence The command sequence number.
-   * @param session The session that submitted the command.
+   * @param sequence  The command sequence number.
+   * @param session   The session that submitted the command.
    * @param operation The command to execute.
    * @return A future to be completed with the command result.
    */
@@ -545,10 +567,10 @@ public class RaftServiceContext implements ServiceContext {
   /**
    * Executes the given query on the state machine.
    *
-   * @param index The index of the query.
-   * @param sequence The query sequence number.
+   * @param index     The index of the query.
+   * @param sequence  The query sequence number.
    * @param timestamp The timestamp of the query.
-   * @param session The session that submitted the query.
+   * @param session   The session that submitted the query.
    * @param operation The query to execute.
    * @return A future to be completed with the query result.
    */

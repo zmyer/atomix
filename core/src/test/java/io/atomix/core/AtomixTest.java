@@ -15,10 +15,17 @@
  */
 package io.atomix.core;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
 import io.atomix.cluster.ClusterMembershipEvent;
 import io.atomix.cluster.ClusterMembershipEventListener;
 import io.atomix.cluster.Member;
 import io.atomix.core.barrier.DistributedCyclicBarrierType;
+import io.atomix.core.counter.AtomicCounter;
 import io.atomix.core.counter.AtomicCounterType;
 import io.atomix.core.counter.DistributedCounterType;
 import io.atomix.core.election.LeaderElectionType;
@@ -27,10 +34,13 @@ import io.atomix.core.idgenerator.AtomicIdGeneratorType;
 import io.atomix.core.list.DistributedListType;
 import io.atomix.core.lock.AtomicLockType;
 import io.atomix.core.lock.DistributedLockType;
+import io.atomix.core.log.DistributedLog;
+import io.atomix.core.log.DistributedLogPartition;
 import io.atomix.core.map.AtomicCounterMapType;
 import io.atomix.core.map.AtomicMapType;
 import io.atomix.core.map.AtomicNavigableMapType;
 import io.atomix.core.map.AtomicSortedMapType;
+import io.atomix.core.map.DistributedMap;
 import io.atomix.core.map.DistributedMapType;
 import io.atomix.core.map.DistributedNavigableMapType;
 import io.atomix.core.map.DistributedSortedMapType;
@@ -49,13 +59,16 @@ import io.atomix.core.tree.AtomicDocumentTreeType;
 import io.atomix.core.value.AtomicValueType;
 import io.atomix.core.value.DistributedValueType;
 import io.atomix.core.workqueue.WorkQueueType;
+import io.atomix.primitive.partition.impl.DefaultPartitionService;
 import io.atomix.primitive.protocol.ProxyProtocol;
+import io.atomix.protocols.log.DistributedLogProtocol;
+import io.atomix.protocols.log.partition.LogPartitionGroup;
+import io.atomix.protocols.raft.MultiRaftProtocol;
+import io.atomix.protocols.raft.partition.RaftPartition;
+import io.atomix.protocols.raft.partition.RaftPartitionGroup;
 import io.atomix.utils.concurrent.Futures;
+import io.atomix.utils.config.ConfigurationException;
 import io.atomix.utils.net.Address;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -63,6 +76,7 @@ import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -70,12 +84,9 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
 
 /**
  * Atomix test.
@@ -201,6 +212,162 @@ public class AtomixTest extends AbstractAtomixTest {
     assertEquals(3, atomix1.getMembershipService().getMembers().size());
     assertEquals(3, atomix2.getMembershipService().getMembers().size());
     assertEquals(3, atomix3.getMembershipService().getMembers().size());
+  }
+
+  @Test
+  public void testRoleChangedListener() throws Exception {
+    // given
+    final CompletableFuture<Void> roleChanged = new CompletableFuture<>();
+
+    final CompletableFuture<Atomix> nodeOneFuture = startAtomix(1, Arrays.asList(1),
+        builder -> {
+          final RaftPartitionGroup partitionGroup = RaftPartitionGroup.builder("system")
+              .withNumPartitions(1)
+              .withMembers(String.valueOf(1))
+              .withDataDirectory(new File(new File(DATA_DIR, "log"), "1"))
+              .build();
+
+          final Atomix atomix = builder.withManagementGroup(partitionGroup).build();
+
+          final DefaultPartitionService partitionService = (DefaultPartitionService) atomix.getPartitionService();
+          final RaftPartitionGroup raftPartitionGroup = (RaftPartitionGroup) partitionService.getSystemPartitionGroup();
+
+          // when
+          raftPartitionGroup.getPartitions().forEach(
+              partition -> {
+                final RaftPartition raftPartition = (RaftPartition) partition;
+                raftPartition.addRoleChangeListener((role) -> roleChanged.complete(null));
+              });
+          return atomix;
+        });
+
+    // then
+    nodeOneFuture.get();
+    roleChanged.get();
+  }
+
+  @Test
+  public void testLogPrimitive() throws Exception {
+    CompletableFuture<Atomix> future1 = startAtomix(1, Arrays.asList(1, 2), builder ->
+        builder.withManagementGroup(RaftPartitionGroup.builder("system")
+            .withNumPartitions(1)
+            .withMembers(String.valueOf(1), String.valueOf(2))
+            .withDataDirectory(new File(new File(DATA_DIR, "log"), "1"))
+            .build())
+            .withPartitionGroups(LogPartitionGroup.builder("log")
+                .withNumPartitions(3)
+                .build())
+            .build());
+
+    CompletableFuture<Atomix> future2 = startAtomix(2, Arrays.asList(1, 2), builder ->
+        builder.withManagementGroup(RaftPartitionGroup.builder("system")
+            .withNumPartitions(1)
+            .withMembers(String.valueOf(1), String.valueOf(2))
+            .withDataDirectory(new File(new File(DATA_DIR, "log"), "2"))
+            .build())
+            .withPartitionGroups(LogPartitionGroup.builder("log")
+                .withNumPartitions(3)
+                .build())
+            .build());
+
+    Atomix atomix1 = future1.get();
+    Atomix atomix2 = future2.get();
+
+    DistributedLog<String> log1 = atomix1.<String>logBuilder()
+        .withProtocol(DistributedLogProtocol.builder()
+            .build())
+        .build();
+
+    DistributedLog<String> log2 = atomix2.<String>logBuilder()
+        .withProtocol(DistributedLogProtocol.builder()
+            .build())
+        .build();
+
+    assertEquals(3, log1.getPartitions().size());
+    assertEquals(1, log1.getPartitions().get(0).id());
+    assertEquals(2, log1.getPartitions().get(1).id());
+    assertEquals(3, log1.getPartitions().get(2).id());
+    assertEquals(1, log2.getPartition(1).id());
+    assertEquals(2, log2.getPartition(2).id());
+    assertEquals(3, log2.getPartition(3).id());
+
+    DistributedLogPartition<String> partition1 = log1.getPartition("Hello world!");
+    DistributedLogPartition<String> partition2 = log2.getPartition("Hello world!");
+    assertEquals(partition1.id(), partition2.id());
+
+    CountDownLatch latch = new CountDownLatch(2);
+    partition2.consume(record -> {
+      assertEquals("Hello world!", record.value());
+      latch.countDown();
+    });
+    log2.consume(record -> {
+      assertEquals("Hello world!", record.value());
+      latch.countDown();
+    });
+    partition1.produce("Hello world!");
+    latch.await(10, TimeUnit.SECONDS);
+    assertEquals(0, latch.getCount());
+  }
+
+  @Test
+  public void testLogBasedPrimitives() throws Exception {
+    CompletableFuture<Atomix> future1 = startAtomix(1, Arrays.asList(1, 2), builder ->
+        builder.withManagementGroup(RaftPartitionGroup.builder("system")
+            .withNumPartitions(1)
+            .withMembers(String.valueOf(1), String.valueOf(2))
+            .withDataDirectory(new File(new File(DATA_DIR, "log"), "1"))
+            .build())
+            .withPartitionGroups(LogPartitionGroup.builder("log")
+                .withNumPartitions(3)
+                .build())
+            .build());
+
+    CompletableFuture<Atomix> future2 = startAtomix(2, Arrays.asList(1, 2), builder ->
+        builder.withManagementGroup(RaftPartitionGroup.builder("system")
+            .withNumPartitions(1)
+            .withMembers(String.valueOf(1), String.valueOf(2))
+            .withDataDirectory(new File(new File(DATA_DIR, "log"), "2"))
+            .build())
+            .withPartitionGroups(LogPartitionGroup.builder("log")
+                .withNumPartitions(3)
+                .build())
+            .build());
+
+    Atomix atomix1 = future1.get();
+    Atomix atomix2 = future2.get();
+
+    DistributedMap<String, String> map1 = atomix1.<String, String>mapBuilder("test-map")
+        .withProtocol(DistributedLogProtocol.builder().build())
+        .build();
+
+    DistributedMap<String, String> map2 = atomix2.<String, String>mapBuilder("test-map")
+        .withProtocol(DistributedLogProtocol.builder().build())
+        .build();
+
+    CountDownLatch latch = new CountDownLatch(1);
+    map2.addListener(event -> {
+      map2.async().get("foo").thenAccept(value -> {
+        assertEquals("bar", value);
+        latch.countDown();
+      });
+    });
+    map1.put("foo", "bar");
+    latch.await(10, TimeUnit.SECONDS);
+    assertEquals(0, latch.getCount());
+
+    AtomicCounter counter1 = atomix1.atomicCounterBuilder("test-counter")
+        .withProtocol(DistributedLogProtocol.builder().build())
+        .build();
+
+    AtomicCounter counter2 = atomix2.atomicCounterBuilder("test-counter")
+        .withProtocol(DistributedLogProtocol.builder().build())
+        .build();
+
+    assertEquals(1, counter1.incrementAndGet());
+    assertEquals(1, counter1.get());
+    Thread.sleep(1000);
+    assertEquals(1, counter2.get());
+    assertEquals(2, counter2.incrementAndGet());
   }
 
   @Test
@@ -530,7 +697,8 @@ public class AtomixTest extends AbstractAtomixTest {
     IntStream.range(1, 4).forEach(i ->
         instances.add(Atomix.builder(getClass().getResource("/primitives.conf").getFile())
             .withMemberId(String.valueOf(i))
-            .withAddress("localhost", 5000 + i)
+            .withHost("localhost")
+            .withPort(5000 + i)
             .withProfiles(ConsensusProfile.builder()
                 .withMembers("1", "2", "3")
                 .withDataPath(new File(new File(DATA_DIR, "primitive-getters"), String.valueOf(i)))
@@ -539,7 +707,8 @@ public class AtomixTest extends AbstractAtomixTest {
     Futures.allOf(instances.stream().map(Atomix::start)).get(30, TimeUnit.SECONDS);
 
     Atomix atomix = Atomix.builder(getClass().getResource("/primitives.conf").getFile())
-        .withAddress("localhost:5000")
+        .withHost("localhost")
+        .withPort(5000)
         .build();
     instances.add(atomix);
 
@@ -550,6 +719,24 @@ public class AtomixTest extends AbstractAtomixTest {
     //}
 
     atomix.start().get(30, TimeUnit.SECONDS);
+
+    try {
+      atomix.mapBuilder("foo")
+          .withProtocol(MultiRaftProtocol.builder("wrong").build())
+          .get();
+      fail();
+    } catch (Exception e) {
+      assertTrue(e instanceof ConfigurationException);
+    }
+
+    try {
+      atomix.mapBuilder("bar")
+          .withProtocol(MultiRaftProtocol.builder("wrong").build())
+          .build();
+      fail();
+    } catch (Exception e) {
+      assertTrue(e instanceof ConfigurationException);
+    }
 
     assertEquals(AtomicCounterType.instance(), atomix.getPrimitive("atomic-counter", AtomicCounterType.instance()).type());
     assertEquals("atomic-counter", atomix.getAtomicCounter("atomic-counter").name());
@@ -792,7 +979,7 @@ public class AtomixTest extends AbstractAtomixTest {
     }
 
     public ClusterMembershipEvent event() throws InterruptedException, TimeoutException {
-      ClusterMembershipEvent event = queue.poll(10, TimeUnit.SECONDS);
+      ClusterMembershipEvent event = queue.poll(15, TimeUnit.SECONDS);
       if (event == null) {
         throw new TimeoutException();
       }

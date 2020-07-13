@@ -30,8 +30,10 @@ public class SwimMembershipProtocolConfig extends GroupMembershipProtocolConfig 
   private static final int DEFAULT_GOSSIP_INTERVAL = 250;
   private static final int DEFAULT_GOSSIP_FANOUT = 2;
   private static final int DEFAULT_PROBE_INTERVAL = 1000;
+  private static final int DEFAULT_PROBE_TIMEOUT = 2000;
   private static final int DEFAULT_SUSPECT_PROBES = 3;
   private static final int DEFAULT_FAILURE_TIMEOUT = 10000;
+  private static final boolean DEFAULT_RETAIN_TOMBSTONES = true;
 
   private boolean broadcastUpdates = DEFAULT_BROADCAST_UPDATES;
   private boolean broadcastDisputes = DEFAULT_BROADCAST_DISPUTES;
@@ -39,8 +41,10 @@ public class SwimMembershipProtocolConfig extends GroupMembershipProtocolConfig 
   private Duration gossipInterval = Duration.ofMillis(DEFAULT_GOSSIP_INTERVAL);
   private int gossipFanout = DEFAULT_GOSSIP_FANOUT;
   private Duration probeInterval = Duration.ofMillis(DEFAULT_PROBE_INTERVAL);
+  private Duration probeTimeout = Duration.ofMillis(DEFAULT_PROBE_TIMEOUT);
   private int suspectProbes = DEFAULT_SUSPECT_PROBES;
   private Duration failureTimeout = Duration.ofMillis(DEFAULT_FAILURE_TIMEOUT);
+  private boolean retainTombstones = DEFAULT_RETAIN_TOMBSTONES;
 
   /**
    * Returns whether to broadcast member updates to all peers.
@@ -166,6 +170,28 @@ public class SwimMembershipProtocolConfig extends GroupMembershipProtocolConfig 
   }
 
   /**
+   * Returns the probe timeout.
+   *
+   * @return the probe timeout
+   */
+  public Duration getProbeTimeout() {
+    return probeTimeout;
+  }
+
+  /**
+   * Sets the probe timeout.
+   *
+   * @param probeTimeout the probe timeout
+   * @return the membership protocol configuration
+   */
+  public SwimMembershipProtocolConfig setProbeTimeout(Duration probeTimeout) {
+    checkNotNull(probeTimeout, "probeTimeout cannot be null");
+    checkArgument(!probeTimeout.isNegative() && !probeTimeout.isZero(), "probeTimeout must be positive");
+    this.probeTimeout = probeTimeout;
+    return this;
+  }
+
+  /**
    * Returns the number of probes to perform on suspect members.
    *
    * @return the number of probes to perform on suspect members
@@ -205,6 +231,26 @@ public class SwimMembershipProtocolConfig extends GroupMembershipProtocolConfig 
     checkNotNull(failureTimeout, "failureTimeout cannot be null");
     checkArgument(!failureTimeout.isNegative() && !failureTimeout.isZero(), "failureTimeout must be positive");
     this.failureTimeout = checkNotNull(failureTimeout);
+    return this;
+  }
+
+  /**
+   * Returns whether tombstone retention is enabled.
+   *
+   * @return whether tombstone retention is enabled
+   */
+  public boolean isRetainTombstones() {
+    return retainTombstones;
+  }
+
+  /**
+   * Sets whether to retain tombstones.
+   *
+   * @param retainTombstones whether to retain tombstones
+   * @return the membership protocol configuration
+   */
+  public SwimMembershipProtocolConfig setRetainTombstones(boolean retainTombstones) {
+    this.retainTombstones = retainTombstones;
     return this;
   }
 

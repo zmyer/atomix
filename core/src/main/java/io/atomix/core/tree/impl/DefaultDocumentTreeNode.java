@@ -82,7 +82,6 @@ public class DefaultDocumentTreeNode<V> implements DocumentTreeNode<V> {
     return children.get(name);
   }
 
-
   public DocumentTreeNode<V> parent() {
     return parent;
   }
@@ -157,8 +156,7 @@ public class DefaultDocumentTreeNode<V> implements DocumentTreeNode<V> {
             .add("value", this.value);
     for (DocumentTreeNode<V> child : children.values()) {
       helper = helper.add("child", "\n" + child.path().pathElements()
-          .get(child.path().pathElements().size() - 1) +
-          " : " + child.value());
+          .get(child.path().pathElements().size() - 1) + " : " + child.value());
     }
     return helper.toString();
   }

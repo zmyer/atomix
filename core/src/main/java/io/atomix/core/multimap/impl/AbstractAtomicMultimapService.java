@@ -72,15 +72,15 @@ public abstract class AbstractAtomicMultimapService extends AbstractPrimitiveSer
           kryo.writeClassAndObject(output, object.valueSet);
         }
 
-                @Override
-                @SuppressWarnings("unchecked")
-                public NonTransactionalValues read(Kryo kryo, Input input, Class<NonTransactionalValues> type) {
-                    NonTransactionalValues commit = new NonTransactionalValues();
-                    commit.valueSet.addAll((Collection<byte[]>) kryo.readClassAndObject(input));
-                    return commit;
-                }
-            }, NonTransactionalValues.class)
-            .build());
+        @Override
+        @SuppressWarnings("unchecked")
+        public NonTransactionalValues read(Kryo kryo, Input input, Class<NonTransactionalValues> type) {
+          NonTransactionalValues commit = new NonTransactionalValues();
+          commit.valueSet.addAll((Collection<byte[]>) kryo.readClassAndObject(input));
+          return commit;
+        }
+      }, NonTransactionalValues.class)
+      .build());
 
   private AtomicLong globalVersion = new AtomicLong(1);
   private Set<SessionId> listeners = new LinkedHashSet<>();
@@ -91,24 +91,24 @@ public abstract class AbstractAtomicMultimapService extends AbstractPrimitiveSer
     super(primitiveType, AtomicMultimapClient.class);
   }
 
-    @Override
-    public Serializer serializer() {
-        return serializer;
-    }
+  @Override
+  public Serializer serializer() {
+    return serializer;
+  }
 
-    @Override
-    public void backup(BackupOutput writer) {
-        writer.writeLong(globalVersion.get());
-        writer.writeObject(listeners);
-        writer.writeObject(backingMap);
-    }
+  @Override
+  public void backup(BackupOutput writer) {
+    writer.writeLong(globalVersion.get());
+    writer.writeObject(listeners);
+    writer.writeObject(backingMap);
+  }
 
-    @Override
-    public void restore(BackupInput reader) {
-        globalVersion = new AtomicLong(reader.readLong());
-        listeners = reader.readObject();
-        backingMap = reader.readObject();
-    }
+  @Override
+  public void restore(BackupInput reader) {
+    globalVersion = new AtomicLong(reader.readLong());
+    listeners = reader.readObject();
+    backingMap = reader.readObject();
+  }
 
   @Override
   public void onExpire(Session session) {
@@ -122,23 +122,23 @@ public abstract class AbstractAtomicMultimapService extends AbstractPrimitiveSer
     entryIterators.entrySet().removeIf(entry -> entry.getValue().sessionId == session.sessionId().id());
   }
 
-    @Override
-    public int size() {
-        return backingMap.values()
-                .stream()
-                .mapToInt(valueCollection -> valueCollection.values().size())
-                .sum();
-    }
+  @Override
+  public int size() {
+    return backingMap.values()
+        .stream()
+        .mapToInt(valueCollection -> valueCollection.values().size())
+        .sum();
+  }
 
-    @Override
-    public boolean isEmpty() {
-        return backingMap.isEmpty();
-    }
+  @Override
+  public boolean isEmpty() {
+    return backingMap.isEmpty();
+  }
 
-    @Override
-    public boolean containsKey(String key) {
-        return backingMap.containsKey(key);
-    }
+  @Override
+  public boolean containsKey(String key) {
+    return backingMap.containsKey(key);
+  }
 
   @Override
   public boolean containsKeys(Collection<String> keys) {
@@ -167,25 +167,25 @@ public abstract class AbstractAtomicMultimapService extends AbstractPrimitiveSer
                     match.matches(byteValue)));
   }
 
-    @Override
-    public boolean containsEntry(String key, byte[] value) {
-        MapEntryValues entryValue =
-                backingMap.get(key);
-        if (entryValue == null) {
-            return false;
-        } else {
-            Match valueMatch = Match.ifValue(value);
-            return entryValue
-                    .values()
-                    .stream()
-                    .anyMatch(byteValue -> valueMatch.matches(byteValue));
-        }
+  @Override
+  public boolean containsEntry(String key, byte[] value) {
+    MapEntryValues entryValue =
+        backingMap.get(key);
+    if (entryValue == null) {
+      return false;
+    } else {
+      Match valueMatch = Match.ifValue(value);
+      return entryValue
+          .values()
+          .stream()
+          .anyMatch(byteValue -> valueMatch.matches(byteValue));
     }
+  }
 
-    @Override
-    public void clear() {
-        backingMap.clear();
-    }
+  @Override
+  public void clear() {
+    backingMap.clear();
+  }
 
   @Override
   public int keyCount() {
@@ -204,22 +204,22 @@ public abstract class AbstractAtomicMultimapService extends AbstractPrimitiveSer
     return toVersioned(backingMap.get(key));
   }
 
-    @Override
-    public boolean remove(String key, byte[] value) {
-        MapEntryValues entry = backingMap.get(key);
-        if (entry == null) {
-            return false;
-        }
-
-        if (entry.remove(key, value)) {
-            if (entry.values().isEmpty()) {
-                backingMap.remove(key);
-            }
-            onChange(key, value, null);
-            return true;
-        }
-        return false;
+  @Override
+  public boolean remove(String key, byte[] value) {
+    MapEntryValues entry = backingMap.get(key);
+    if (entry == null) {
+      return false;
     }
+
+    if (entry.remove(key, value)) {
+      if (entry.values().isEmpty()) {
+        backingMap.remove(key);
+      }
+      onChange(key, value, null);
+      return true;
+    }
+    return false;
+  }
 
   @Override
   public Versioned<Collection<byte[]>> removeAll(String key) {
@@ -234,12 +234,12 @@ public abstract class AbstractAtomicMultimapService extends AbstractPrimitiveSer
     return removedValues;
   }
 
-    @Override
-    public boolean removeAll(String key, Collection<? extends byte[]> values) {
-        MapEntryValues entry = backingMap.get(key);
-        if (entry == null) {
-            return false;
-        }
+  @Override
+  public boolean removeAll(String key, Collection<? extends byte[]> values) {
+    MapEntryValues entry = backingMap.get(key);
+    if (entry == null) {
+      return false;
+    }
 
     Versioned<Collection<byte[]>> removedValues = entry.removeAll(key, values);
     if (removedValues != null) {
@@ -261,20 +261,19 @@ public abstract class AbstractAtomicMultimapService extends AbstractPrimitiveSer
     return false;
   }
 
-    @Override
-    public boolean putAll(String key, Collection<? extends byte[]> values) {
-        if (values.isEmpty()) {
-            return false;
-        }
-
-        Collection<? extends byte[]> addedValues = backingMap.computeIfAbsent(key, k -> new NonTransactionalValues())
-                .putAll(key, values);
-        if (addedValues != null) {
-            addedValues.forEach(value -> onChange(key, value, null));
-            return true;
-        }
-        return false;
+  @Override
+  public boolean putAll(String key, Collection<? extends byte[]> values) {
+    if (values.isEmpty()) {
+      return false;
     }
+
+    Collection<? extends byte[]> addedValues = backingMap.computeIfAbsent(key, k -> new NonTransactionalValues()).putAll(key, values);
+    if (addedValues != null) {
+      addedValues.forEach(value -> onChange(key, value, null));
+      return true;
+    }
+    return false;
+  }
 
   @Override
   @SuppressWarnings("squid:S2175") // ByteArrayComparator passed into {@link Sets#newTreeSet(Comparator)}
@@ -481,23 +480,23 @@ public abstract class AbstractAtomicMultimapService extends AbstractPrimitiveSer
     listeners.add(getCurrentSession().sessionId());
   }
 
-    @Override
-    public void unlisten() {
-        listeners.remove(getCurrentSession().sessionId());
-    }
+  @Override
+  public void unlisten() {
+    listeners.remove(getCurrentSession().sessionId());
+  }
 
-    /**
-     * Sends a change event to listeners.
-     *
-     * @param key      the changed key
-     * @param oldValue the old value
-     * @param newValue the new value
-     */
-    private void onChange(String key, byte[] oldValue, byte[] newValue) {
-        listeners.forEach(id -> getSession(id).accept(client -> client.onChange(key, oldValue, newValue)));
-    }
+  /**
+   * Sends a change event to listeners.
+   *
+   * @param key      the changed key
+   * @param oldValue the old value
+   * @param newValue the new value
+   */
+  private void onChange(String key, byte[] oldValue, byte[] newValue) {
+    listeners.forEach(id -> getSession(id).accept(client -> client.onChange(key, oldValue, newValue)));
+  }
 
-    private interface MapEntryValues {
+  private interface MapEntryValues {
 
     /**
      * Returns the list of raw {@code byte[]'s}.
@@ -506,70 +505,70 @@ public abstract class AbstractAtomicMultimapService extends AbstractPrimitiveSer
      */
     Collection<byte[]> values();
 
-        /**
-         * Returns the version of the value.
-         *
-         * @return version
-         */
-        long version();
+    /**
+     * Returns the version of the value.
+     *
+     * @return version
+     */
+    long version();
 
-        boolean put(String key, byte[] value);
+    boolean put(String key, byte[] value);
 
-        Collection<? extends byte[]> putAll(String key, Collection<? extends byte[]> values);
+    Collection<? extends byte[]> putAll(String key, Collection<? extends byte[]> values);
 
     Versioned<Collection<byte[]>> replace(String key, Collection<? extends byte[]> values);
 
-        boolean remove(String key, byte[] value);
+    boolean remove(String key, byte[] value);
 
     Versioned<Collection<byte[]>> removeAll(String key);
 
     Versioned<Collection<byte[]>> removeAll(String key, Collection<? extends byte[]> values);
   }
 
-    private class NonTransactionalValues implements MapEntryValues {
-        private long version;
-        private final TreeSet<byte[]> valueSet = Sets.newTreeSet(new ByteArrayComparator());
+  private class NonTransactionalValues implements MapEntryValues {
+    private long version;
+    private final TreeSet<byte[]> valueSet = Sets.newTreeSet(new ByteArrayComparator());
 
-        public NonTransactionalValues() {
-            //Set the version to current it will only be updated once this is
-            // populated
-            this.version = globalVersion.get();
-        }
+    NonTransactionalValues() {
+      //Set the version to current it will only be updated once this is
+      // populated
+      this.version = globalVersion.get();
+    }
 
     @Override
     public Collection<byte[]> values() {
       return ImmutableSet.copyOf(valueSet);
     }
 
-        @Override
-        public long version() {
-            return version;
-        }
+    @Override
+    public long version() {
+      return version;
+    }
 
-        @Override
-        public boolean put(String key, byte[] value) {
-            if (valueSet.add(value)) {
-                version = getCurrentIndex();
-                return true;
-            }
-            return false;
-        }
+    @Override
+    public boolean put(String key, byte[] value) {
+      if (valueSet.add(value)) {
+        version = getCurrentIndex();
+        return true;
+      }
+      return false;
+    }
 
-        @Override
-        public Collection<? extends byte[]> putAll(String key, Collection<? extends byte[]> values) {
-            Set<byte[]> addedValues = Sets.newHashSet();
-            for (byte[] value : values) {
-                if (valueSet.add(value)) {
-                    addedValues.add(value);
-                }
-            }
-
-            if (!addedValues.isEmpty()) {
-                version = getCurrentIndex();
-                return addedValues;
-            }
-            return null;
+    @Override
+    public Collection<? extends byte[]> putAll(String key, Collection<? extends byte[]> values) {
+      Set<byte[]> addedValues = Sets.newHashSet();
+      for (byte[] value : values) {
+        if (valueSet.add(value)) {
+          addedValues.add(value);
         }
+      }
+
+      if (!addedValues.isEmpty()) {
+        version = getCurrentIndex();
+        return addedValues;
+      }
+      return null;
+    }
 
     @Override
     public Versioned<Collection<byte[]>> replace(String key, Collection<? extends byte[]> values) {
@@ -607,12 +606,12 @@ public abstract class AbstractAtomicMultimapService extends AbstractPrimitiveSer
         }
       }
 
-            if (!removedValues.isEmpty()) {
-                return new Versioned<>(removedValues, version = getCurrentIndex());
-            }
-            return null;
-        }
+      if (!removedValues.isEmpty()) {
+        return new Versioned<>(removedValues, version = getCurrentIndex());
+      }
+      return null;
     }
+  }
 
   /**
    * Utility for turning a {@code MapEntryValue} to {@code Versioned}.
@@ -628,9 +627,9 @@ public abstract class AbstractAtomicMultimapService extends AbstractPrimitiveSer
         : new Versioned<>(value.values(), value.version());
   }
 
-    private static class ByteArrayComparator implements Comparator<byte[]>, Serializable {
+  private static class ByteArrayComparator implements Comparator<byte[]>, Serializable {
 
-        private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 1L;
 
     @Override
     public int compare(byte[] o1, byte[] o2) {

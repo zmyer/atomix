@@ -18,7 +18,7 @@ package io.atomix.cluster;
 import io.atomix.cluster.discovery.NodeDiscoveryConfig;
 import io.atomix.cluster.messaging.MessagingConfig;
 import io.atomix.cluster.protocol.GroupMembershipProtocolConfig;
-import io.atomix.cluster.protocol.PhiMembershipProtocolConfig;
+import io.atomix.cluster.protocol.SwimMembershipProtocolConfig;
 import io.atomix.utils.config.Config;
 
 import static com.google.common.base.Preconditions.checkNotNull;
@@ -26,159 +26,158 @@ import static com.google.common.base.Preconditions.checkNotNull;
 /**
  * Cluster configuration.
  */
-// TODO: 2018/7/30 by zmyer
 public class ClusterConfig implements Config {
-    private static final String DEFAULT_CLUSTER_NAME = "atomix";
+  private static final String DEFAULT_CLUSTER_NAME = "atomix";
 
-    private String clusterId = DEFAULT_CLUSTER_NAME;
-    private MemberConfig nodeConfig = new MemberConfig();
-    private NodeDiscoveryConfig discoveryConfig;
-    private MulticastConfig multicastConfig = new MulticastConfig();
-    private GroupMembershipProtocolConfig protocolConfig = new PhiMembershipProtocolConfig();
-    private MembershipConfig membershipConfig = new MembershipConfig();
-    private MessagingConfig messagingConfig = new MessagingConfig();
+  private String clusterId = DEFAULT_CLUSTER_NAME;
+  private MemberConfig nodeConfig = new MemberConfig();
+  private NodeDiscoveryConfig discoveryConfig;
+  private MulticastConfig multicastConfig = new MulticastConfig();
+  private GroupMembershipProtocolConfig protocolConfig = new SwimMembershipProtocolConfig();
+  private MembershipConfig membershipConfig = new MembershipConfig();
+  private MessagingConfig messagingConfig = new MessagingConfig();
 
-    /**
-     * Returns the cluster identifier.
-     *
-     * @return the cluster identifier
-     */
-    public String getClusterId() {
-        return clusterId;
-    }
+  /**
+   * Returns the cluster identifier.
+   *
+   * @return the cluster identifier
+   */
+  public String getClusterId() {
+    return clusterId;
+  }
 
-    /**
-     * Sets the cluster identifier.
-     *
-     * @param clusterId the cluster identifier
-     * @return the cluster configuration
-     */
-    public ClusterConfig setClusterId(String clusterId) {
-        this.clusterId = clusterId;
-        return this;
-    }
+  /**
+   * Sets the cluster identifier.
+   *
+   * @param clusterId the cluster identifier
+   * @return the cluster configuration
+   */
+  public ClusterConfig setClusterId(String clusterId) {
+    this.clusterId = clusterId;
+    return this;
+  }
 
-    /**
-     * Returns the local member configuration.
-     *
-     * @return the local member configuration
-     */
-    public MemberConfig getNodeConfig() {
-        return nodeConfig;
-    }
+  /**
+   * Returns the local member configuration.
+   *
+   * @return the local member configuration
+   */
+  public MemberConfig getNodeConfig() {
+    return nodeConfig;
+  }
 
-    /**
-     * Sets the local member configuration.
-     *
-     * @param nodeConfig the local member configuration
-     * @return the cluster configuration
-     */
-    public ClusterConfig setNodeConfig(MemberConfig nodeConfig) {
-        this.nodeConfig = checkNotNull(nodeConfig);
-        return this;
-    }
+  /**
+   * Sets the local member configuration.
+   *
+   * @param nodeConfig the local member configuration
+   * @return the cluster configuration
+   */
+  public ClusterConfig setNodeConfig(MemberConfig nodeConfig) {
+    this.nodeConfig = checkNotNull(nodeConfig);
+    return this;
+  }
 
-    /**
-     * Returns the node discovery provider configuration.
-     *
-     * @return the node discovery provider configuration
-     */
-    public NodeDiscoveryConfig getDiscoveryConfig() {
-        return discoveryConfig;
-    }
+  /**
+   * Returns the node discovery provider configuration.
+   *
+   * @return the node discovery provider configuration
+   */
+  public NodeDiscoveryConfig getDiscoveryConfig() {
+    return discoveryConfig;
+  }
 
-    /**
-     * Sets the node discovery provider configuration.
-     *
-     * @param discoveryConfig the node discovery provider configuration
-     * @return the node configuration
-     */
-    public ClusterConfig setDiscoveryConfig(NodeDiscoveryConfig discoveryConfig) {
-        this.discoveryConfig = checkNotNull(discoveryConfig);
-        return this;
-    }
+  /**
+   * Sets the node discovery provider configuration.
+   *
+   * @param discoveryConfig the node discovery provider configuration
+   * @return the node configuration
+   */
+  public ClusterConfig setDiscoveryConfig(NodeDiscoveryConfig discoveryConfig) {
+    this.discoveryConfig = checkNotNull(discoveryConfig);
+    return this;
+  }
 
-    /**
-     * Returns the multicast configuration.
-     *
-     * @return the multicast configuration
-     */
-    public MulticastConfig getMulticastConfig() {
-        return multicastConfig;
-    }
+  /**
+   * Returns the multicast configuration.
+   *
+   * @return the multicast configuration
+   */
+  public MulticastConfig getMulticastConfig() {
+    return multicastConfig;
+  }
 
-    /**
-     * Sets the multicast configuration.
-     *
-     * @param multicastConfig the multicast configuration
-     * @return the cluster configuration
-     */
-    public ClusterConfig setMulticastConfig(MulticastConfig multicastConfig) {
-        this.multicastConfig = checkNotNull(multicastConfig);
-        return this;
-    }
+  /**
+   * Sets the multicast configuration.
+   *
+   * @param multicastConfig the multicast configuration
+   * @return the cluster configuration
+   */
+  public ClusterConfig setMulticastConfig(MulticastConfig multicastConfig) {
+    this.multicastConfig = checkNotNull(multicastConfig);
+    return this;
+  }
 
-    /**
-     * Returns the group membership protocol configuration.
-     *
-     * @return the group membership protocol configuration
-     */
-    public GroupMembershipProtocolConfig getProtocolConfig() {
-        return protocolConfig;
-    }
+  /**
+   * Returns the group membership protocol configuration.
+   *
+   * @return the group membership protocol configuration
+   */
+  public GroupMembershipProtocolConfig getProtocolConfig() {
+    return protocolConfig;
+  }
 
-    /**
-     * Sets the group membership protocol configuration.
-     *
-     * @param protocolConfig the group membership protocol configuration
-     * @return the cluster configuration
-     */
-    public ClusterConfig setProtocolConfig(GroupMembershipProtocolConfig protocolConfig) {
-        this.protocolConfig = protocolConfig;
-        return this;
-    }
+  /**
+   * Sets the group membership protocol configuration.
+   *
+   * @param protocolConfig the group membership protocol configuration
+   * @return the cluster configuration
+   */
+  public ClusterConfig setProtocolConfig(GroupMembershipProtocolConfig protocolConfig) {
+    this.protocolConfig = protocolConfig;
+    return this;
+  }
 
-    /**
-     * Returns the cluster membership configuration.
-     *
-     * @return the cluster membership configuration
-     * @deprecated since 3.1
-     */
-    @Deprecated
-    public MembershipConfig getMembershipConfig() {
-        return membershipConfig;
-    }
+  /**
+   * Returns the cluster membership configuration.
+   *
+   * @return the cluster membership configuration
+   * @deprecated since 3.1
+   */
+  @Deprecated
+  public MembershipConfig getMembershipConfig() {
+    return membershipConfig;
+  }
 
-    /**
-     * Sets the cluster membership configuration.
-     *
-     * @param membershipConfig the cluster membership configuration
-     * @return the cluster configuration
-     * @deprecated since 3.1
-     */
-    @Deprecated
-    public ClusterConfig setMembershipConfig(MembershipConfig membershipConfig) {
-        this.membershipConfig = checkNotNull(membershipConfig);
-        return this;
-    }
+  /**
+   * Sets the cluster membership configuration.
+   *
+   * @param membershipConfig the cluster membership configuration
+   * @return the cluster configuration
+   * @deprecated since 3.1
+   */
+  @Deprecated
+  public ClusterConfig setMembershipConfig(MembershipConfig membershipConfig) {
+    this.membershipConfig = checkNotNull(membershipConfig);
+    return this;
+  }
 
-    /**
-     * Returns the cluster messaging configuration.
-     *
-     * @return the messaging configuration
-     */
-    public MessagingConfig getMessagingConfig() {
-        return messagingConfig;
-    }
+  /**
+   * Returns the cluster messaging configuration.
+   *
+   * @return the messaging configuration
+   */
+  public MessagingConfig getMessagingConfig() {
+    return messagingConfig;
+  }
 
-    /**
-     * Sets the cluster messaging configuration.
-     *
-     * @param messagingConfig the messaging configuration
-     * @return the cluster configuration
-     */
-    public ClusterConfig setMessagingConfig(MessagingConfig messagingConfig) {
-        this.messagingConfig = messagingConfig;
-        return this;
-    }
+  /**
+   * Sets the cluster messaging configuration.
+   *
+   * @param messagingConfig the messaging configuration
+   * @return the cluster configuration
+   */
+  public ClusterConfig setMessagingConfig(MessagingConfig messagingConfig) {
+    this.messagingConfig = messagingConfig;
+    return this;
+  }
 }

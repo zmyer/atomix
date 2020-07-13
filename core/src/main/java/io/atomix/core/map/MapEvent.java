@@ -28,25 +28,25 @@ import java.util.Objects;
  */
 public class MapEvent<K, V> extends AbstractEvent<MapEvent.Type, K> {
 
+  /**
+   * MapEvent type.
+   */
+  public enum Type {
     /**
-     * MapEvent type.
+     * Entry inserted into the map.
      */
-    public enum Type {
-        /**
-         * Entry inserted into the map.
-         */
-        INSERT,
+    INSERT,
 
-        /**
-         * Existing map entry updated.
-         */
-        UPDATE,
+    /**
+     * Existing map entry updated.
+     */
+    UPDATE,
 
-        /**
-         * Entry removed from map.
-         */
-        REMOVE
-    }
+    /**
+     * Entry removed from map.
+     */
+    REMOVE
+  }
 
   private final V newValue;
   private final V oldValue;
@@ -93,17 +93,20 @@ public class MapEvent<K, V> extends AbstractEvent<MapEvent.Type, K> {
     return oldValue;
   }
 
-    @Override
-    public boolean equals(Object o) {
-        if (!(o instanceof MapEvent)) {
-            return false;
-        }
+  @Override
+  public boolean equals(Object o) {
+    if (o == this) {
+      return true;
+    }
+    if (!(o instanceof MapEvent)) {
+      return false;
+    }
 
     MapEvent<K, V> that = (MapEvent) o;
-    return Objects.equals(this.type(), that.type()) &&
-        Objects.equals(this.key(), that.key()) &&
-        Objects.equals(this.newValue, that.newValue) &&
-        Objects.equals(this.oldValue, that.oldValue);
+    return Objects.equals(this.type(), that.type())
+        && Objects.equals(this.key(), that.key())
+        && Objects.equals(this.newValue, that.newValue)
+        && Objects.equals(this.oldValue, that.oldValue);
   }
 
   @Override

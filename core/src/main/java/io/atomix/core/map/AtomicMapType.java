@@ -38,72 +38,71 @@ import static com.google.common.base.MoreObjects.toStringHelper;
 /**
  * Consistent map primitive type.
  */
-// TODO: 2018/12/07 by zmyer
 public class AtomicMapType<K, V> implements PrimitiveType<AtomicMapBuilder<K, V>, AtomicMapConfig, AtomicMap<K, V>> {
-    private static final String NAME = "atomic-map";
+  private static final String NAME = "atomic-map";
 
-    private static final AtomicMapType INSTANCE = new AtomicMapType();
+  private static final AtomicMapType INSTANCE = new AtomicMapType();
 
-    /**
-     * Returns a new consistent map type.
-     *
-     * @param <K> the key type
-     * @param <V> the value type
-     * @return a new consistent map type
-     */
-    @SuppressWarnings("unchecked")
-    public static <K, V> AtomicMapType<K, V> instance() {
-        return INSTANCE;
-    }
+  /**
+   * Returns a new consistent map type.
+   *
+   * @param <K> the key type
+   * @param <V> the value type
+   * @return a new consistent map type
+   */
+  @SuppressWarnings("unchecked")
+  public static <K, V> AtomicMapType<K, V> instance() {
+    return INSTANCE;
+  }
 
-    @Override
-    public String name() {
-        return NAME;
-    }
+  @Override
+  public String name() {
+    return NAME;
+  }
 
-    @Override
-    public Namespace namespace() {
-        return Namespace.builder()
-                .register(PrimitiveType.super.namespace())
-                .register(Namespaces.BASIC)
-                .nextId(Namespaces.BEGIN_USER_CUSTOM_ID)
-                .register(TransactionId.class)
-                .register(TransactionLog.class)
-                .register(MapUpdate.class)
-                .register(MapUpdate.Type.class)
-                .register(PrepareResult.class)
-                .register(CommitResult.class)
-                .register(RollbackResult.class)
-                .register(MapEntryUpdateResult.class)
-                .register(MapEntryUpdateResult.Status.class)
-                .register(Versioned.class)
-                .register(AtomicMapEvent.class)
-                .register(AtomicMapEvent.Type.class)
-                .register(IteratorBatch.class)
-                .register(Versioned.class)
-                .register(byte[].class)
-                .build();
-    }
+  @Override
+  public Namespace namespace() {
+    return Namespace.builder()
+        .register(PrimitiveType.super.namespace())
+        .register(Namespaces.BASIC)
+        .nextId(Namespaces.BEGIN_USER_CUSTOM_ID)
+        .register(TransactionId.class)
+        .register(TransactionLog.class)
+        .register(MapUpdate.class)
+        .register(MapUpdate.Type.class)
+        .register(PrepareResult.class)
+        .register(CommitResult.class)
+        .register(RollbackResult.class)
+        .register(MapEntryUpdateResult.class)
+        .register(MapEntryUpdateResult.Status.class)
+        .register(Versioned.class)
+        .register(AtomicMapEvent.class)
+        .register(AtomicMapEvent.Type.class)
+        .register(IteratorBatch.class)
+        .register(Versioned.class)
+        .register(byte[].class)
+        .build();
+  }
 
-    @Override
-    public PrimitiveService newService(ServiceConfig config) {
-        return new DefaultAtomicMapService();
-    }
+  @Override
+  public PrimitiveService newService(ServiceConfig config) {
+    return new DefaultAtomicMapService();
+  }
 
-    @Override
-    public AtomicMapConfig newConfig() {
-        return new AtomicMapConfig();
-    }
+  @Override
+  public AtomicMapConfig newConfig() {
+    return new AtomicMapConfig();
+  }
 
-    @Override
-    public AtomicMapBuilder<K, V> newBuilder(String name, AtomicMapConfig config, PrimitiveManagementService managementService) {
-        return new DefaultAtomicMapBuilder<>(name, config, managementService);
-    }
+  @Override
+  public AtomicMapBuilder<K, V> newBuilder(String name, AtomicMapConfig config, PrimitiveManagementService managementService) {
+    return new DefaultAtomicMapBuilder<>(name, config, managementService);
+  }
 
-    @Override
-    public String toString() {
-        return toStringHelper(this)
-                .add("name", name())
-                .toString();
-    }
+  @Override
+  public String toString() {
+    return toStringHelper(this)
+        .add("name", name())
+        .toString();
+  }
 }
